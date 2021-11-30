@@ -1,0 +1,17 @@
+name: commands
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  retest:
+    if: github.repository == 'flink-extended/flink-remote-shuffle'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Re-Test Action
+        uses: ./.github/actions/rerun-tests
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
