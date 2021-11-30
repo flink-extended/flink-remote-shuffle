@@ -1,0 +1,95 @@
+################################################################################
+#  Licensed to the Apache Software Foundation (ASF) under one
+#  or more contributor license agreements.  See the NOTICE file
+#  distributed with this work for additional information
+#  regarding copyright ownership.  The ASF licenses this file
+#  to you under the Apache License, Version 2.0 (the
+#  "License"); you may not use this file except in compliance
+#  with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+# limitations under the License.
+################################################################################
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: flink-rss-cr
+rules:
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - '*'
+  - apiGroups: ["shuffleoperator.alibaba.com"]
+    resources:
+      - remoteshuffles
+    verbs:
+      - '*'
+  - apiGroups: ["shuffleoperator.alibaba.com"]
+    resources:
+      - remoteshuffles/status
+    verbs:
+      - update
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - daemonsets
+    verbs:
+      - '*'
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs:
+      - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: flink-rss-crb
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flink-rss-cr
+subjects:
+  - kind: ServiceAccount
+    name: flink-rss-sa
+    namespace: flink-system-rss
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flink-rss-sa
+  namespace: flink-system-rss
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: flink-system-rss
+  name: flink-remote-shuffle-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flink-remote-shuffle-operator
+  template:
+    metadata:
+      labels:
+        app: flink-remote-shuffle-operator
+    spec:
+      serviceAccountName: flink-rss-sa
+      containers:
+        - name: flink-remote-shuffle-operator
+          image: <docker image> # You need to configure the docker image to be used here.
+          imagePullPolicy: Always
+          command:
+            - bash
+          args:
+            - -c
+            - $JAVA_HOME/bin/java -classpath '/flink-remote-shuffle/opt/*' -Dlog4j.configurationFile=file:/flink-remote-shuffle/conf/log4j2-operator.properties -Dlog.file=/flink-remote-shuffle/log/operator.log com.alibaba.flink.shuffle.kubernetes.operator.RemoteShuffleApplicationOperatorEntrypoint

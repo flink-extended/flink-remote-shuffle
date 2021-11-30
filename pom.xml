@@ -1,0 +1,533 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+<project
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+	xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>com.alibaba.flink.shuffle</groupId>
+	<artifactId>flink-shuffle-parent</artifactId>
+	<packaging>pom</packaging>
+	<version>0.3.0-SNAPSHOT</version>
+
+	<licenses>
+		<license>
+			<name>The Apache Software License, Version 2.0</name>
+			<url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
+
+	<properties>
+		<scala.binary.version>2.11</scala.binary.version>
+		<flink.shaded.version>13.0</flink.shaded.version>
+		<log4j.version>2.12.1</log4j.version>
+		<junit.version>4.13</junit.version>
+		<mockito.version>2.21.0</mockito.version>
+		<hamcrest.version>1.3</hamcrest.version>
+		<javax.annotation-api.version>1.3.2</javax.annotation-api.version>
+		<java.guava.version>11.0.2</java.guava.version>
+		<slf4j.version>1.7.15</slf4j.version>
+		<log4j.version>2.12.1</log4j.version>
+		<spotless.version>2.4.2</spotless.version>
+		<target.java.version>1.8</target.java.version>
+		<maven.compiler.source>${target.java.version}</maven.compiler.source>
+		<maven.compiler.target>${target.java.version}</maven.compiler.target>
+		<jackson.version>2.12.1</jackson.version>
+		<snakeyaml.version>1.27</snakeyaml.version>
+		<curator.version>2.12.0</curator.version>
+		<hadoop.version>2.4.1</hadoop.version>
+		<alibaba.metrics.version>2.0.6</alibaba.metrics.version>
+		<commons.cli.version>1.3.1</commons.cli.version>
+		<!-- Only the curator2 TestingServer works with ZK 3.4 -->
+		<zookeeper.version>3.4.14-14.0</zookeeper.version>
+		<flink.version>1.14.0</flink.version>
+	</properties>
+
+	<modules>
+		<module>shuffle-common</module>
+		<module>shuffle-coordinator</module>
+		<module>shuffle-core</module>
+		<module>shuffle-kubernetes</module>
+		<module>shuffle-plugin</module>
+		<module>shuffle-dist</module>
+		<module>shuffle-e2e-tests</module>
+		<module>shuffle-storage</module>
+		<module>shuffle-transfer</module>
+		<module>shuffle-kubernetes-operator</module>
+		<module>shuffle-metrics</module>
+		<module>shuffle-yarn</module>
+		<module>shuffle-rpc</module>
+		<module>shuffle-examples</module>
+	</modules>
+
+	<dependencies>
+		<!-- Root dependencies for all projects -->
+		<!-- Logging API -->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+		</dependency>
+
+		<!-- 'javax.annotation' classes like '@Nullable' -->
+		<dependency>
+			<groupId>com.google.code.findbugs</groupId>
+			<artifactId>jsr305</artifactId>
+		</dependency>
+
+		<!-- test dependencies -->
+
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<type>jar</type>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.hamcrest</groupId>
+			<artifactId>hamcrest-all</artifactId>
+			<version>${hamcrest.version}</version>
+			<type>jar</type>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- tests will have log4j as the default logging framework available -->
+
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-slf4j-impl</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-api</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-core</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<!-- this section defines the module versions that are used if nothing else is specified. -->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>javax.annotation</groupId>
+				<artifactId>javax.annotation-api</artifactId>
+				<version>${javax.annotation-api.version}</version>
+			</dependency>
+
+			<!-- This manages the 'javax.annotation' annotations (JSR305) -->
+			<dependency>
+				<groupId>com.google.code.findbugs</groupId>
+				<artifactId>jsr305</artifactId>
+				<version>1.3.9</version>
+			</dependency>
+
+			<dependency>
+				<groupId>junit</groupId>
+				<artifactId>junit</artifactId>
+				<version>${junit.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-api</artifactId>
+				<version>${slf4j.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>org.apache.logging.log4j</groupId>
+				<artifactId>log4j-slf4j-impl</artifactId>
+				<version>${log4j.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>org.apache.logging.log4j</groupId>
+				<artifactId>log4j-api</artifactId>
+				<version>${log4j.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>org.apache.logging.log4j</groupId>
+				<artifactId>log4j-core</artifactId>
+				<version>${log4j.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>org.apache.logging.log4j</groupId>
+				<artifactId>log4j-1.2-api</artifactId>
+				<version>${log4j.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>org.mockito</groupId>
+				<artifactId>mockito-core</artifactId>
+				<version>${mockito.version}</version>
+				<type>jar</type>
+				<scope>test</scope>
+			</dependency>
+
+			<dependency>
+				<!-- Bumped for security purposes and making it work with Jackson dependencies (2.12.1) -->
+				<groupId>org.yaml</groupId>
+				<artifactId>snakeyaml</artifactId>
+				<version>${snakeyaml.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>com.fasterxml.jackson</groupId>
+				<artifactId>jackson-bom</artifactId>
+				<type>pom</type>
+				<scope>import</scope>
+				<version>${jackson.version}</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<profiles>
+		<profile>
+			<id>default</id>
+			<activation>
+				<activeByDefault>true</activeByDefault>
+			</activation>
+			<properties>
+				<exclude-test-classes>**/*E2ETest.java</exclude-test-classes>
+			</properties>
+		</profile>
+		<profile>
+			<id>includeE2E</id>
+			<properties>
+				<exclude-test-classes></exclude-test-classes>
+			</properties>
+		</profile>
+	</profiles>
+
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.rat</groupId>
+				<artifactId>apache-rat-plugin</artifactId>
+				<version>0.12</version><!--$NO-MVN-MAN-VER$-->
+				<inherited>false</inherited>
+				<executions>
+					<execution>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<excludeSubProjects>false</excludeSubProjects>
+					<numUnapprovedLicenses>0</numUnapprovedLicenses>
+					<licenses>
+						<!-- Enforce this license:
+							Licensed to the Apache Software Foundation (ASF) under one
+							or more contributor license agreements.  See the NOTICE file
+							distributed with this work for additional information
+							regarding copyright ownership.  The ASF licenses this file
+							to you under the Apache License, Version 2.0 (the
+							"License"); you may not use this file except in compliance
+							with the License.  You may obtain a copy of the License at
+							  http://www.apache.org/licenses/LICENSE-2.0
+							Unless required by applicable law or agreed to in writing,
+							software distributed under the License is distributed on an
+							"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+							KIND, either express or implied.  See the License for the
+							specific language governing permissions and limitations
+							under the License.
+						-->
+						<license
+							implementation="org.apache.rat.analysis.license.SimplePatternBasedLicense">
+							<licenseFamilyCategory>AL2</licenseFamilyCategory>
+							<licenseFamilyName>Apache License 2.0</licenseFamilyName>
+							<notes/>
+							<patterns>
+								<pattern>Licensed to the Apache Software Foundation (ASF) under
+									one
+								</pattern>
+							</patterns>
+						</license>
+					</licenses>
+					<licenseFamilies>
+						<licenseFamily implementation="org.apache.rat.license.SimpleLicenseFamily">
+							<familyName>Apache License 2.0</familyName>
+						</licenseFamily>
+					</licenseFamilies>
+					<excludes>
+						<exclude>**/.*/**</exclude>
+						<exclude>**/*.log</exclude>
+						<!-- Administrative files in the main trunk. -->
+						<exclude>**/README.md</exclude>
+						<!-- Build files -->
+						<exclude>**/*.iml</exclude>
+						<!-- Generated content -->
+						<exclude>build-target/**</exclude>
+						<exclude>**/target/**</exclude>
+						<!-- Configuration Files. -->
+						<exclude>**/shuffle-bin/conf/workers</exclude>
+						<exclude>**/shuffle-bin/conf/managers</exclude>
+					</excludes>
+				</configuration>
+			</plugin>
+
+			<!--surefire for unit tests and integration tests-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>2.22.1</version>
+				<dependencies>
+					<dependency>
+						<groupId>org.apache.maven.surefire</groupId>
+						<artifactId>surefire-logger-api</artifactId>
+						<version>2.21.0</version>
+						<optional>true</optional>
+					</dependency>
+				</dependencies>
+				<configuration>
+					<forkCount>1</forkCount>
+					<reuseForks>true</reuseForks>
+					<trimStackTrace>false</trimStackTrace>
+					<systemPropertyVariables>
+						<forkNumber>0${surefire.forkNumber}</forkNumber>
+						<project.basedir>${project.basedir}</project.basedir>
+						<buildDirectory>${project.build.directory}</buildDirectory>
+					</systemPropertyVariables>
+					<argLine>-Xms256m -Xmx2048m -Dmvn.forkNumber=${surefire.forkNumber}
+						-XX:+UseG1GC
+					</argLine>
+				</configuration>
+				<executions>
+					<execution>
+						<id>default-test</id>
+						<phase>test</phase>
+						<goals>
+							<goal>test</goal>
+						</goals>
+						<configuration>
+							<excludes>
+								<exclude>${exclude-test-classes}</exclude>
+							</excludes>
+						</configuration>
+					</execution>
+
+					<!--execute all the integration tests-->
+					<execution>
+						<id>integration-tests</id>
+						<phase>integration-test</phase>
+						<goals>
+							<goal>test</goal>
+						</goals>
+						<configuration>
+							<includes>
+								<include>**/*ITCase.*</include>
+							</includes>
+							<reuseForks>false</reuseForks>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-checkstyle-plugin</artifactId>
+				<version>2.17</version>
+				<dependencies>
+					<dependency>
+						<groupId>com.puppycrawl.tools</groupId>
+						<artifactId>checkstyle</artifactId>
+						<!-- Note: match version with docs/flinkDev/ide_setup.md -->
+						<version>8.14</version>
+					</dependency>
+				</dependencies>
+				<executions>
+					<execution>
+						<id>validate</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<suppressionsLocation>/tools/maven/suppressions.xml</suppressionsLocation>
+					<includeTestSourceDirectory>true</includeTestSourceDirectory>
+					<configLocation>/tools/maven/checkstyle.xml</configLocation>
+					<logViolationsToConsole>true</logViolationsToConsole>
+					<failOnViolation>true</failOnViolation>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<version>2.2</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>test-jar</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-source-plugin</artifactId>
+				<version>3.2.1</version>
+				<executions>
+					<execution>
+						<id>attach-sources</id>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>com.diffplug.spotless</groupId>
+				<artifactId>spotless-maven-plugin</artifactId>
+				<version>${spotless.version}</version>
+				<configuration>
+					<java>
+						<googleJavaFormat>
+							<version>1.7</version>
+							<style>AOSP</style>
+						</googleJavaFormat>
+
+						<!-- \# refers to the static imports -->
+						<importOrder>
+							<order>
+								com.alibaba.flink.shuffle,org.apache.flink,org.apache.flink.shaded,,javax,java,scala,\#
+							</order>
+						</importOrder>
+
+						<removeUnusedImports/>
+					</java>
+				</configuration>
+				<executions>
+					<execution>
+						<id>spotless-check</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<version>3.0.0-M1</version>
+				<executions>
+					<execution>
+						<id>enforce-maven</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<requireMavenVersion>
+									<!-- enforce at least mvn version 3.1.1 (see FLINK-12447) -->
+									<version>[3.1.1,)</version>
+								</requireMavenVersion>
+								<requireJavaVersion>
+									<version>${target.java.version}</version>
+								</requireJavaVersion>
+							</rules>
+						</configuration>
+					</execution>
+					<execution>
+						<id>ban-unsafe-snakeyaml</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<bannedDependencies>
+									<excludes>
+										<exclude>org.yaml:snakeyaml:(,1.26]</exclude>
+									</excludes>
+									<includes>
+										<!-- Snakeyaml is pulled in by many modules without using it in production,
+											so there's no benefit in us investing time into bumping these. -->
+										<include>org.yaml:snakeyaml:(,1.26]:*:test</include>
+									</includes>
+								</bannedDependencies>
+							</rules>
+						</configuration>
+					</execution>
+					<execution>
+						<id>ban-unsafe-jackson</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<bannedDependencies>
+									<excludes>
+										<exclude>com.fasterxml.jackson*:*:(,2.12.0]</exclude>
+									</excludes>
+								</bannedDependencies>
+							</rules>
+						</configuration>
+					</execution>
+					<execution>
+						<id>forbid-log4j-1</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<bannedDependencies>
+									<excludes>
+										<exclude>log4j:log4j</exclude>
+										<exclude>org.slf4j:slf4j-log4j12</exclude>
+									</excludes>
+								</bannedDependencies>
+							</rules>
+						</configuration>
+					</execution>
+					<execution>
+						<id>dependency-convergence</id>
+						<!-- disabled by default as it interacts badly with shade-plugin -->
+						<phase>none</phase>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<dependencyConvergence/>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>
