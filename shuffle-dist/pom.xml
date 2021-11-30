@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+<project
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+	xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+	<parent>
+		<groupId>com.alibaba.flink.shuffle</groupId>
+		<artifactId>flink-shuffle-parent</artifactId>
+		<version>1.0-SNAPSHOT</version>
+	</parent>
+	<modelVersion>4.0.0</modelVersion>
+
+	<artifactId>shuffle-dist</artifactId>
+
+	<dependencies>
+
+		<dependency>
+			<groupId>com.alibaba.flink.shuffle</groupId>
+			<artifactId>shuffle-common</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.alibaba.flink.shuffle</groupId>
+			<artifactId>shuffle-coordinator</artifactId>
+			<version>${project.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.apache.flink</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+
+		<dependency>
+			<groupId>com.alibaba.flink.shuffle</groupId>
+			<artifactId>shuffle-core</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.alibaba.flink.shuffle</groupId>
+			<artifactId>shuffle-kubernetes</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.alibaba.flink.shuffle</groupId>
+			<artifactId>shuffle-kubernetes-operator</artifactId>
+			<version>${project.version}</version>
+			<!-- The operator should be separated from dist jar. -->
+			<scope>provided</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>com.alibaba.flink.shuffle</groupId>
+			<artifactId>shuffle-storage</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.alibaba.flink.shuffle</groupId>
+			<artifactId>shuffle-transfer</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.alibaba.flink.shuffle</groupId>
+			<artifactId>shuffle-metrics</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.alibaba.flink.shuffle</groupId>
+			<artifactId>shuffle-yarn</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
+		<!--
+			The following dependencies are packaged in 'examples/'
+			The scope of these dependencies needs to be 'provided' so that
+			they are not included into the 'shuffle-dist' uber jar.
+		-->
+		<dependency>
+			<groupId>com.alibaba.flink.shuffle</groupId>
+			<artifactId>shuffle-examples</artifactId>
+			<version>${project.version}</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<!-- flink shaded dependencies -->
+
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-shaded-netty</artifactId>
+			<version>4.1.49.Final-${flink.shaded.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-shaded-zookeeper-3</artifactId>
+			<version>${zookeeper.version}</version>
+		</dependency>
+
+		<!-- Concrete logging framework - we add this only here (and not in the
+		root POM) to not tie the projects to one specific framework and make
+		it easier for users to swap logging frameworks -->
+
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-slf4j-impl</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-api</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-core</artifactId>
+		</dependency>
+
+		<dependency>
+			<!-- API bridge between log4j 1 and 2; included for convenience -->
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-1.2-api</artifactId>
+		</dependency>
+
+	</dependencies>
+
+	<profiles>
+		<profile>
+			<!-- Creates/Removes the 'build-target' symlink in the root directory (only Unix systems) -->
+			<id>symlink-build-target</id>
+			<activation>
+				<os>
+					<family>unix</family>
+				</os>
+			</activation>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>exec-maven-plugin</artifactId>
+						<version>1.5.0</version>
+						<executions>
+							<execution>
+								<id>remove-build-target-link</id>
+								<phase>clean</phase>
+								<goals>
+									<goal>exec</goal>
+								</goals>
+								<configuration>
+									<executable>rm</executable>
+									<arguments>
+										<argument>-f</argument>
+										<argument>${project.basedir}/../build-target</argument>
+									</arguments>
+								</configuration>
+							</execution>
+							<execution>
+								<id>create-build-target-link</id>
+								<phase>package</phase>
+								<goals>
+									<goal>exec</goal>
+								</goals>
+								<configuration>
+									<executable>ln</executable>
+									<arguments>
+										<argument>-sfn</argument>
+										<argument>
+											${project.basedir}/target/flink-remote-shuffle-${project.version}-bin/flink-remote-shuffle-${project.version}
+										</argument>
+										<argument>${project.basedir}/../build-target</argument>
+									</arguments>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>dependency-convergence</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<skip>true</skip>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<executions>
+					<execution>
+						<!--
+						Disable inherited shade-remote-shuffle to prevent the Shade plugin from
+						changing the project.basedir. The basedir is changed by the Shade plugin
+						when dependencyReducedPomLocation is set to a different location than the
+						original basedir. We do that in the root pom.xml.
+						-->
+						<id>shade-remote-shuffle</id>
+						<phase>none</phase>
+					</execution>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+						<configuration combine.self="override">
+							<shadedArtifactAttached>false</shadedArtifactAttached>
+							<createDependencyReducedPom>false</createDependencyReducedPom>
+							<finalName>${project.artifactId}-${project.version}</finalName>
+							<filters>
+								<!-- Globally exclude log4j.properties from our JAR files. -->
+								<filter>
+									<artifact>*</artifact>
+									<excludes>
+										<exclude>log4j.properties</exclude>
+										<exclude>log4j-test.properties</exclude>
+										<exclude>META-INF/*.SF</exclude>
+										<exclude>META-INF/*.DSA</exclude>
+										<exclude>META-INF/*.RSA</exclude>
+										<exclude>flink-rpc-akka.jar</exclude>
+									</excludes>
+								</filter>
+							</filters>
+							<artifactSet>
+								<excludes>
+									<!-- log4j 2 is bundled separately from the shuffle-dist jar -->
+									<exclude>org.apache.logging.log4j:*</exclude>
+								</excludes>
+							</artifactSet>
+							<transformers>
+								<transformer
+									implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+									<resource>reference.conf</resource>
+								</transformer>
+							</transformers>
+							<relocations>
+								<!-- javax.ws.rs package may conflict with outer packages, e.g., Hadoop packages,
+									and it could be referenced by each sub module of the project, so
+									javax.ws.rs is shaded in the granularity of the whole project. -->
+								<relocation>
+									<pattern>javax.ws.rs</pattern>
+									<shadedPattern>
+										com.alibaba.flink.shuffle.shaded.javax.ws.rs
+									</shadedPattern>
+								</relocation>
+							</relocations>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>bin</id>
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+						<configuration>
+							<descriptors>
+								<descriptor>src/main/assemblies/bin.xml</descriptor>
+							</descriptors>
+							<finalName>flink-remote-shuffle-${project.version}-bin</finalName>
+							<appendAssemblyId>false</appendAssemblyId>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

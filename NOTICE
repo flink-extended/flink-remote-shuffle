@@ -1,0 +1,28 @@
+Remote Shuffle Service for Flink
+Copyright 2021 The Alibaba Group Holding Ltd
+
+This product includes software developed at The Alibaba Group Holding Ltd
+(https://www.alibaba.com/).
+
+This project bundles the following dependencies under the Apache Software License 2.0 (http://www.apache.org/licenses/LICENSE-2.0.txt):
+
+- org.apache.flink:flink-core:1.14.0
+- org.apache.flink:flink-runtime:1.14.0
+- org.apache.flink:flink-rpc:1.14.0
+- commons-cli:commons-cli:1.3.1
+- org.apache.commons:commons-lang3:3.3.2
+- io.netty:netty:4.1.49.Final
+- org.apache.zookeeper:zookeeper:3.4.14
+- org.apache.curator:curator-framework:4.2.0
+- io.fabric8:kubernetes-client:5.2.1
+- org.apache.logging.log4j:log4j-api:2.12.1
+- org.apache.logging.log4j:log4j-core:2.12.1
+- org.apache.logging.log4j:log4j-slf4j-impl:2.12.1
+- org.apache.logging.log4j:log4j-1.2-api:2.12.1
+- com.alibaba.middleware:metrics-core-api:2.0.6
+- com.alibaba.middleware:metrics-core-impl:2.0.6
+- com.alibaba.middleware:metrics-integration:2.0.6
+- com.alibaba.middleware:metrics-rest:2.0.6
+- com.alibaba.middleware:metrics-reporter:2.0.6
+
+

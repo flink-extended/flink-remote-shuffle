@@ -1,0 +1,64 @@
+################################################################################
+#  Licensed to the Apache Software Foundation (ASF) under one
+#  or more contributor license agreements.  See the NOTICE file
+#  distributed with this work for additional information
+#  regarding copyright ownership.  The ASF licenses this file
+#  to you under the Apache License, Version 2.0 (the
+#  "License"); you may not use this file except in compliance
+#  with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+# limitations under the License.
+################################################################################
+
+apiVersion: shuffleoperator.alibaba.com/v1
+kind: RemoteShuffle
+metadata:
+  namespace: flink-system-rss
+  name: flink-remote-shuffle
+spec:
+  shuffleDynamicConfigs:
+    remote-shuffle.manager.jvm-opts: -verbose:gc -Xloggc:/flink-remote-shuffle/log/gc.log
+    remote-shuffle.worker.jvm-opts: -verbose:gc -Xloggc:/flink-remote-shuffle/log/gc.log
+    remote-shuffle.kubernetes.manager.cpu: 4
+    remote-shuffle.kubernetes.worker.cpu: 4
+    remote-shuffle.kubernetes.worker.limit-factor.cpu: 8
+    remote-shuffle.kubernetes.container.image: <docker image>
+    remote-shuffle.kubernetes.worker.volume.host-paths: name:disk,path:<dir on host>,mountPath:/data
+    remote-shuffle.storage.local-data-dirs: '[SSD]/data'
+    remote-shuffle.high-availability.mode: ZOOKEEPER
+    remote-shuffle.ha.zookeeper.quorum: <zookeeper quorum>
+
+  shuffleFileConfigs:
+    log4j2.properties: |
+      monitorInterval=30
+
+      rootLogger.level = INFO
+      rootLogger.appenderRef.console.ref = ConsoleAppender
+      rootLogger.appenderRef.rolling.ref = RollingFileAppender
+
+      # Log all info to the console
+      appender.console.name = ConsoleAppender
+      appender.console.type = CONSOLE
+      appender.console.layout.type = PatternLayout
+      appender.console.layout.pattern = %d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%t] %-60c %x - %m%n
+
+      # Log all info in the given rolling file
+      appender.rolling.name = RollingFileAppender
+      appender.rolling.type = RollingFile
+      appender.rolling.append = true
+      appender.rolling.fileName = ${sys:log.file}
+      appender.rolling.filePattern = ${sys:log.file}.%i
+      appender.rolling.layout.type = PatternLayout
+      appender.rolling.layout.pattern = %d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%t] %-60c %x - %m%n
+      appender.rolling.policies.type = Policies
+      appender.rolling.policies.size.type = SizeBasedTriggeringPolicy
+      appender.rolling.policies.size.size=256MB
+      appender.rolling.policies.startup.type = OnStartupTriggeringPolicy
+      appender.rolling.strategy.type = DefaultRolloverStrategy
+      appender.rolling.strategy.max = ${env:MAX_LOG_FILE_NUMBER:-10}
