@@ -53,9 +53,8 @@ offer some help to prepare the patches for the Flink version you use.
 
 ## Document
 
-The remote shuffle service supports standalone, yarn and k8s deployment. You can find the full user
-guide [here](./docs/user_guide.md)
-. In the future, more internal implementation detail specifications will be supplemented.
+The remote shuffle service supports standalone, yarn and k8s deployment. You can find the full documents [here](https://github.com/flink-extended/flink-remote-shuffle/wiki).
+In the future, more internal implementation detail specifications will be supplemented.
 
 ## Building from Source
 
