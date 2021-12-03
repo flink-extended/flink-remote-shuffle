@@ -158,14 +158,13 @@ for more information.
 
 ## Support
 
-We provide free support for users using this project. You can scan the following QR code to join
-the [DingTalk](https://www.dingtalk.com/) user support group for further help and collaboration:
+We provide free support for users using this project. You can join the Slack channel or scan the
+following QR code to join the [DingTalk](https://www.dingtalk.com/) user support group for further
+help and collaboration:
 
 English:
 
-<div align="center">
-<img src="./docs/imgs/support-en.jpeg" width="30%"/>
-</div>
+Please join the Slack channel by clicking this [invitation](https://join.slack.com/t/slack-5xu7894/shared_invite/zt-ykp807ok-1JXMcE6HS~NCplRp2T31fQ).
 
 Chinese:
 
@@ -173,9 +172,6 @@ Chinese:
 <img src="./docs/imgs/support-zh.jpeg" width="30%"/>
 </div>
 
-Another way is to join the Slack channel by clicking
-this [invitation](https://join.slack.com/t/slack-5xu7894/shared_invite/zt-ykp807ok-1JXMcE6HS~NCplRp2T31fQ)
-.
 
 ## Acknowledge
 
