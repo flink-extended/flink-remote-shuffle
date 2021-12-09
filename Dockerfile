@@ -16,14 +16,24 @@
 # limitations under the License.
 ################################################################################
 
-FROM openjdk:8-jre
+FROM openjdk:8-jdk-slim
 ARG REMOTE_SHUFFLE_VERSION
+
+# Install some utilities
+RUN apt-get update \
+     && apt-get install -y netcat dnsutils less procps iputils-ping \
+                 libssl-dev \
+                 curl \
+     && apt-get clean \
+     && rm -rf /var/lib/apt/lists/*
 
 RUN set -e && mkdir -p /flink-remote-shuffle
 
 RUN ln -s /flink-remote-shuffle /flink-shuffle
 
 COPY ./shuffle-dist/target/flink-remote-shuffle-${REMOTE_SHUFFLE_VERSION}-bin/flink-remote-shuffle-${REMOTE_SHUFFLE_VERSION} /flink-remote-shuffle
+
+WORKDIR /flink-remote-shuffle
 
 ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US.UTF-8
