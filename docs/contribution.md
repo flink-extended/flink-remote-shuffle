@@ -31,10 +31,17 @@ code after you have made some changes.
 mvn spotless:apply
 ```
 
+To improve readability, commit messages should use the following format:
+
+```
+[FRS-<issue id>][module name] commit message
+```
+
+Here is a simple example: \[FRS-100]\[docs] Improve document of deployment.
+
 ## How to Contribute
 
-For collaboration, feel free
-to [contact us](../README.md#support)
+For collaboration, feel free to [contact us](../README.md#support)
 . To report a bug, you can just open an issue on GitHub and attach the exceptions and your analysis
 if any. For other improvements, you can contact us or open an issue first and describe what
 improvement you would like to do. After reaching a consensus, you can open a pull request and your

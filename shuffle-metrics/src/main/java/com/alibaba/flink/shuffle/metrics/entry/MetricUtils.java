@@ -32,6 +32,7 @@ import com.alibaba.metrics.MetricLevel;
 import com.alibaba.metrics.MetricManager;
 import com.alibaba.metrics.MetricName;
 import com.alibaba.metrics.Timer;
+import com.alibaba.metrics.integrate.MetricsIntegrateUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,32 +46,15 @@ public class MetricUtils {
     // Manage metric system
     // ---------------------------------------------------------------
 
-    public static void startManagerMetricSystem(Configuration config) {
-        MetricConfiguration metricConf = new MetricConfiguration(config, true);
-        startMetricSystemInternal(metricConf);
-    }
-
-    public static void startWorkerMetricSystem(Configuration config) {
-        MetricConfiguration metricConf = new MetricConfiguration(config, false);
-        startMetricSystemInternal(metricConf);
-    }
-
-    private static void startMetricSystemInternal(MetricConfiguration conf) {
+    public static void startMetricSystem(Configuration config) {
+        MetricConfiguration metricConf = new MetricConfiguration(config);
         try {
-            MetricBootstrap.init(conf);
-            ReporterSetup.fromConfiguration(conf.getConfiguration());
+            MetricsIntegrateUtils.registerJvmMetrics(metricConf.getProperties());
+            MetricsIntegrateUtils.registerSystemMetrics(metricConf.getProperties());
+            ReporterSetup.fromConfiguration(metricConf.getConfiguration());
             LOG.info("Metric system start successfully");
         } catch (Throwable t) {
             LOG.error("Start metric system failed, ", t);
-        }
-    }
-
-    public static void stopMetricSystem() {
-        try {
-            MetricBootstrap.destroy();
-            LOG.info("Metric system is stopped.");
-        } catch (Throwable throwable) {
-            LOG.error("Failed to stop metric system.", throwable);
         }
     }
 
