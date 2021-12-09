@@ -29,7 +29,7 @@ under the License.
     - [ShuffleWorker Related](#shuffleworker-related)
     - [ShuffleManager Related](#shufflemanager-related)
     - [Data Transmission Related (Server)](#data-transmission-related-(server))
-    - [Metric Related](#metric-related)
+    - [Metric & Rest Related](#metric--rest-related)
 - [Options for Deployment](#options-for-deployment)
     - [K8s Deployment Related](#k8s-deployment-related)
     - [Yarn Deployment Related](#yarn-deployment-related)
@@ -86,11 +86,11 @@ be put in the Flink configuration file.
 | `remote-shuffle.transfer.client.num-threads` | Integer | `-1` | 1.0.0 | false | The number of Netty threads to be used at the client (flink job) side. The default `-1` means that `2 * (the number of slots)` will be used. |
 | `remote-shuffle.transfer.client.connect-timeout` | Duration | `2min` | 1.0.0 | false | The TCP connection setup timeout of the Netty client. |
 | `remote-shuffle.transfer.client.connect-retries` | Integer | `3` | 1.0.0 | false | Number of retries when failed to connect to the remote `ShuffleWorker`. |
-| `remote-shuffle.transfer.client.connect-retry-wait` | Duration | `3s` | 1.0.0 | flase | Time to wait between two consecutive connection retries. |
+| `remote-shuffle.transfer.client.connect-retry-wait` | Duration | `3s` | 1.0.0 | false | Time to wait between two consecutive connection retries. |
 | `remote-shuffle.transfer.transport-type` | String | `auto` | 1.0.0 | false | The Netty transport type, either `nio` or `epoll`. The `auto` means "selecting the proper mode automatically based on the platform. Note that the `epoll` mode can get better performance, less GC and have more advanced features which are only available on modern Linux. |
 | `remote-shuffle.transfer.send-receive-buffer-size` | MemorySize | `0b` | 1.0.0 | false | The Netty send and receive buffer size. The default `0` means the system buffer size (cat /proc/sys/net/ipv4/tcp_[rw]mem) and is 4 MiB in modern Linux. |
 | `remote-shuffle.transfer.heartbeat.interval` | Duration | `1min` | 1.0.0 | false | The time interval to send heartbeat between the Netty server and Netty client. |
-| `remote-shuffle.transfer.heartbeat.timeout` | Duration | `5min` | 1.0.0 | flase | Heartbeat timeout used to detect broken Netty connections. |
+| `remote-shuffle.transfer.heartbeat.timeout` | Duration | `5min` | 1.0.0 | false | Heartbeat timeout used to detect broken Netty connections. |
 
 ### ShuffleMaster Related
 
@@ -188,16 +188,15 @@ conf/remote-shuffle-conf.yaml file.
 | `remote-shuffle.transfer.transport-type` | String | `auto` | 1.0.0 | false | The Netty transport type, either `nio` or `epoll`. The `auto` means "selecting the proper mode automatically based on the platform. Note that the `epoll` mode can get better performance, less GC and have more advanced features which are only available on modern Linux. |
 | `remote-shuffle.transfer.send-receive-buffer-size` | MemorySize | `0b` | 1.0.0 | false | The Netty send and receive buffer size. The default `0b` means the system buffer size (cat /proc/sys/net/ipv4/tcp_[rw]mem) and is 4 MiB in modern Linux. |
 | `remote-shuffle.transfer.heartbeat.interval` | Duration | `1min` | 1.0.0 | false | The time interval to send heartbeat between the Netty server and Netty client. |
-| `remote-shuffle.transfer.heartbeat.timeout` | Duration | `5min` | 1.0.0 | flase | Heartbeat timeout used to detect broken Netty connections. |
+| `remote-shuffle.transfer.heartbeat.timeout` | Duration | `5min` | 1.0.0 | false | Heartbeat timeout used to detect broken Netty connections. |
 
-### Metric Related
+### Metric & Rest Related
 
 | Key | Value Type | Default Value | Version | Required | Description |
 | --- | ---------- | ------------- | ------- | -------- | ----------- |
-| `remote-shuffle.metrics.enabled-http-server` | Bool | `true` | 1.0.0 | false | Whether the http server for requesting metrics is enabled. |
-| `remote-shuffle.metrics.bind-host` | String | `0.0.0.0` | 1.0.0 | false | The local address of the network interface that the http metric server binds to. |
-| `remote-shuffle.metrics.manager.bind-port` | Integer | `23101` | 1.0.0 | false | `ShuffleManager` http metric server bind port. |
-| `remote-shuffle.metrics.worker.bind-port` | Integer | `23103` | 1.0.0 | false | `ShuffleWorker` http metric server bind port. |
+| `remote-shuffle.rest.bind-host` | String | `0.0.0.0` | 1.0.0 | false | Local address of the network interface that the rest server binds to. |
+| `remote-shuffle.rest.manager.bind-port` | Integer | `23101` | 1.0.0 | false | `ShuffleManager` rest server bind port. |
+| `remote-shuffle.rest.worker.bind-port` | Integer | `23103` | 1.0.0 | false | `ShuffleWorker` rest server bind port. |
 
 ## Options for Deployment
 

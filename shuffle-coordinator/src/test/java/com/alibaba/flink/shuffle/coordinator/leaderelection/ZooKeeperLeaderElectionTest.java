@@ -105,10 +105,18 @@ public class ZooKeeperLeaderElectionTest extends TestLogger {
 
     @Before
     public void before() {
-        try {
-            testingServer = new TestingServer();
-        } catch (Exception e) {
-            throw new RuntimeException("Could not start ZooKeeper testing cluster.", e);
+        // loop to avoid port conflict
+        int maxRetries = 10;
+        for (int retry = 0; retry < maxRetries; ++retry) {
+            try {
+                testingServer = new TestingServer();
+                break;
+            } catch (Throwable throwable) {
+                if (retry == maxRetries - 1) {
+                    throw new RuntimeException(
+                            "Could not start ZooKeeper testing cluster.", throwable);
+                }
+            }
         }
 
         configuration = new Configuration();

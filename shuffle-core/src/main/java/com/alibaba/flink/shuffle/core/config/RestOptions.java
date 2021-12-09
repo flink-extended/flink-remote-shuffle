@@ -20,23 +20,30 @@ package com.alibaba.flink.shuffle.core.config;
 
 import com.alibaba.flink.shuffle.common.config.ConfigOption;
 
-/** Config options for metrics. */
-public class MetricOptions {
+/** Options for rest. */
+public class RestOptions {
 
-    /**
-     * Specify the implementation classes of metrics reporter. Separate by ';' if there are multiple
-     * class names. Each class name needs a package name prefix, e.g. a.b.c.Factory1;a.b.c.Factory2.
-     */
-    public static final ConfigOption<String> METRICS_REPORTER_CLASSES =
-            new ConfigOption<String>("remote-shuffle.metrics.reporter.factories")
-                    .defaultValue(null)
+    /** Local address of the network interface that the rest server binds to. */
+    public static final ConfigOption<String> REST_BIND_HOST =
+            new ConfigOption<String>("remote-shuffle.rest.bind-host")
+                    .defaultValue("0.0.0.0")
                     .description(
-                            "Specify the implementation classes of metrics reporter. Separate by "
-                                    + "';' if there are multiple class names. Each class name needs"
-                                    + " a package name prefix, e.g. a.b.c.Factory1;a.b.c.Factory2.");
+                            "Local address of the network interface that the rest server binds to.");
+
+    /** ShuffleManager rest server bind port. */
+    public static final ConfigOption<Integer> REST_MANAGER_BIND_PORT =
+            new ConfigOption<Integer>("remote-shuffle.rest.manager.bind-port")
+                    .defaultValue(23101)
+                    .description("ShuffleManager rest server bind port.");
+
+    /** ShuffleWorker rest server bind port. */
+    public static final ConfigOption<Integer> REST_WORKER_BIND_PORT =
+            new ConfigOption<Integer>("remote-shuffle.rest.worker.bind-port")
+                    .defaultValue(23103)
+                    .description("ShuffleWorker rest server bind port.");
 
     // ------------------------------------------------------------------------
 
     /** Not intended to be instantiated. */
-    private MetricOptions() {}
+    private RestOptions() {}
 }

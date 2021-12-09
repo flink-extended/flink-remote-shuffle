@@ -177,8 +177,7 @@ you must have an available Zookeeper service first (deploy one or reuse the exis
 
 For standalone deployment mode, you can either enable or disable high availability (default is
 disabled). If high availability is not enabled, you must config the `ShuffleManager` RPC address
-explicitly. See
-the [standalone deployment guide](./deploy_standalone_mode.md)
+explicitly. See the [standalone deployment guide](./deploy_standalone_mode.md)
 for more information. One weakness of standalone mode is that it can not tolerant the offline of
 the `ShuffleManager` node, so it is not suggested using the standalone deployment mode in production
 currently. In the future, a standby `ShuffleManager` may be introduced to solve the problem.
@@ -186,15 +185,13 @@ currently. In the future, a standby `ShuffleManager` may be introduced to solve 
 For Yarn deployment mode, you must enable high availability and a Yarn environment is required.
 The `ShuffleWorker` will run in Yarn `NodeManager` as auxiliary service and the `ShuffleManager`
 will run as an independent Yarn application. The Yarn deployment mode can tolerant `ShuffleManager`
-and `ShuffleWorker` crash. See
-the [Yarn deployment guide](./deploy_on_yarn.md)
+and `ShuffleWorker` crash. See the [Yarn deployment guide](./deploy_on_yarn.md)
 for more information.
 
 For Kubernetes deployment mode, like the Yarn deployment mode, you must enable high availability and
 a Kubernetes environment is required. The `ShuffleManager` and `ShuffleWorker` will run as
 Kubernetes application. The Kubernetes deployment mode can also tolerant `ShuffleManager`
-and `ShuffleWorker` crash. See
-the [Kubernetes deployment guide](./deploy_on_kubernetes.md)
+and `ShuffleWorker` crash. See the [Kubernetes deployment guide](./deploy_on_kubernetes.md)
 for more information.
 
 ### Configuration
@@ -218,7 +215,7 @@ For shuffle data storage, you must config the storage directories and the config
 must be existed on all the `ShuffleWorker` nodes:
 
 ```yaml
-remote-shuffle.storage.local-data-dirs: [SSD]/dir1,[HDD]/dir2
+remote-shuffle.storage.local-data-dirs: [ SSD ]/dir1,[HDD]/dir2
 ```
 
 If you are using Kubernetes deployment, aside from `remote-shuffle.storage.local-data-dirs` you
@@ -266,10 +263,12 @@ the [configuration document](./configuration.md)
 
 **Metrics:** There are some important metrics that may help you to monitor the cluster and more
 metrics will be added in the future. You can get the `ShuffleManager` and `ShuffleWorker` metrics by
-requesting the metrics server, for example, http://IP:PORT/metrics/. The IP should be
+requesting the metrics server, for example, http://IP:PORT/metrics. The IP should be
 the `ShuffleManager` or `ShuffleWorker` external ip address and the PORT should the corresponding
-metric server port (`23101` for `ShuffleManager` and `23103` for `ShuffleWorker` by default). All
-supported metrics are as follows:
+metric server port (`23101` for `ShuffleManager` and `23103` for `ShuffleWorker` by default). You
+can also query metrics by specifying one or multiple metric groups, for example, http://IP:
+PORT/metrics?group=remote-shuffle or http://IP:PORT/metrics?group=jvm&group=system. All supported
+metrics (except for jvm and system metrics) are as follows:
 
 | Metric Key | Type | Version | Description |
 | ---------- | ---- | ------- | ----------- |
@@ -309,7 +308,6 @@ influence and how remote shuffle system handles these exceptions.
 | `ShuffleClient` registration failure | Lead to restart of Flink `JobMaster` and failover of the whole job | Same as crash of `JobMaster` and relevant resources will be cleaned up |
 | Startup issue caused by illegal configuration, etc | Remote shuffle will be unavailable | It can not recover itself and you need to check the log, find out the root cause and correct it |
 | Unavailability of `Zookeeper` | Remote shuffle will be unavailable | It can not recover itself and you need to recover `Zookeeper` manually as soon as possible |
-
 
 ### Best Practices
 

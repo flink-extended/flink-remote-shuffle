@@ -21,6 +21,7 @@ package com.alibaba.flink.shuffle.e2e.shufflecluster;
 import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorker;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerRunner;
+import com.alibaba.flink.shuffle.core.config.RestOptions;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.config.TransferOptions;
 import com.alibaba.flink.shuffle.core.config.memory.ShuffleWorkerProcessSpec;
@@ -43,6 +44,7 @@ public class ShuffleWorkerProcess extends TestJvmProcess {
         this.dataDir = dataDir;
         configuration.setInteger(TransferOptions.SERVER_DATA_PORT, dataPort);
         configuration.setString(StorageOptions.STORAGE_LOCAL_DATA_DIRS, dataDir);
+        configuration.setInteger(RestOptions.REST_WORKER_BIND_PORT, getAvailablePort());
         this.jvmArgs = LocalShuffleClusterUtils.generateDynamicConfigs(configuration);
 
         ShuffleWorkerProcessSpec processSpec = new ShuffleWorkerProcessSpec(configuration);

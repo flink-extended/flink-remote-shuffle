@@ -32,6 +32,7 @@ import com.alibaba.flink.shuffle.coordinator.heartbeat.HeartbeatServices;
 import com.alibaba.flink.shuffle.coordinator.heartbeat.HeartbeatServicesUtils;
 import com.alibaba.flink.shuffle.coordinator.highavailability.HaServiceUtils;
 import com.alibaba.flink.shuffle.coordinator.highavailability.HaServices;
+import com.alibaba.flink.shuffle.coordinator.metrics.MetricsRestHandler;
 import com.alibaba.flink.shuffle.coordinator.utils.ClusterEntrypointUtils;
 import com.alibaba.flink.shuffle.coordinator.utils.EnvironmentInformation;
 import com.alibaba.flink.shuffle.coordinator.utils.LeaderRetrievalUtils;
@@ -41,6 +42,8 @@ import com.alibaba.flink.shuffle.core.config.WorkerOptions;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionMeta;
 import com.alibaba.flink.shuffle.metrics.entry.MetricUtils;
+import com.alibaba.flink.shuffle.rest.RestService;
+import com.alibaba.flink.shuffle.rest.RestUtil;
 import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcService;
 import com.alibaba.flink.shuffle.rpc.utils.AkkaRpcServiceUtils;
 import com.alibaba.flink.shuffle.storage.datastore.PartitionedDataStoreImpl;
@@ -65,7 +68,7 @@ import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
 import static com.alibaba.flink.shuffle.coordinator.utils.ClusterEntrypointUtils.STARTUP_FAILURE_RETURN_CODE;
 
 /** The entrypoint of the ShuffleWorker. */
-public class ShuffleWorkerRunner implements FatalErrorHandler {
+public class ShuffleWorkerRunner implements FatalErrorHandler, AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(ShuffleWorkerRunner.class);
 
@@ -76,6 +79,10 @@ public class ShuffleWorkerRunner implements FatalErrorHandler {
     private static final int FAILURE_EXIT_CODE = 1;
 
     private final Object lock = new Object();
+
+    private final Configuration configuration;
+
+    private final RestService restService;
 
     private final RemoteShuffleRpcService rpcService;
 
@@ -89,13 +96,16 @@ public class ShuffleWorkerRunner implements FatalErrorHandler {
 
     public ShuffleWorkerRunner(Configuration configuration) throws Exception {
         checkArgument(configuration != null, "Must be not null.");
+        this.configuration = configuration;
 
         haServices = HaServiceUtils.createHAServices(configuration);
 
         HeartbeatServices heartbeatServices =
                 HeartbeatServicesUtils.createManagerWorkerHeartbeatServices(configuration);
 
-        MetricUtils.startWorkerMetricSystem(configuration);
+        MetricUtils.startMetricSystem(configuration);
+        this.restService = RestUtil.startWorkerRestService(configuration);
+        restService.registerHandler(new MetricsRestHandler());
 
         AkkaRpcServiceUtils.loadRpcSystem(configuration);
         this.rpcService =
@@ -121,6 +131,10 @@ public class ShuffleWorkerRunner implements FatalErrorHandler {
                                 }
                             }
                         }));
+    }
+
+    public Configuration getConfiguration() {
+        return configuration;
     }
 
     private static String determineShuffleWorkerBindAddress(
@@ -308,6 +322,7 @@ public class ShuffleWorkerRunner implements FatalErrorHandler {
         FatalErrorExitUtils.exitProcessIfNeeded(FAILURE_EXIT_CODE);
     }
 
+    @Override
     public void close() throws Exception {
         try {
             closeAsync(Result.SUCCESS).get();
@@ -365,7 +380,7 @@ public class ShuffleWorkerRunner implements FatalErrorHandler {
                 terminationFutures.add(FutureUtils.completedExceptionally(exception));
             }
 
-            MetricUtils.stopMetricSystem();
+            restService.stop();
 
             return FutureUtils.completeAll(terminationFutures);
         }
