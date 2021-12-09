@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.net.ServerSocket;
 import java.util.Arrays;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
@@ -260,6 +261,19 @@ public abstract class TestJvmProcess {
                 ShutdownHookUtil.removeShutdownHook(shutdownHook, getClass().getSimpleName(), LOG);
             }
         }
+    }
+
+    public static int getAvailablePort() {
+        for (int i = 0; i < 100; i++) {
+            try (ServerSocket serverSocket = new ServerSocket(0)) {
+                int port = serverSocket.getLocalPort();
+                if (port != 0) {
+                    return port;
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        throw new RuntimeException("Could not find a free permitted port on the machine.");
     }
 
     public String getProcessOutput() {

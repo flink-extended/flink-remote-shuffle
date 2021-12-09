@@ -24,6 +24,7 @@ import com.alibaba.flink.shuffle.coordinator.manager.entrypoint.ShuffleManagerEn
 import com.alibaba.flink.shuffle.coordinator.utils.ClusterEntrypointUtils;
 import com.alibaba.flink.shuffle.coordinator.utils.EnvironmentInformation;
 import com.alibaba.flink.shuffle.core.config.ManagerOptions;
+import com.alibaba.flink.shuffle.core.config.RestOptions;
 import com.alibaba.flink.shuffle.core.config.memory.ShuffleManagerProcessSpec;
 import com.alibaba.flink.shuffle.e2e.TestJvmProcess;
 
@@ -42,6 +43,7 @@ public class ShuffleManagerProcess extends TestJvmProcess {
         super("ShuffleManager", logDirName);
         this.jvmArgs = LocalShuffleClusterUtils.generateDynamicConfigs(configuration);
 
+        configuration.setInteger(RestOptions.REST_MANAGER_BIND_PORT, getAvailablePort());
         ShuffleManagerProcessSpec processSpec = new ShuffleManagerProcessSpec(configuration);
         setJvmDirectMemory(processSpec.getJvmDirectMemorySize().getMebiBytes());
         setJVMHeapMemory(processSpec.getJvmHeapMemorySize().getMebiBytes());

@@ -22,6 +22,7 @@ import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.core.config.ClusterOptions;
 import com.alibaba.flink.shuffle.core.config.ManagerOptions;
 import com.alibaba.flink.shuffle.core.config.MemoryOptions;
+import com.alibaba.flink.shuffle.core.config.RestOptions;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.config.TransferOptions;
 import com.alibaba.flink.shuffle.core.config.WorkerOptions;
@@ -95,6 +96,9 @@ public class ShuffleWorkerRunnerTest {
         Random random = new Random(System.currentTimeMillis());
         int nextPort = random.nextInt(30000) + 20000;
         configuration.setInteger(TransferOptions.SERVER_DATA_PORT, nextPort);
+
+        nextPort = random.nextInt(30000) + 20000;
+        configuration.setInteger(RestOptions.REST_WORKER_BIND_PORT, nextPort);
 
         return configuration;
     }

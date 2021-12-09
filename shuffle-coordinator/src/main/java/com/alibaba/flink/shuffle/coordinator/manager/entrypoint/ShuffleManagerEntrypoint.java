@@ -30,10 +30,13 @@ import com.alibaba.flink.shuffle.coordinator.highavailability.HaServiceUtils;
 import com.alibaba.flink.shuffle.coordinator.highavailability.HaServices;
 import com.alibaba.flink.shuffle.coordinator.manager.ShuffleManager;
 import com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.AssignmentTrackerImpl;
+import com.alibaba.flink.shuffle.coordinator.metrics.MetricsRestHandler;
 import com.alibaba.flink.shuffle.core.config.ManagerOptions;
 import com.alibaba.flink.shuffle.core.executor.ExecutorThreadFactory;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.metrics.entry.MetricUtils;
+import com.alibaba.flink.shuffle.rest.RestService;
+import com.alibaba.flink.shuffle.rest.RestUtil;
 import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcService;
 import com.alibaba.flink.shuffle.rpc.utils.AkkaRpcServiceUtils;
 
@@ -70,6 +73,8 @@ public class ShuffleManagerEntrypoint implements AutoCloseableAsync, FatalErrorH
     /** The lock to guard startup / shutdown / manipulation methods. */
     private final Object lock = new Object();
 
+    private final RestService restService;
+
     private final Configuration configuration;
 
     private final CompletableFuture<Void> terminationFuture;
@@ -99,7 +104,9 @@ public class ShuffleManagerEntrypoint implements AutoCloseableAsync, FatalErrorH
                         Optional.ofNullable(
                                 configuration.getInteger(ManagerOptions.RPC_BIND_PORT)));
 
-        MetricUtils.startManagerMetricSystem(configuration);
+        MetricUtils.startMetricSystem(configuration);
+        this.restService = RestUtil.startManagerRestService(configuration);
+        restService.registerHandler(new MetricsRestHandler());
 
         // update the configuration used to create the high availability services
         configuration.setString(ManagerOptions.RPC_ADDRESS, shuffleRpcService.getAddress());
@@ -124,6 +131,10 @@ public class ShuffleManagerEntrypoint implements AutoCloseableAsync, FatalErrorH
                         jobHeartbeatServices,
                         workerHeartbeatServices,
                         new AssignmentTrackerImpl());
+    }
+
+    public Configuration getConfiguration() {
+        return configuration;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -240,7 +251,7 @@ public class ShuffleManagerEntrypoint implements AutoCloseableAsync, FatalErrorH
                 terminationFutures.add(FutureUtils.completedExceptionally(exception));
             }
 
-            MetricUtils.stopMetricSystem();
+            restService.stop();
 
             return FutureUtils.completeAll(terminationFutures);
         }

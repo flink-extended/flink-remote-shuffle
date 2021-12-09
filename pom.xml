@@ -58,6 +58,9 @@ under the License.
 		<zookeeper.version>3.5.9</zookeeper.version>
 		<flink.version>1.13.3</flink.version>
 		<rpc.flink.version>1.14.0</rpc.flink.version>
+		<jetty.version>9.4.44.v20210927</jetty.version>
+		<http.client.version>4.5.13</http.client.version>
+		<commons.lang3.version>3.3.2</commons.lang3.version>
 	</properties>
 
 	<modules>
@@ -75,6 +78,7 @@ under the License.
 		<module>shuffle-yarn</module>
 		<module>shuffle-rpc</module>
 		<module>shuffle-examples</module>
+		<module>shuffle-rest</module>
 	</modules>
 
 	<dependencies>
