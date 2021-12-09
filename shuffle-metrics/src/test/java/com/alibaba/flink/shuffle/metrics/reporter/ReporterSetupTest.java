@@ -18,15 +18,14 @@
 
 package com.alibaba.flink.shuffle.metrics.reporter;
 
+import com.alibaba.flink.shuffle.common.config.ConfigConstants;
 import com.alibaba.flink.shuffle.common.config.Configuration;
 
 import org.junit.Test;
 
 import java.util.Properties;
 
-import static com.alibaba.flink.shuffle.core.config.MetricOptions.METRICS_REPORTER_CLASSES;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link ReporterSetup}. */
@@ -35,8 +34,12 @@ public class ReporterSetupTest {
     public void testInitReporterFromConfiguration() {
         FakedMetricReporterFactory.resetMethodCallCount();
         Properties properties = new Properties();
+        String name = "fake";
         properties.setProperty(
-                METRICS_REPORTER_CLASSES.key(),
+                ConfigConstants.METRICS_REPORTER_PREFIX
+                        + name
+                        + '.'
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
                 "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory");
         Configuration conf = new Configuration(properties);
 
@@ -49,10 +52,20 @@ public class ReporterSetupTest {
     public void testMultipleSameReporters() {
         FakedMetricReporterFactory.resetMethodCallCount();
         Properties properties = new Properties();
+        String name1 = "fake1";
+        String name2 = "fake2";
         properties.setProperty(
-                METRICS_REPORTER_CLASSES.key(),
-                "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory;"
-                        + "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory");
+                ConfigConstants.METRICS_REPORTER_PREFIX
+                        + name1
+                        + '.'
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
+                "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory");
+        properties.setProperty(
+                ConfigConstants.METRICS_REPORTER_PREFIX
+                        + name2
+                        + '.'
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
+                "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory");
         Configuration conf = new Configuration(properties);
 
         assertEquals(0, FakedMetricReporterFactory.getMethodCallCount());
@@ -64,10 +77,21 @@ public class ReporterSetupTest {
     public void testMultipleDifferentReporters() {
         FakedMetricReporterFactory.resetMethodCallCount();
         Properties properties = new Properties();
+        String name1 = "fake1";
+        String name2 = "anotherFaked";
         properties.setProperty(
-                METRICS_REPORTER_CLASSES.key(),
-                "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory;"
-                        + "com.alibaba.flink.shuffle.metrics.reporter.AnotherFakedReporterFactory");
+                ConfigConstants.METRICS_REPORTER_PREFIX
+                        + name1
+                        + '.'
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
+                "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory");
+        properties.setProperty(
+                ConfigConstants.METRICS_REPORTER_PREFIX
+                        + name2
+                        + '.'
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
+                "com.alibaba.flink.shuffle.metrics.reporter.AnotherFakedReporterFactory");
+
         Configuration conf = new Configuration(properties);
 
         assertEquals(0, FakedMetricReporterFactory.getMethodCallCount());
@@ -86,14 +110,19 @@ public class ReporterSetupTest {
         assertTrue(
                 FakedMetricReporterFactory.getConf() == null
                         || FakedMetricReporterFactory.getConf().getString("my.k1") == null);
-        final String reporterKey = METRICS_REPORTER_CLASSES.key();
-        final String reporterVal =
-                "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory";
-
         Properties properties = new Properties();
-        properties.setProperty("my.k1", "v1");
-        properties.setProperty("my.k2", "v2");
-        properties.setProperty(reporterKey, reporterVal);
+        String name = "fake";
+        properties.setProperty(
+                ConfigConstants.METRICS_REPORTER_PREFIX
+                        + name
+                        + '.'
+                        + ConfigConstants.METRICS_REPORTER_FACTORY_CLASS_SUFFIX,
+                "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory");
+
+        properties.setProperty(
+                ConfigConstants.METRICS_REPORTER_PREFIX + name + '.' + "my.k1", "v1");
+        properties.setProperty(
+                ConfigConstants.METRICS_REPORTER_PREFIX + name + '.' + "my.k2", "v2");
         Configuration conf = new Configuration(properties);
         ReporterSetup.fromConfiguration(conf);
 
@@ -101,7 +130,5 @@ public class ReporterSetupTest {
         Configuration config = FakedMetricReporterFactory.getConf();
         assertTrue(config.getString("my.k1").equals("v1"));
         assertTrue(config.getString("my.k2").equals("v2"));
-        assertFalse(config.getString("my.k1").equals("v2"));
-        assertTrue(config.getString(reporterKey).equals(reporterVal));
     }
 }

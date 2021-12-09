@@ -70,6 +70,13 @@ under the License.
 			<outputDirectory>lib/</outputDirectory>
 			<fileMode>0644</fileMode>
 		</file>
+
+		<!-- copy metrics reporter jar -->
+		<file>
+			<source>../shuffle-metrics-reporter/shuffle-metrics-reporter-prometheus/target/shuffle-metrics-reporter-prometheus-${project.version}.jar</source>
+			<outputDirectory>lib/</outputDirectory>
+			<fileMode>0644</fileMode>
+		</file>
 	</files>
 
 	<fileSets>

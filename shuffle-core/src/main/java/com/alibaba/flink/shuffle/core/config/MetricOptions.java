@@ -22,6 +22,29 @@ import com.alibaba.flink.shuffle.common.config.ConfigOption;
 
 /** Config options for metrics. */
 public class MetricOptions {
+    /**
+     * An optional list of reporter names. If configured, only reporters whose name matches any of
+     * the names in the list will be started. Otherwise, all reporters that could be found in the
+     * configuration will be started.
+     *
+     * <p>Example:
+     *
+     * <pre>{@code
+     * metrics.reporters = foo,bar
+     *
+     * metrics.reporter.foo.class = org.apache.flink.metrics.reporter.JMXReporter
+     * metrics.reporter.foo.interval = 10
+     *
+     * metrics.reporter.bar.class = org.apache.flink.metrics.graphite.GraphiteReporter
+     * metrics.reporter.bar.port = 1337
+     * }</pre>
+     */
+    public static final ConfigOption<String> REPORTERS_LIST =
+            new ConfigOption<String>("remote-shuffle.metrics.reporter")
+                    .description(
+                            "An optional list of reporter names. If configured, only reporters whose name matches"
+                                    + " any of the names in the list will be started. Otherwise, all reporters that could be found in"
+                                    + " the configuration will be started.");
 
     /** Whether the http server for reading metrics is enabled. */
     public static final ConfigOption<Boolean> METRICS_HTTP_SERVER_ENABLE =
@@ -60,7 +83,6 @@ public class MetricOptions {
                             "Specify the implementation classes of metrics reporter. Separate by "
                                     + "';' if there are multiple class names. Each class name needs"
                                     + " a package name prefix, e.g. a.b.c.Factory1;a.b.c.Factory2.");
-
     // ------------------------------------------------------------------------
 
     /** Not intended to be instantiated. */

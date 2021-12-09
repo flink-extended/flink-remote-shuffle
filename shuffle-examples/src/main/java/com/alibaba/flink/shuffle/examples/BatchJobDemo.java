@@ -18,6 +18,7 @@
 
 package com.alibaba.flink.shuffle.examples;
 
+import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -45,9 +46,17 @@ public class BatchJobDemo {
                 .addSink(
                         new SinkFunction<byte[]>() {
                             @Override
-                            public void invoke(byte[] value) {}
+                            public void invoke(byte[] value) {
+                                try {
+                                    System.out.println(new String(value));
+                                    Thread.sleep(1000);
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
+                            }
                         });
         StreamGraph streamGraph = env.getStreamGraph();
+        env.setRuntimeMode(RuntimeExecutionMode.BATCH);
         streamGraph.setGlobalStreamExchangeMode(GlobalStreamExchangeMode.ALL_EDGES_BLOCKING);
         streamGraph.setJobType(JobType.BATCH);
         env.execute(streamGraph);
