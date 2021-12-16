@@ -1,0 +1,2778 @@
+From b89eab538a5132e73aa6892adb54aeef13d59585 Mon Sep 17 00:00:00 2001
+From: jinxing64 <jinxing.corey@gmail.com>
+Date: Tue, 8 Jun 2021 17:23:58 +0800
+Subject: [PATCH] Patch for Flink 1.13 to use flink remote shuffle
+
+[FLINK-22676][coordination] The partition tracker stops tracking internal partitions when TM disconnects
+[FLINK-23214][runtime] Make ShuffleMaster a cluster level shared service
+[FLINK-22674][runtime] Provide JobID when applying for shuffle resources by ShuffleMaster#registerPartitionWithProducer
+[FLINK-23249][runtime] Introduce ShuffleMasterContext to ShuffleMaster
+[FLINK-22675][runtime] Add lifecycle methods to ShuffleMaster
+[FLINK-22677][runtime] DefaultScheduler supports async registration of produced partitions
+[FLINK-22677][runtime] AdaptiveScheduler requires partition registration to be completed immediately
+---
+ ...bMasterServiceLeadershipRunnerFactory.java |   7 -
+ .../runtime/executiongraph/Execution.java     |  53 ++--
+ .../network/NettyShuffleServiceFactory.java   |   4 +-
+ .../partition/AbstractPartitionTracker.java   |  11 +-
+ .../partition/JobMasterPartitionTracker.java  |  23 +-
+ .../JobMasterPartitionTrackerImpl.java        |  83 +++---
+ .../jobmaster/JobManagerSharedServices.java   |  31 ++-
+ .../flink/runtime/jobmaster/JobMaster.java    |  41 ++-
+ .../runtime/jobmaster/JobMasterGateway.java   |   8 +
+ .../DefaultJobMasterServiceFactory.java       |   3 +-
+ .../runtime/scheduler/DefaultScheduler.java   |  96 +++++--
+ .../scheduler/DefaultSchedulerFactory.java    |   4 +-
+ .../scheduler/adaptive/AdaptiveScheduler.java |  12 +-
+ .../runtime/shuffle/JobShuffleContext.java    |  42 +++
+ .../shuffle/JobShuffleContextImpl.java        |  52 ++++
+ .../runtime/shuffle/NettyShuffleMaster.java   |  10 +-
+ .../flink/runtime/shuffle/ShuffleMaster.java  |  44 ++-
+ .../runtime/shuffle/ShuffleMasterContext.java |  36 +++
+ .../shuffle/ShuffleMasterContextImpl.java     |  48 ++++
+ .../shuffle/ShuffleServiceFactory.java        |   5 +-
+ .../deployment/ShuffleDescriptorTest.java     |  12 +-
+ .../ExecutionPartitionLifecycleTest.java      |   4 +-
+ .../runtime/executiongraph/ExecutionTest.java |  56 ----
+ .../AbstractPartitionTrackerTest.java         |   2 +-
+ .../JobMasterPartitionTrackerImplTest.java    | 239 +++++++++--------
+ .../NoOpJobMasterPartitionTracker.java        |  15 +-
+ .../TestingJobMasterPartitionTracker.java     |  40 +--
+ .../JobMasterPartitionReleaseTest.java        |  66 +++--
+ ...estingJobManagerSharedServicesBuilder.java |  12 +-
+ .../utils/TestingJobMasterGateway.java        |   6 +
+ .../scheduler/DefaultSchedulerTest.java       | 145 +++++++++-
+ .../scheduler/SchedulerTestingUtils.java      |   4 +-
+ ...estExecutionVertexOperationsDecorator.java |  14 +
+ .../runtime/shuffle/ShuffleMasterTest.java    | 251 ++++++++++++++++++
+ .../shuffle/ShuffleServiceLoaderTest.java     |   3 +-
+ .../runtime/shuffle/TestingShuffleMaster.java | 147 ++++++++++
+ 36 files changed, 1272 insertions(+), 357 deletions(-)
+ create mode 100644 flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/JobShuffleContext.java
+ create mode 100644 flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/JobShuffleContextImpl.java
+ create mode 100644 flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleMasterContext.java
+ create mode 100644 flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleMasterContextImpl.java
+ create mode 100644 flink-runtime/src/test/java/org/apache/flink/runtime/shuffle/ShuffleMasterTest.java
+ create mode 100644 flink-runtime/src/test/java/org/apache/flink/runtime/shuffle/TestingShuffleMaster.java
+
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/dispatcher/JobMasterServiceLeadershipRunnerFactory.java b/flink-runtime/src/main/java/org/apache/flink/runtime/dispatcher/JobMasterServiceLeadershipRunnerFactory.java
+index 9fb2c7c2609..ea1f2c97d90 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/dispatcher/JobMasterServiceLeadershipRunnerFactory.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/dispatcher/JobMasterServiceLeadershipRunnerFactory.java
+@@ -38,8 +38,6 @@ import org.apache.flink.runtime.jobmaster.factories.JobManagerJobMetricGroupFact
+ import org.apache.flink.runtime.leaderelection.LeaderElectionService;
+ import org.apache.flink.runtime.rpc.FatalErrorHandler;
+ import org.apache.flink.runtime.rpc.RpcService;
+-import org.apache.flink.runtime.shuffle.ShuffleMaster;
+-import org.apache.flink.runtime.shuffle.ShuffleServiceLoader;
+ import org.apache.flink.util.Preconditions;
+ 
+ import static org.apache.flink.util.Preconditions.checkArgument;
+@@ -83,10 +81,6 @@ public enum JobMasterServiceLeadershipRunnerFactory implements JobManagerRunnerF
+                     "Adaptive Scheduler is required for reactive mode");
+         }
+ 
+-        final ShuffleMaster<?> shuffleMaster =
+-                ShuffleServiceLoader.loadShuffleServiceFactory(configuration)
+-                        .createShuffleMaster(configuration);
+-
+         final LibraryCacheManager.ClassLoaderLease classLoaderLease =
+                 jobManagerServices
+                         .getLibraryCacheManager()
+@@ -111,7 +105,6 @@ public enum JobMasterServiceLeadershipRunnerFactory implements JobManagerRunnerF
+                         jobManagerJobMetricGroupFactory,
+                         fatalErrorHandler,
+                         userCodeClassLoader,
+-                        shuffleMaster,
+                         initializationTimestamp);
+ 
+         final DefaultJobMasterServiceProcessFactory jobMasterServiceProcessFactory =
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/executiongraph/Execution.java b/flink-runtime/src/main/java/org/apache/flink/runtime/executiongraph/Execution.java
+index 10e073ffbc1..ac28487584f 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/executiongraph/Execution.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/executiongraph/Execution.java
+@@ -49,7 +49,6 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+ import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
+ import org.apache.flink.runtime.scheduler.strategy.ConsumerVertexGroup;
+ import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
+-import org.apache.flink.runtime.shuffle.NettyShuffleMaster;
+ import org.apache.flink.runtime.shuffle.PartitionDescriptor;
+ import org.apache.flink.runtime.shuffle.ProducerDescriptor;
+ import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
+@@ -404,7 +403,7 @@ public class Execution
+     //  Actions
+     // --------------------------------------------------------------------------------------------
+ 
+-    public CompletableFuture<Execution> registerProducedPartitions(
++    public CompletableFuture<Void> registerProducedPartitions(
+             TaskManagerLocation location, boolean notifyPartitionDataAvailable) {
+ 
+         assertRunningInJobMasterMainThread();
+@@ -415,34 +414,27 @@ public class Execution
+                 vertex.getExecutionGraphAccessor().getJobMasterMainThreadExecutor(),
+                 producedPartitionsCache -> {
+                     producedPartitions = producedPartitionsCache;
+-                    startTrackingPartitions(
+-                            location.getResourceID(), producedPartitionsCache.values());
+-                    return this;
++
++                    if (getState() == SCHEDULED) {
++                        startTrackingPartitions(
++                                location.getResourceID(), producedPartitionsCache.values());
++                    } else {
++                        LOG.info(
++                                "Discarding late registered partitions for {} task {}.",
++                                getState(),
++                                attemptId);
++                        for (ResultPartitionDeploymentDescriptor desc :
++                                producedPartitionsCache.values()) {
++                            getVertex()
++                                    .getExecutionGraphAccessor()
++                                    .getShuffleMaster()
++                                    .releasePartitionExternally(desc.getShuffleDescriptor());
++                        }
++                    }
++                    return null;
+                 });
+     }
+ 
+-    /**
+-     * Register producedPartitions to {@link ShuffleMaster}
+-     *
+-     * <p>HACK: Please notice that this method simulates asynchronous registration in a synchronous
+-     * way by making sure the returned {@link CompletableFuture} from {@link
+-     * ShuffleMaster#registerPartitionWithProducer} is completed immediately.
+-     *
+-     * <p>{@link Execution#producedPartitions} are registered through an asynchronous interface
+-     * {@link ShuffleMaster#registerPartitionWithProducer} to {@link ShuffleMaster}, however they
+-     * are not always accessed through callbacks. So, it is possible that {@link
+-     * Execution#producedPartitions} have not been available yet when accessed (in {@link
+-     * Execution#deploy} for example).
+-     *
+-     * <p>Since the only implementation of {@link ShuffleMaster} is {@link NettyShuffleMaster},
+-     * which indeed registers producedPartition in a synchronous way, this method enforces
+-     * synchronous registration under an asynchronous interface for now.
+-     *
+-     * <p>TODO: If asynchronous registration is needed in the future, use callbacks to access {@link
+-     * Execution#producedPartitions}.
+-     *
+-     * @return completed future of partition deployment descriptors.
+-     */
+     @VisibleForTesting
+     static CompletableFuture<
+                     Map<IntermediateResultPartitionID, ResultPartitionDeploymentDescriptor>>
+@@ -468,11 +460,8 @@ public class Execution
+             CompletableFuture<? extends ShuffleDescriptor> shuffleDescriptorFuture =
+                     vertex.getExecutionGraphAccessor()
+                             .getShuffleMaster()
+-                            .registerPartitionWithProducer(partitionDescriptor, producerDescriptor);
+-
+-            // temporary hack; the scheduler does not handle incomplete futures properly
+-            Preconditions.checkState(
+-                    shuffleDescriptorFuture.isDone(), "ShuffleDescriptor future is incomplete.");
++                            .registerPartitionWithProducer(
++                                    vertex.getJobId(), partitionDescriptor, producerDescriptor);
+ 
+             CompletableFuture<ResultPartitionDeploymentDescriptor> partitionRegistration =
+                     shuffleDescriptorFuture.thenApply(
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/NettyShuffleServiceFactory.java b/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/NettyShuffleServiceFactory.java
+index a9d3c9a9224..27af3ae81bd 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/NettyShuffleServiceFactory.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/NettyShuffleServiceFactory.java
+@@ -19,7 +19,6 @@
+ package org.apache.flink.runtime.io.network;
+ 
+ import org.apache.flink.annotation.VisibleForTesting;
+-import org.apache.flink.configuration.Configuration;
+ import org.apache.flink.metrics.MetricGroup;
+ import org.apache.flink.runtime.clusterframework.types.ResourceID;
+ import org.apache.flink.runtime.io.disk.BatchShuffleReadBufferPool;
+@@ -36,6 +35,7 @@ import org.apache.flink.runtime.io.network.partition.consumer.SingleInputGateFac
+ import org.apache.flink.runtime.shuffle.NettyShuffleDescriptor;
+ import org.apache.flink.runtime.shuffle.NettyShuffleMaster;
+ import org.apache.flink.runtime.shuffle.ShuffleEnvironmentContext;
++import org.apache.flink.runtime.shuffle.ShuffleMasterContext;
+ import org.apache.flink.runtime.shuffle.ShuffleServiceFactory;
+ import org.apache.flink.runtime.taskmanager.NettyShuffleEnvironmentConfiguration;
+ import org.apache.flink.runtime.util.ExecutorThreadFactory;
+@@ -55,7 +55,7 @@ public class NettyShuffleServiceFactory
+     private static final String DIR_NAME_PREFIX = "netty-shuffle";
+ 
+     @Override
+-    public NettyShuffleMaster createShuffleMaster(Configuration configuration) {
++    public NettyShuffleMaster createShuffleMaster(ShuffleMasterContext shuffleMasterContext) {
+         return NettyShuffleMaster.INSTANCE;
+     }
+ 
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/partition/AbstractPartitionTracker.java b/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/partition/AbstractPartitionTracker.java
+index 4660519b7cc..40ed9e6fa40 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/partition/AbstractPartitionTracker.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/partition/AbstractPartitionTracker.java
+@@ -34,8 +34,8 @@ import java.util.stream.Stream;
+  */
+ public abstract class AbstractPartitionTracker<K, M> implements PartitionTracker<K, M> {
+ 
+-    private final PartitionTable<K> partitionTable = new PartitionTable<>();
+-    private final Map<ResultPartitionID, PartitionInfo<K, M>> partitionInfos = new HashMap<>();
++    protected final PartitionTable<K> partitionTable = new PartitionTable<>();
++    protected final Map<ResultPartitionID, PartitionInfo<K, M>> partitionInfos = new HashMap<>();
+ 
+     void startTrackingPartition(K key, ResultPartitionID resultPartitionId, M metaInfo) {
+         partitionInfos.put(resultPartitionId, new PartitionInfo<>(key, metaInfo));
+@@ -94,7 +94,8 @@ public abstract class AbstractPartitionTracker<K, M> implements PartitionTracker
+                         resultPartitionId, partitionInfo.key, partitionInfo.getMetaInfo()));
+     }
+ 
+-    private static class PartitionInfo<K, M> {
++    /** Information of tracked partition. */
++    static class PartitionInfo<K, M> {
+ 
+         private final K key;
+         private final M metaInfo;
+@@ -104,11 +105,11 @@ public abstract class AbstractPartitionTracker<K, M> implements PartitionTracker
+             this.metaInfo = metaInfo;
+         }
+ 
+-        public K getKey() {
++        K getKey() {
+             return key;
+         }
+ 
+-        public M getMetaInfo() {
++        M getMetaInfo() {
+             return metaInfo;
+         }
+     }
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/partition/JobMasterPartitionTracker.java b/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/partition/JobMasterPartitionTracker.java
+index 4bade709399..cb7c2bef862 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/partition/JobMasterPartitionTracker.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/partition/JobMasterPartitionTracker.java
+@@ -39,17 +39,26 @@ public interface JobMasterPartitionTracker
+             ResultPartitionDeploymentDescriptor resultPartitionDeploymentDescriptor);
+ 
+     /** Releases the given partitions and stop the tracking of partitions that were released. */
+-    void stopTrackingAndReleasePartitions(Collection<ResultPartitionID> resultPartitionIds);
++    default void stopTrackingAndReleasePartitions(
++            Collection<ResultPartitionID> resultPartitionIds) {
++        stopTrackingAndReleasePartitions(resultPartitionIds, true);
++    }
+ 
+     /**
+-     * Releases all partitions for the given task executor ID, and stop the tracking of partitions
+-     * that were released.
++     * Releases the given partitions and stop the tracking of partitions that were released. The
++     * boolean flag indicates whether we need to notify the ShuffleMaster to release all external
++     * resources or not.
+      */
+-    void stopTrackingAndReleasePartitionsFor(ResourceID producingTaskExecutorId);
++    void stopTrackingAndReleasePartitions(
++            Collection<ResultPartitionID> resultPartitionIds, boolean releaseOnShuffleMaster);
+ 
+     /**
+-     * Releases all job partitions and promotes all cluster partitions for the given task executor
+-     * ID, and stops the tracking of partitions that were released/promoted.
++     * Releases the job partitions and promotes the cluster partitions, and stops the tracking of
++     * partitions that were released/promoted.
+      */
+-    void stopTrackingAndReleaseOrPromotePartitionsFor(ResourceID producingTaskExecutorId);
++    void stopTrackingAndReleaseOrPromotePartitions(
++            Collection<ResultPartitionID> resultPartitionIds);
++
++    /** Get all the partitions under tracking. */
++    Collection<ResultPartitionDeploymentDescriptor> getAllTrackedPartitions();
+ }
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/partition/JobMasterPartitionTrackerImpl.java b/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/partition/JobMasterPartitionTrackerImpl.java
+index 4ce0a521509..f1ed2e74e1c 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/partition/JobMasterPartitionTrackerImpl.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/io/network/partition/JobMasterPartitionTrackerImpl.java
+@@ -21,7 +21,6 @@ import org.apache.flink.api.common.JobID;
+ import org.apache.flink.runtime.clusterframework.types.ResourceID;
+ import org.apache.flink.runtime.deployment.ResultPartitionDeploymentDescriptor;
+ import org.apache.flink.runtime.shuffle.ShuffleMaster;
+-import org.apache.flink.util.CollectionUtil;
+ import org.apache.flink.util.Preconditions;
+ 
+ import java.util.Collection;
+@@ -29,6 +28,7 @@ import java.util.Collections;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.Set;
++import java.util.function.BiConsumer;
+ import java.util.stream.Collectors;
+ import java.util.stream.Stream;
+ 
+@@ -41,6 +41,12 @@ public class JobMasterPartitionTrackerImpl
+         extends AbstractPartitionTracker<ResourceID, ResultPartitionDeploymentDescriptor>
+         implements JobMasterPartitionTracker {
+ 
++    // Besides below fields, JobMasterPartitionTrackerImpl inherits 'partitionTable' and
++    // 'partitionInfos' from parent and tracks partitions from different dimensions:
++    // 'partitionTable' tracks partitions which occupie local resource on TM;
++    // 'partitionInfos' tracks all available partitions no matter they are accommodated
++    // externally on remote or internally on TM;
++
+     private final JobID jobId;
+ 
+     private final ShuffleMaster<?> shuffleMaster;
+@@ -79,10 +85,48 @@ public class JobMasterPartitionTrackerImpl
+     }
+ 
+     @Override
+-    public void stopTrackingAndReleasePartitions(Collection<ResultPartitionID> resultPartitionIds) {
++    void startTrackingPartition(
++            ResourceID key,
++            ResultPartitionID resultPartitionId,
++            ResultPartitionDeploymentDescriptor metaInfo) {
++        // A partition is registered into 'partitionTable' only when it occupies
++        // resource on the corresponding TM;
++        if (metaInfo.getShuffleDescriptor().storesLocalResourcesOn().isPresent()) {
++            partitionTable.startTrackingPartitions(
++                    key, Collections.singletonList(resultPartitionId));
++        }
++        partitionInfos.put(resultPartitionId, new PartitionInfo<>(key, metaInfo));
++    }
++
++    @Override
++    public void stopTrackingAndReleasePartitions(
++            Collection<ResultPartitionID> resultPartitionIds, boolean releaseOnShuffleMaster) {
++        stopTrackingAndHandlePartitions(
++                resultPartitionIds,
++                (tmID, partitionDescs) ->
++                        internalReleasePartitions(tmID, partitionDescs, releaseOnShuffleMaster));
++    }
++
++    @Override
++    public void stopTrackingAndReleaseOrPromotePartitions(
++            Collection<ResultPartitionID> resultPartitionIds) {
++        stopTrackingAndHandlePartitions(
++                resultPartitionIds,
++                (tmID, partitionDescs) -> internalReleaseOrPromotePartitions(tmID, partitionDescs));
++    }
++
++    @Override
++    public Collection<ResultPartitionDeploymentDescriptor> getAllTrackedPartitions() {
++        return partitionInfos.values().stream().map(PartitionInfo::getMetaInfo).collect(toList());
++    }
++
++    private void stopTrackingAndHandlePartitions(
++            Collection<ResultPartitionID> resultPartitionIds,
++            BiConsumer<ResourceID, Collection<ResultPartitionDeploymentDescriptor>>
++                    partitionHandler) {
+         Preconditions.checkNotNull(resultPartitionIds);
+ 
+-        // stop tracking partitions to be released and group them by task executor ID
++        // stop tracking partitions to handle and group them by task executor ID
+         Map<ResourceID, List<ResultPartitionDeploymentDescriptor>> partitionsToReleaseByResourceId =
+                 stopTrackingPartitions(resultPartitionIds).stream()
+                         .collect(
+@@ -91,40 +135,19 @@ public class JobMasterPartitionTrackerImpl
+                                         Collectors.mapping(
+                                                 PartitionTrackerEntry::getMetaInfo, toList())));
+ 
+-        partitionsToReleaseByResourceId.forEach(this::internalReleasePartitions);
+-    }
+-
+-    @Override
+-    public void stopTrackingAndReleasePartitionsFor(ResourceID producingTaskExecutorId) {
+-        Preconditions.checkNotNull(producingTaskExecutorId);
+-
+-        Collection<ResultPartitionDeploymentDescriptor> resultPartitionIds =
+-                CollectionUtil.project(
+-                        stopTrackingPartitionsFor(producingTaskExecutorId),
+-                        PartitionTrackerEntry::getMetaInfo);
+-
+-        internalReleasePartitions(producingTaskExecutorId, resultPartitionIds);
+-    }
+-
+-    @Override
+-    public void stopTrackingAndReleaseOrPromotePartitionsFor(ResourceID producingTaskExecutorId) {
+-        Preconditions.checkNotNull(producingTaskExecutorId);
+-
+-        Collection<ResultPartitionDeploymentDescriptor> resultPartitionIds =
+-                CollectionUtil.project(
+-                        stopTrackingPartitionsFor(producingTaskExecutorId),
+-                        PartitionTrackerEntry::getMetaInfo);
+-
+-        internalReleaseOrPromotePartitions(producingTaskExecutorId, resultPartitionIds);
++        partitionsToReleaseByResourceId.forEach(partitionHandler);
+     }
+ 
+     private void internalReleasePartitions(
+             ResourceID potentialPartitionLocation,
+-            Collection<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors) {
++            Collection<ResultPartitionDeploymentDescriptor> partitionDeploymentDescriptors,
++            boolean releaseOnShuffleMaster) {
+ 
+         internalReleasePartitionsOnTaskExecutor(
+                 potentialPartitionLocation, partitionDeploymentDescriptors);
+-        internalReleasePartitionsOnShuffleMaster(partitionDeploymentDescriptors.stream());
++        if (releaseOnShuffleMaster) {
++            internalReleasePartitionsOnShuffleMaster(partitionDeploymentDescriptors.stream());
++        }
+     }
+ 
+     private void internalReleaseOrPromotePartitions(
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/JobManagerSharedServices.java b/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/JobManagerSharedServices.java
+index e59c3d3e42f..cfd47271976 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/JobManagerSharedServices.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/JobManagerSharedServices.java
+@@ -26,6 +26,10 @@ import org.apache.flink.runtime.execution.librarycache.BlobLibraryCacheManager;
+ import org.apache.flink.runtime.execution.librarycache.FlinkUserCodeClassLoaders;
+ import org.apache.flink.runtime.execution.librarycache.LibraryCacheManager;
+ import org.apache.flink.runtime.rpc.FatalErrorHandler;
++import org.apache.flink.runtime.shuffle.ShuffleMaster;
++import org.apache.flink.runtime.shuffle.ShuffleMasterContext;
++import org.apache.flink.runtime.shuffle.ShuffleMasterContextImpl;
++import org.apache.flink.runtime.shuffle.ShuffleServiceLoader;
+ import org.apache.flink.runtime.util.ExecutorThreadFactory;
+ import org.apache.flink.runtime.util.Hardware;
+ import org.apache.flink.util.ExceptionUtils;
+@@ -47,15 +51,19 @@ public class JobManagerSharedServices {
+ 
+     private final LibraryCacheManager libraryCacheManager;
+ 
++    private final ShuffleMaster<?> shuffleMaster;
++
+     @Nonnull private final BlobWriter blobWriter;
+ 
+     public JobManagerSharedServices(
+             ScheduledExecutorService scheduledExecutorService,
+             LibraryCacheManager libraryCacheManager,
++            ShuffleMaster<?> shuffleMaster,
+             @Nonnull BlobWriter blobWriter) {
+ 
+         this.scheduledExecutorService = checkNotNull(scheduledExecutorService);
+         this.libraryCacheManager = checkNotNull(libraryCacheManager);
++        this.shuffleMaster = checkNotNull(shuffleMaster);
+         this.blobWriter = blobWriter;
+     }
+ 
+@@ -67,6 +75,10 @@ public class JobManagerSharedServices {
+         return libraryCacheManager;
+     }
+ 
++    public ShuffleMaster<?> getShuffleMaster() {
++        return shuffleMaster;
++    }
++
+     @Nonnull
+     public BlobWriter getBlobWriter() {
+         return blobWriter;
+@@ -90,6 +102,12 @@ public class JobManagerSharedServices {
+             firstException = t;
+         }
+ 
++        try {
++            shuffleMaster.close();
++        } catch (Throwable t) {
++            firstException = firstException == null ? t : firstException;
++        }
++
+         libraryCacheManager.shutdown();
+ 
+         if (firstException != null) {
+@@ -103,7 +121,8 @@ public class JobManagerSharedServices {
+     // ------------------------------------------------------------------------
+ 
+     public static JobManagerSharedServices fromConfiguration(
+-            Configuration config, BlobServer blobServer, FatalErrorHandler fatalErrorHandler) {
++            Configuration config, BlobServer blobServer, FatalErrorHandler fatalErrorHandler)
++            throws Exception {
+ 
+         checkNotNull(config);
+         checkNotNull(blobServer);
+@@ -133,6 +152,14 @@ public class JobManagerSharedServices {
+                         Hardware.getNumberCPUCores(),
+                         new ExecutorThreadFactory("jobmanager-future"));
+ 
+-        return new JobManagerSharedServices(futureExecutor, libraryCacheManager, blobServer);
++        final ShuffleMasterContext shuffleMasterContext =
++                new ShuffleMasterContextImpl(config, fatalErrorHandler);
++        final ShuffleMaster<?> shuffleMaster =
++                ShuffleServiceLoader.loadShuffleServiceFactory(config)
++                        .createShuffleMaster(shuffleMasterContext);
++        shuffleMaster.start();
++
++        return new JobManagerSharedServices(
++                futureExecutor, libraryCacheManager, shuffleMaster, blobServer);
+     }
+ }
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/JobMaster.java b/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/JobMaster.java
+index 75af0be9762..bc58de9e2b1 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/JobMaster.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/JobMaster.java
+@@ -75,6 +75,8 @@ import org.apache.flink.runtime.rpc.RpcService;
+ import org.apache.flink.runtime.rpc.akka.AkkaRpcServiceUtils;
+ import org.apache.flink.runtime.scheduler.ExecutionGraphInfo;
+ import org.apache.flink.runtime.scheduler.SchedulerNG;
++import org.apache.flink.runtime.shuffle.JobShuffleContext;
++import org.apache.flink.runtime.shuffle.JobShuffleContextImpl;
+ import org.apache.flink.runtime.shuffle.ShuffleMaster;
+ import org.apache.flink.runtime.slots.ResourceRequirement;
+ import org.apache.flink.runtime.state.KeyGroupRange;
+@@ -109,6 +111,7 @@ import java.util.concurrent.CompletionException;
+ import java.util.concurrent.Executor;
+ import java.util.concurrent.ScheduledExecutorService;
+ import java.util.concurrent.TimeoutException;
++import java.util.stream.Collectors;
+ 
+ import static org.apache.flink.util.Preconditions.checkNotNull;
+ 
+@@ -852,6 +855,19 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
+         }
+     }
+ 
++    @Override
++    public CompletableFuture<?> stopTrackingAndReleasePartitions(
++            Collection<ResultPartitionID> partitionIds) {
++        CompletableFuture<?> future = new CompletableFuture<>();
++        try {
++            partitionTracker.stopTrackingAndReleasePartitions(partitionIds, false);
++            future.complete(null);
++        } catch (Throwable throwable) {
++            future.completeExceptionally(throwable);
++        }
++        return future;
++    }
++
+     // ----------------------------------------------------------------------------------------------
+     // Internal methods
+     // ----------------------------------------------------------------------------------------------
+@@ -862,6 +878,9 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
+     private void startJobExecution() throws Exception {
+         validateRunsInMainThread();
+ 
++        JobShuffleContext context = new JobShuffleContextImpl(jobGraph.getJobID(), this);
++        shuffleMaster.registerJob(context);
++
+         startJobMasterServices();
+ 
+         log.info(
+@@ -928,6 +947,7 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
+         return FutureUtils.runAfterwards(
+                 terminationFuture,
+                 () -> {
++                    shuffleMaster.unregisterJob(jobGraph.getJobID());
+                     disconnectTaskManagerResourceManagerConnections(cause);
+                     stopJobMasterServices();
+                 });
+@@ -977,18 +997,19 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
+ 
+     private void jobStatusChanged(final JobStatus newJobStatus) {
+         validateRunsInMainThread();
+-
+         if (newJobStatus.isGloballyTerminalState()) {
+             runAsync(
+-                    () ->
+-                            registeredTaskManagers
+-                                    .keySet()
+-                                    .forEach(
+-                                            newJobStatus == JobStatus.FINISHED
+-                                                    ? partitionTracker
+-                                                            ::stopTrackingAndReleaseOrPromotePartitionsFor
+-                                                    : partitionTracker
+-                                                            ::stopTrackingAndReleasePartitionsFor));
++                    () -> {
++                        Collection<ResultPartitionID> allTracked =
++                                partitionTracker.getAllTrackedPartitions().stream()
++                                        .map(d -> d.getShuffleDescriptor().getResultPartitionID())
++                                        .collect(Collectors.toList());
++                        if (newJobStatus == JobStatus.FINISHED) {
++                            partitionTracker.stopTrackingAndReleaseOrPromotePartitions(allTracked);
++                        } else {
++                            partitionTracker.stopTrackingAndReleasePartitions(allTracked);
++                        }
++                    });
+ 
+             final ExecutionGraphInfo executionGraphInfo = schedulerNG.requestJob();
+             scheduledExecutorService.execute(
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/JobMasterGateway.java b/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/JobMasterGateway.java
+index 1db69f79647..acc02b6e67a 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/JobMasterGateway.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/JobMasterGateway.java
+@@ -289,4 +289,12 @@ public interface JobMasterGateway
+             OperatorID operatorId,
+             SerializedValue<CoordinationRequest> serializedRequest,
+             @RpcTimeout Time timeout);
++
++    /**
++     * Notifies the {@link org.apache.flink.runtime.io.network.partition.JobMasterPartitionTracker}
++     * to stop tracking the target result partitions and release the locally occupied resources on
++     * {@link org.apache.flink.runtime.taskexecutor.TaskExecutor}s if any.
++     */
++    CompletableFuture<?> stopTrackingAndReleasePartitions(
++            Collection<ResultPartitionID> partitionIds);
+ }
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/factories/DefaultJobMasterServiceFactory.java b/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/factories/DefaultJobMasterServiceFactory.java
+index 637bdc58497..bcde4b49475 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/factories/DefaultJobMasterServiceFactory.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/jobmaster/factories/DefaultJobMasterServiceFactory.java
+@@ -69,7 +69,6 @@ public class DefaultJobMasterServiceFactory implements JobMasterServiceFactory {
+             JobManagerJobMetricGroupFactory jobManagerJobMetricGroupFactory,
+             FatalErrorHandler fatalErrorHandler,
+             ClassLoader userCodeClassloader,
+-            ShuffleMaster<?> shuffleMaster,
+             long initializationTimestamp) {
+         this.executor = executor;
+         this.rpcService = rpcService;
+@@ -82,7 +81,7 @@ public class DefaultJobMasterServiceFactory implements JobMasterServiceFactory {
+         this.jobManagerJobMetricGroupFactory = jobManagerJobMetricGroupFactory;
+         this.fatalErrorHandler = fatalErrorHandler;
+         this.userCodeClassloader = userCodeClassloader;
+-        this.shuffleMaster = shuffleMaster;
++        this.shuffleMaster = jobManagerSharedServices.getShuffleMaster();
+         this.initializationTimestamp = initializationTimestamp;
+     }
+ 
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/scheduler/DefaultScheduler.java b/flink-runtime/src/main/java/org/apache/flink/runtime/scheduler/DefaultScheduler.java
+index 50f7b87ee9b..630909f05ce 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/scheduler/DefaultScheduler.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/scheduler/DefaultScheduler.java
+@@ -20,6 +20,7 @@
+ package org.apache.flink.runtime.scheduler;
+ 
+ import org.apache.flink.api.common.JobStatus;
++import org.apache.flink.api.common.time.Time;
+ import org.apache.flink.configuration.Configuration;
+ import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
+ import org.apache.flink.runtime.clusterframework.types.AllocationID;
+@@ -49,6 +50,7 @@ import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
+ import org.apache.flink.runtime.scheduler.strategy.SchedulingStrategy;
+ import org.apache.flink.runtime.scheduler.strategy.SchedulingStrategyFactory;
+ import org.apache.flink.runtime.scheduler.strategy.SchedulingTopology;
++import org.apache.flink.runtime.shuffle.ShuffleMaster;
+ import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
+ import org.apache.flink.runtime.topology.Vertex;
+ import org.apache.flink.util.ExceptionUtils;
+@@ -97,6 +99,10 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
+ 
+     private final Set<ExecutionVertexID> verticesWaitingForRestart;
+ 
++    private final ShuffleMaster<?> shuffleMaster;
++
++    private final Time rpcTimeout;
++
+     DefaultScheduler(
+             final Logger log,
+             final JobGraph jobGraph,
+@@ -116,7 +122,9 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
+             long initializationTimestamp,
+             final ComponentMainThreadExecutor mainThreadExecutor,
+             final JobStatusListener jobStatusListener,
+-            final ExecutionGraphFactory executionGraphFactory)
++            final ExecutionGraphFactory executionGraphFactory,
++            final ShuffleMaster<?> shuffleMaster,
++            final Time rpcTimeout)
+             throws Exception {
+ 
+         super(
+@@ -138,6 +146,8 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
+         this.delayExecutor = checkNotNull(delayExecutor);
+         this.userCodeLoader = checkNotNull(userCodeLoader);
+         this.executionVertexOperations = checkNotNull(executionVertexOperations);
++        this.shuffleMaster = checkNotNull(shuffleMaster);
++        this.rpcTimeout = checkNotNull(rpcTimeout);
+ 
+         final FailoverStrategy failoverStrategy =
+                 failoverStrategyFactory.create(
+@@ -425,21 +435,33 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
+ 
+     private void waitForAllSlotsAndDeploy(final List<DeploymentHandle> deploymentHandles) {
+         FutureUtils.assertNoException(
+-                assignAllResources(deploymentHandles).handle(deployAll(deploymentHandles)));
++                assignAllResourcesAndRegisterProducedPartitions(deploymentHandles)
++                        .handle(deployAll(deploymentHandles)));
+     }
+ 
+-    private CompletableFuture<Void> assignAllResources(
++    private CompletableFuture<Void> assignAllResourcesAndRegisterProducedPartitions(
+             final List<DeploymentHandle> deploymentHandles) {
+-        final List<CompletableFuture<Void>> slotAssignedFutures = new ArrayList<>();
++        final List<CompletableFuture<Void>> resultFutures = new ArrayList<>();
+         for (DeploymentHandle deploymentHandle : deploymentHandles) {
+-            final CompletableFuture<Void> slotAssigned =
++            final CompletableFuture<Void> resultFuture =
+                     deploymentHandle
+                             .getSlotExecutionVertexAssignment()
+                             .getLogicalSlotFuture()
+-                            .handle(assignResourceOrHandleError(deploymentHandle));
+-            slotAssignedFutures.add(slotAssigned);
++                            .handle(assignResource(deploymentHandle))
++                            .thenCompose(registerProducedPartitions(deploymentHandle))
++                            .handle(
++                                    (ignore, throwable) -> {
++                                        if (throwable != null) {
++                                            handleTaskDeploymentFailure(
++                                                    deploymentHandle.getExecutionVertexId(),
++                                                    throwable);
++                                        }
++                                        return null;
++                                    });
++
++            resultFutures.add(resultFuture);
+         }
+-        return FutureUtils.waitForAll(slotAssignedFutures);
++        return FutureUtils.waitForAll(resultFutures);
+     }
+ 
+     private BiFunction<Void, Throwable, Void> deployAll(
+@@ -466,7 +488,7 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
+         }
+     }
+ 
+-    private BiFunction<LogicalSlot, Throwable, Void> assignResourceOrHandleError(
++    private BiFunction<LogicalSlot, Throwable, LogicalSlot> assignResource(
+             final DeploymentHandle deploymentHandle) {
+         final ExecutionVertexVersion requiredVertexVersion =
+                 deploymentHandle.getRequiredVertexVersion();
+@@ -474,28 +496,56 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
+ 
+         return (logicalSlot, throwable) -> {
+             if (executionVertexVersioner.isModified(requiredVertexVersion)) {
+-                log.debug(
+-                        "Refusing to assign slot to execution vertex {} because this deployment was "
+-                                + "superseded by another deployment",
+-                        executionVertexId);
+-                releaseSlotIfPresent(logicalSlot);
++                if (throwable == null) {
++                    log.debug(
++                            "Refusing to assign slot to execution vertex {} because this deployment was "
++                                    + "superseded by another deployment",
++                            executionVertexId);
++                    releaseSlotIfPresent(logicalSlot);
++                }
+                 return null;
+             }
+ 
+-            if (throwable == null) {
++            // throw exception only if the execution version is not outdated.
++            // this ensures that canceling a pending slot request does not fail
++            // a task which is about to cancel in #restartTasksWithDelay(...)
++            if (throwable != null) {
++                throw new CompletionException(maybeWrapWithNoResourceAvailableException(throwable));
++            }
++
++            final ExecutionVertex executionVertex = getExecutionVertex(executionVertexId);
++            executionVertex.tryAssignResource(logicalSlot);
++            return logicalSlot;
++        };
++    }
++
++    private Function<LogicalSlot, CompletableFuture<Void>> registerProducedPartitions(
++            final DeploymentHandle deploymentHandle) {
++        final ExecutionVertexID executionVertexId = deploymentHandle.getExecutionVertexId();
++
++        return logicalSlot -> {
++            // a null logicalSlot means the slot assignment is skipped, in which case
++            // the produced partition registration process can be skipped as well
++            if (logicalSlot != null) {
+                 final ExecutionVertex executionVertex = getExecutionVertex(executionVertexId);
+                 final boolean notifyPartitionDataAvailable =
+                         deploymentHandle.getDeploymentOption().notifyPartitionDataAvailable();
+-                executionVertex
+-                        .getCurrentExecutionAttempt()
+-                        .registerProducedPartitions(
+-                                logicalSlot.getTaskManagerLocation(), notifyPartitionDataAvailable);
+-                executionVertex.tryAssignResource(logicalSlot);
++
++                final CompletableFuture<Void> partitionRegistrationFuture =
++                        executionVertex
++                                .getCurrentExecutionAttempt()
++                                .registerProducedPartitions(
++                                        logicalSlot.getTaskManagerLocation(),
++                                        notifyPartitionDataAvailable);
++
++                return FutureUtils.orTimeout(
++                        partitionRegistrationFuture,
++                        rpcTimeout.toMilliseconds(),
++                        TimeUnit.MILLISECONDS,
++                        getMainThreadExecutor());
+             } else {
+-                handleTaskDeploymentFailure(
+-                        executionVertexId, maybeWrapWithNoResourceAvailableException(throwable));
++                return FutureUtils.completedVoidFuture();
+             }
+-            return null;
+         };
+     }
+ 
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/scheduler/DefaultSchedulerFactory.java b/flink-runtime/src/main/java/org/apache/flink/runtime/scheduler/DefaultSchedulerFactory.java
+index cf008871478..926b16d9418 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/scheduler/DefaultSchedulerFactory.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/scheduler/DefaultSchedulerFactory.java
+@@ -133,7 +133,9 @@ public class DefaultSchedulerFactory implements SchedulerNGFactory {
+                 initializationTimestamp,
+                 mainThreadExecutor,
+                 jobStatusListener,
+-                executionGraphFactory);
++                executionGraphFactory,
++                shuffleMaster,
++                rpcTimeout);
+     }
+ 
+     @Override
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/scheduler/adaptive/AdaptiveScheduler.java b/flink-runtime/src/main/java/org/apache/flink/runtime/scheduler/adaptive/AdaptiveScheduler.java
+index 9a1a252fced..472153cb64c 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/scheduler/adaptive/AdaptiveScheduler.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/scheduler/adaptive/AdaptiveScheduler.java
+@@ -959,9 +959,15 @@ public class AdaptiveScheduler
+             ExecutionGraph executionGraph, ReservedSlots reservedSlots) {
+         for (ExecutionVertex executionVertex : executionGraph.getAllExecutionVertices()) {
+             final LogicalSlot assignedSlot = reservedSlots.getSlotFor(executionVertex.getID());
+-            executionVertex
+-                    .getCurrentExecutionAttempt()
+-                    .registerProducedPartitions(assignedSlot.getTaskManagerLocation(), false);
++            final CompletableFuture<Void> registrationFuture =
++                    executionVertex
++                            .getCurrentExecutionAttempt()
++                            .registerProducedPartitions(
++                                    assignedSlot.getTaskManagerLocation(), false);
++            Preconditions.checkState(
++                    registrationFuture.isDone(),
++                    "Partition registration must be completed immediately for reactive mode");
++
+             executionVertex.tryAssignResource(assignedSlot);
+         }
+ 
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/JobShuffleContext.java b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/JobShuffleContext.java
+new file mode 100644
+index 00000000000..3cfa996f0c1
+--- /dev/null
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/JobShuffleContext.java
+@@ -0,0 +1,42 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.flink.runtime.shuffle;
++
++import org.apache.flink.api.common.JobID;
++import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
++
++import java.util.Collection;
++import java.util.concurrent.CompletableFuture;
++
++/**
++ * Job level shuffle context which can offer some job information like job ID and through it, the
++ * shuffle plugin notify the job to stop tracking the lost result partitions.
++ */
++public interface JobShuffleContext {
++
++    /** @return the corresponding {@link JobID}. */
++    JobID getJobId();
++
++    /**
++     * Notifies the job to stop tracking and release the target result partitions, which means these
++     * partitions will be removed and will be reproduced if used afterwards.
++     */
++    CompletableFuture<?> stopTrackingAndReleasePartitions(
++            Collection<ResultPartitionID> partitionIds);
++}
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/JobShuffleContextImpl.java b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/JobShuffleContextImpl.java
+new file mode 100644
+index 00000000000..d05689706d2
+--- /dev/null
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/JobShuffleContextImpl.java
+@@ -0,0 +1,52 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.flink.runtime.shuffle;
++
++import org.apache.flink.api.common.JobID;
++import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
++import org.apache.flink.runtime.jobmaster.JobMasterGateway;
++
++import java.util.Collection;
++import java.util.concurrent.CompletableFuture;
++
++import static org.apache.flink.util.Preconditions.checkNotNull;
++
++/** The default implementation of {@link JobShuffleContext}. */
++public class JobShuffleContextImpl implements JobShuffleContext {
++
++    private final JobID jobId;
++
++    private final JobMasterGateway jobMasterGateway;
++
++    public JobShuffleContextImpl(JobID jobId, JobMasterGateway jobMasterGateway) {
++        this.jobId = checkNotNull(jobId);
++        this.jobMasterGateway = checkNotNull(jobMasterGateway);
++    }
++
++    @Override
++    public JobID getJobId() {
++        return jobId;
++    }
++
++    @Override
++    public CompletableFuture<?> stopTrackingAndReleasePartitions(
++            Collection<ResultPartitionID> partitionIds) {
++        return jobMasterGateway.stopTrackingAndReleasePartitions(partitionIds);
++    }
++}
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/NettyShuffleMaster.java b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/NettyShuffleMaster.java
+index 0d73d25df9b..7b2e8762cbf 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/NettyShuffleMaster.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/NettyShuffleMaster.java
+@@ -18,6 +18,7 @@
+ 
+ package org.apache.flink.runtime.shuffle;
+ 
++import org.apache.flink.api.common.JobID;
+ import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
+ import org.apache.flink.runtime.shuffle.NettyShuffleDescriptor.LocalExecutionPartitionConnectionInfo;
+ import org.apache.flink.runtime.shuffle.NettyShuffleDescriptor.NetworkPartitionConnectionInfo;
+@@ -26,12 +27,15 @@ import org.apache.flink.runtime.shuffle.NettyShuffleDescriptor.PartitionConnecti
+ import java.util.concurrent.CompletableFuture;
+ 
+ /** Default {@link ShuffleMaster} for netty and local file based shuffle implementation. */
+-public enum NettyShuffleMaster implements ShuffleMaster<NettyShuffleDescriptor> {
+-    INSTANCE;
++public class NettyShuffleMaster implements ShuffleMaster<NettyShuffleDescriptor> {
++
++    public static final NettyShuffleMaster INSTANCE = new NettyShuffleMaster();
+ 
+     @Override
+     public CompletableFuture<NettyShuffleDescriptor> registerPartitionWithProducer(
+-            PartitionDescriptor partitionDescriptor, ProducerDescriptor producerDescriptor) {
++            JobID jobID,
++            PartitionDescriptor partitionDescriptor,
++            ProducerDescriptor producerDescriptor) {
+ 
+         ResultPartitionID resultPartitionID =
+                 new ResultPartitionID(
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleMaster.java b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleMaster.java
+index 2620e0872ed..b5b464e30b3 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleMaster.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleMaster.java
+@@ -18,6 +18,8 @@
+ 
+ package org.apache.flink.runtime.shuffle;
+ 
++import org.apache.flink.api.common.JobID;
++
+ import java.util.Collection;
+ import java.util.concurrent.CompletableFuture;
+ 
+@@ -28,18 +30,48 @@ import java.util.concurrent.CompletableFuture;
+  * @param <T> partition shuffle descriptor used for producer/consumer deployment and their data
+  *     exchange.
+  */
+-public interface ShuffleMaster<T extends ShuffleDescriptor> {
++public interface ShuffleMaster<T extends ShuffleDescriptor> extends AutoCloseable {
+ 
+     /**
+-     * Asynchronously register a partition and its producer with the shuffle service.
++     * Starts this shuffle master as a service. One can do some initialization here, for example
++     * getting access and connecting to the external system.
++     */
++    default void start() throws Exception {}
++
++    /**
++     * Closes this shuffle master service which should release all resources. A shuffle master will
++     * only be closed when the cluster is shut down.
++     */
++    @Override
++    default void close() throws Exception {}
++
++    /**
++     * Registers the target job together with the corresponding {@link JobShuffleContext} to this
++     * shuffle master. Through the shuffle context, one can obtain some basic information like job
++     * ID, job configuration. It enables ShuffleMaster to notify JobMaster about lost result
++     * partitions, so that JobMaster can identify and reproduce unavailable partitions earlier.
+      *
+-     * <p>IMPORTANT: the returned future must be completed due to limitations in the default
+-     * scheduler.
++     * @param context the corresponding shuffle context of the target job.
++     */
++    default void registerJob(JobShuffleContext context) {}
++
++    /**
++     * Unregisters the target job from this shuffle master, which means the corresponding job has
++     * reached a global termination state and all the allocated resources except for the cluster
++     * partitions can be cleared.
++     *
++     * @param jobID ID of the target job to be unregistered.
++     */
++    default void unregisterJob(JobID jobID) {}
++
++    /**
++     * Asynchronously register a partition and its producer with the shuffle service.
+      *
+      * <p>The returned shuffle descriptor is an internal handle which identifies the partition
+      * internally within the shuffle service. The descriptor should provide enough information to
+      * read from or write data to the partition.
+      *
++     * @param jobID job ID of the corresponding job which registered the partition
+      * @param partitionDescriptor general job graph information about the partition
+      * @param producerDescriptor general producer information (location, execution id, connection
+      *     info)
+@@ -47,7 +79,9 @@ public interface ShuffleMaster<T extends ShuffleDescriptor> {
+      *     and their data exchange.
+      */
+     CompletableFuture<T> registerPartitionWithProducer(
+-            PartitionDescriptor partitionDescriptor, ProducerDescriptor producerDescriptor);
++            JobID jobID,
++            PartitionDescriptor partitionDescriptor,
++            ProducerDescriptor producerDescriptor);
+ 
+     /**
+      * Release any external resources occupied by the given partition.
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleMasterContext.java b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleMasterContext.java
+new file mode 100644
+index 00000000000..a35b960e239
+--- /dev/null
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleMasterContext.java
+@@ -0,0 +1,36 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.flink.runtime.shuffle;
++
++import org.apache.flink.configuration.Configuration;
++
++/**
++ * Shuffle context used to create {@link ShuffleMaster}. It can work as a proxy to other cluster
++ * components and hide these components from users. For example, the customized shuffle master can
++ * access the cluster fatal error handler through this context and in the future, more components
++ * like the resource manager partition tracker will be accessible.
++ */
++public interface ShuffleMasterContext {
++
++    /** @return the cluster configuration. */
++    Configuration getConfiguration();
++
++    /** Handles the fatal error if any. */
++    void onFatalError(Throwable throwable);
++}
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleMasterContextImpl.java b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleMasterContextImpl.java
+new file mode 100644
+index 00000000000..111c57b55f8
+--- /dev/null
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleMasterContextImpl.java
+@@ -0,0 +1,48 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.flink.runtime.shuffle;
++
++import org.apache.flink.configuration.Configuration;
++import org.apache.flink.runtime.rpc.FatalErrorHandler;
++
++import static org.apache.flink.util.Preconditions.checkNotNull;
++
++/** The default implementation of {@link ShuffleMasterContext}. */
++public class ShuffleMasterContextImpl implements ShuffleMasterContext {
++
++    private final Configuration configuration;
++
++    private final FatalErrorHandler fatalErrorHandler;
++
++    public ShuffleMasterContextImpl(
++            Configuration configuration, FatalErrorHandler fatalErrorHandler) {
++        this.configuration = checkNotNull(configuration);
++        this.fatalErrorHandler = checkNotNull(fatalErrorHandler);
++    }
++
++    @Override
++    public Configuration getConfiguration() {
++        return configuration;
++    }
++
++    @Override
++    public void onFatalError(Throwable throwable) {
++        fatalErrorHandler.onFatalError(throwable);
++    }
++}
+diff --git a/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleServiceFactory.java b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleServiceFactory.java
+index 9cd8166ad9e..6d81a224252 100644
+--- a/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleServiceFactory.java
++++ b/flink-runtime/src/main/java/org/apache/flink/runtime/shuffle/ShuffleServiceFactory.java
+@@ -18,7 +18,6 @@
+ 
+ package org.apache.flink.runtime.shuffle;
+ 
+-import org.apache.flink.configuration.Configuration;
+ import org.apache.flink.runtime.io.network.api.writer.ResultPartitionWriter;
+ import org.apache.flink.runtime.io.network.partition.consumer.IndexedInputGate;
+ 
+@@ -39,10 +38,10 @@ public interface ShuffleServiceFactory<
+     /**
+      * Factory method to create a specific {@link ShuffleMaster} implementation.
+      *
+-     * @param configuration Flink configuration
++     * @param shuffleMasterContext shuffle context for shuffle master.
+      * @return shuffle manager implementation
+      */
+-    ShuffleMaster<SD> createShuffleMaster(Configuration configuration);
++    ShuffleMaster<SD> createShuffleMaster(ShuffleMasterContext shuffleMasterContext);
+ 
+     /**
+      * Factory method to create a specific local {@link ShuffleEnvironment} implementation.
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/deployment/ShuffleDescriptorTest.java b/flink-runtime/src/test/java/org/apache/flink/runtime/deployment/ShuffleDescriptorTest.java
+index 5fc142c58e6..57e750d7fd0 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/deployment/ShuffleDescriptorTest.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/deployment/ShuffleDescriptorTest.java
+@@ -18,6 +18,7 @@
+ 
+ package org.apache.flink.runtime.deployment;
+ 
++import org.apache.flink.api.common.JobID;
+ import org.apache.flink.runtime.clusterframework.types.ResourceID;
+ import org.apache.flink.runtime.execution.ExecutionState;
+ import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
+@@ -54,18 +55,20 @@ public class ShuffleDescriptorTest extends TestLogger {
+     @Test
+     public void testMixedLocalRemoteUnknownDeployment() throws Exception {
+         ResourceID consumerResourceID = ResourceID.generate();
++        JobID jobID = new JobID();
+ 
+         // Local and remote channel are only allowed for certain execution
+         // states.
+         for (ExecutionState state : ExecutionState.values()) {
+             ResultPartitionID localPartitionId = new ResultPartitionID();
+             ResultPartitionDeploymentDescriptor localPartition =
+-                    createResultPartitionDeploymentDescriptor(localPartitionId, consumerResourceID);
++                    createResultPartitionDeploymentDescriptor(
++                            jobID, localPartitionId, consumerResourceID);
+ 
+             ResultPartitionID remotePartitionId = new ResultPartitionID();
+             ResultPartitionDeploymentDescriptor remotePartition =
+                     createResultPartitionDeploymentDescriptor(
+-                            remotePartitionId, ResourceID.generate());
++                            jobID, remotePartitionId, ResourceID.generate());
+ 
+             ResultPartitionID unknownPartitionId = new ResultPartitionID();
+ 
+@@ -196,7 +199,7 @@ public class ShuffleDescriptorTest extends TestLogger {
+     }
+ 
+     private static ResultPartitionDeploymentDescriptor createResultPartitionDeploymentDescriptor(
+-            ResultPartitionID id, ResourceID location)
++            JobID jobID, ResultPartitionID id, ResourceID location)
+             throws ExecutionException, InterruptedException {
+         ProducerDescriptor producerDescriptor =
+                 new ProducerDescriptor(
+@@ -208,7 +211,8 @@ public class ShuffleDescriptorTest extends TestLogger {
+                 PartitionDescriptorBuilder.newBuilder().setPartitionId(id.getPartitionId()).build();
+         ShuffleDescriptor shuffleDescriptor =
+                 NettyShuffleMaster.INSTANCE
+-                        .registerPartitionWithProducer(partitionDescriptor, producerDescriptor)
++                        .registerPartitionWithProducer(
++                                jobID, partitionDescriptor, producerDescriptor)
+                         .get();
+         return new ResultPartitionDeploymentDescriptor(
+                 partitionDescriptor, shuffleDescriptor, 1, true);
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/executiongraph/ExecutionPartitionLifecycleTest.java b/flink-runtime/src/test/java/org/apache/flink/runtime/executiongraph/ExecutionPartitionLifecycleTest.java
+index 373590b8fac..eee997a1c45 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/executiongraph/ExecutionPartitionLifecycleTest.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/executiongraph/ExecutionPartitionLifecycleTest.java
+@@ -322,7 +322,9 @@ public class ExecutionPartitionLifecycleTest extends TestLogger {
+ 
+         @Override
+         public CompletableFuture<ShuffleDescriptor> registerPartitionWithProducer(
+-                PartitionDescriptor partitionDescriptor, ProducerDescriptor producerDescriptor) {
++                JobID jobID,
++                PartitionDescriptor partitionDescriptor,
++                ProducerDescriptor producerDescriptor) {
+             return CompletableFuture.completedFuture(
+                     new ShuffleDescriptor() {
+                         @Override
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/executiongraph/ExecutionTest.java b/flink-runtime/src/test/java/org/apache/flink/runtime/executiongraph/ExecutionTest.java
+index c724087ee08..d3de904bbf6 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/executiongraph/ExecutionTest.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/executiongraph/ExecutionTest.java
+@@ -22,21 +22,14 @@ import org.apache.flink.runtime.checkpoint.JobManagerTaskRestore;
+ import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
+ import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutorServiceAdapter;
+ import org.apache.flink.runtime.executiongraph.utils.SimpleAckingTaskManagerGateway;
+-import org.apache.flink.runtime.jobgraph.JobGraph;
+ import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
+ import org.apache.flink.runtime.jobgraph.JobVertex;
+ import org.apache.flink.runtime.jobgraph.JobVertexID;
+-import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
+ import org.apache.flink.runtime.jobmaster.slotpool.PhysicalSlot;
+ import org.apache.flink.runtime.scheduler.SchedulerBase;
+ import org.apache.flink.runtime.scheduler.SchedulerTestingUtils;
+ import org.apache.flink.runtime.scheduler.TestingPhysicalSlot;
+ import org.apache.flink.runtime.scheduler.TestingPhysicalSlotProvider;
+-import org.apache.flink.runtime.shuffle.PartitionDescriptor;
+-import org.apache.flink.runtime.shuffle.ProducerDescriptor;
+-import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
+-import org.apache.flink.runtime.shuffle.ShuffleMaster;
+-import org.apache.flink.runtime.taskmanager.LocalTaskManagerLocation;
+ import org.apache.flink.runtime.testtasks.NoOpInvokable;
+ import org.apache.flink.util.FlinkException;
+ import org.apache.flink.util.TestLogger;
+@@ -48,8 +41,6 @@ import javax.annotation.Nonnull;
+ 
+ import java.util.concurrent.CompletableFuture;
+ 
+-import static org.apache.flink.runtime.io.network.partition.ResultPartitionType.PIPELINED;
+-import static org.apache.flink.runtime.jobgraph.DistributionPattern.POINTWISE;
+ import static org.hamcrest.Matchers.is;
+ import static org.hamcrest.Matchers.notNullValue;
+ import static org.hamcrest.Matchers.nullValue;
+@@ -239,53 +230,6 @@ public class ExecutionTest extends TestLogger {
+                 });
+     }
+ 
+-    /**
+-     * Tests that incomplete futures returned by {@link ShuffleMaster#registerPartitionWithProducer}
+-     * are rejected.
+-     */
+-    @Test
+-    public void testIncompletePartitionRegistrationFutureIsRejected() throws Exception {
+-        final ShuffleMaster<ShuffleDescriptor> shuffleMaster = new TestingShuffleMaster();
+-        final JobVertex source = new JobVertex("source");
+-        final JobVertex target = new JobVertex("target");
+-
+-        source.setInvokableClass(AbstractInvokable.class);
+-        target.setInvokableClass(AbstractInvokable.class);
+-        target.connectNewDataSetAsInput(source, POINTWISE, PIPELINED);
+-
+-        final JobGraph jobGraph = JobGraphTestUtils.streamingJobGraph(source, target);
+-        ExecutionGraph executionGraph =
+-                TestingDefaultExecutionGraphBuilder.newBuilder()
+-                        .setJobGraph(jobGraph)
+-                        .setShuffleMaster(shuffleMaster)
+-                        .build();
+-
+-        final ExecutionVertex sourceVertex =
+-                executionGraph.getAllVertices().get(source.getID()).getTaskVertices()[0];
+-
+-        boolean incompletePartitionRegistrationRejected = false;
+-        try {
+-            Execution.registerProducedPartitions(
+-                    sourceVertex, new LocalTaskManagerLocation(), new ExecutionAttemptID(), false);
+-        } catch (IllegalStateException e) {
+-            incompletePartitionRegistrationRejected = true;
+-        }
+-
+-        assertTrue(incompletePartitionRegistrationRejected);
+-    }
+-
+-    private static class TestingShuffleMaster implements ShuffleMaster<ShuffleDescriptor> {
+-
+-        @Override
+-        public CompletableFuture<ShuffleDescriptor> registerPartitionWithProducer(
+-                PartitionDescriptor partitionDescriptor, ProducerDescriptor producerDescriptor) {
+-            return new CompletableFuture<>();
+-        }
+-
+-        @Override
+-        public void releasePartitionExternally(ShuffleDescriptor shuffleDescriptor) {}
+-    }
+-
+     @Nonnull
+     private JobVertex createNoOpJobVertex() {
+         final JobVertex jobVertex = new JobVertex("Test vertex", new JobVertexID());
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/AbstractPartitionTrackerTest.java b/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/AbstractPartitionTrackerTest.java
+index 1fc117b4c80..0324d482e8f 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/AbstractPartitionTrackerTest.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/AbstractPartitionTrackerTest.java
+@@ -64,7 +64,7 @@ public class AbstractPartitionTrackerTest extends TestLogger {
+                 is(false));
+     }
+ 
+-    static ResultPartitionDeploymentDescriptor createResultPartitionDeploymentDescriptor(
++    public static ResultPartitionDeploymentDescriptor createResultPartitionDeploymentDescriptor(
+             ResultPartitionID resultPartitionId, boolean hasLocalResources) {
+         return createResultPartitionDeploymentDescriptor(
+                 resultPartitionId, ResultPartitionType.BLOCKING, hasLocalResources);
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/JobMasterPartitionTrackerImplTest.java b/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/JobMasterPartitionTrackerImplTest.java
+index c96a1af57d9..54eb9f67b83 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/JobMasterPartitionTrackerImplTest.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/JobMasterPartitionTrackerImplTest.java
+@@ -32,17 +32,20 @@ import org.apache.flink.shaded.guava18.com.google.common.collect.Iterables;
+ 
+ import org.junit.Test;
+ 
++import java.util.ArrayList;
++import java.util.Arrays;
+ import java.util.Collection;
+-import java.util.Collections;
+ import java.util.Optional;
+ import java.util.Queue;
+ import java.util.concurrent.ArrayBlockingQueue;
+ import java.util.concurrent.CompletableFuture;
++import java.util.stream.Collectors;
+ 
+-import static org.hamcrest.CoreMatchers.is;
+ import static org.hamcrest.MatcherAssert.assertThat;
+ import static org.hamcrest.Matchers.contains;
++import static org.hamcrest.Matchers.containsInAnyOrder;
+ import static org.hamcrest.Matchers.empty;
++import static org.hamcrest.Matchers.is;
+ import static org.junit.Assert.assertEquals;
+ 
+ /** Tests for the {@link JobMasterPartitionTrackerImpl}. */
+@@ -73,7 +76,7 @@ public class JobMasterPartitionTrackerImplTest extends TestLogger {
+         partitionTracker.startTrackingPartition(
+                 resourceId,
+                 AbstractPartitionTrackerTest.createResultPartitionDeploymentDescriptor(
+-                        resultPartitionId, resultPartitionType, false));
++                        resultPartitionId, resultPartitionType, true));
+ 
+         assertThat(
+                 partitionTracker.isTrackingPartitionsFor(resourceId),
+@@ -85,73 +88,69 @@ public class JobMasterPartitionTrackerImplTest extends TestLogger {
+         final TestingShuffleMaster shuffleMaster = new TestingShuffleMaster();
+         final JobID jobId = new JobID();
+ 
+-        final Queue<ReleaseCall> taskExecutorReleaseCalls = new ArrayBlockingQueue<>(4);
++        final Queue<ReleaseCall> releaseCalls = new ArrayBlockingQueue<>(4);
+         final JobMasterPartitionTracker partitionTracker =
+                 new JobMasterPartitionTrackerImpl(
+                         jobId,
+                         shuffleMaster,
+-                        resourceId ->
+-                                Optional.of(
+-                                        createTaskExecutorGateway(
+-                                                resourceId, taskExecutorReleaseCalls)));
++                        tmId -> Optional.of(createTaskExecutorGateway(tmId, releaseCalls)));
+ 
+-        final ResourceID taskExecutorId1 = ResourceID.generate();
+-        final ResourceID taskExecutorId2 = ResourceID.generate();
+-        final ResultPartitionID resultPartitionId1 = new ResultPartitionID();
+-        final ResultPartitionID resultPartitionId2 = new ResultPartitionID();
++        final ResourceID tmId = ResourceID.generate();
++        final ResultPartitionID resultPartitionId = new ResultPartitionID();
+ 
+         partitionTracker.startTrackingPartition(
+-                taskExecutorId1,
++                tmId,
+                 AbstractPartitionTrackerTest.createResultPartitionDeploymentDescriptor(
+-                        resultPartitionId1, true));
+-        partitionTracker.startTrackingPartition(
+-                taskExecutorId2,
+-                AbstractPartitionTrackerTest.createResultPartitionDeploymentDescriptor(
+-                        resultPartitionId2, true));
+-
+-        {
+-            partitionTracker.stopTrackingAndReleasePartitionsFor(taskExecutorId1);
++                        resultPartitionId, true));
+ 
+-            assertEquals(1, taskExecutorReleaseCalls.size());
++        assertThat(partitionTracker.isTrackingPartitionsFor(tmId), is(true));
+ 
+-            ReleaseCall taskExecutorReleaseCall = taskExecutorReleaseCalls.remove();
+-            assertEquals(taskExecutorId1, taskExecutorReleaseCall.getTaskExecutorId());
+-            assertEquals(jobId, taskExecutorReleaseCall.getJobId());
+-            assertThat(
+-                    taskExecutorReleaseCall.getReleasedPartitions(), contains(resultPartitionId1));
+-            assertThat(taskExecutorReleaseCall.getPromotedPartitions(), is(empty()));
++        partitionTracker.stopTrackingAndReleasePartitions(Arrays.asList(resultPartitionId));
+ 
+-            assertEquals(1, shuffleMaster.externallyReleasedPartitions.size());
+-            assertEquals(resultPartitionId1, shuffleMaster.externallyReleasedPartitions.remove());
++        assertEquals(1, releaseCalls.size());
++        ReleaseCall releaseCall = releaseCalls.remove();
++        assertEquals(tmId, releaseCall.getTaskExecutorId());
++        assertEquals(jobId, releaseCall.getJobId());
++        assertThat(releaseCall.getReleasedPartitions(), contains(resultPartitionId));
++        assertThat(releaseCall.getPromotedPartitions(), is(empty()));
++        assertEquals(1, shuffleMaster.externallyReleasedPartitions.size());
++        assertEquals(resultPartitionId, shuffleMaster.externallyReleasedPartitions.remove());
++        assertThat(partitionTracker.isTrackingPartitionsFor(tmId), is(false));
++    }
+ 
+-            assertThat(partitionTracker.isTrackingPartitionsFor(taskExecutorId1), is(false));
+-        }
++    @Test
++    public void testReleaseCallsWithoutLocalResources() {
++        final TestingShuffleMaster shuffleMaster = new TestingShuffleMaster();
+ 
+-        {
+-            partitionTracker.stopTrackingAndReleasePartitions(
+-                    Collections.singletonList(resultPartitionId2));
++        final Queue<ReleaseCall> releaseCalls = new ArrayBlockingQueue<>(4);
++        final JobMasterPartitionTracker partitionTracker =
++                new JobMasterPartitionTrackerImpl(
++                        new JobID(),
++                        shuffleMaster,
++                        tmId -> Optional.of(createTaskExecutorGateway(tmId, releaseCalls)));
+ 
+-            assertEquals(1, taskExecutorReleaseCalls.size());
++        final ResourceID tmId = ResourceID.generate();
++        final ResultPartitionID resultPartitionId = new ResultPartitionID();
+ 
+-            ReleaseCall releaseCall = taskExecutorReleaseCalls.remove();
+-            assertEquals(taskExecutorId2, releaseCall.getTaskExecutorId());
+-            assertEquals(jobId, releaseCall.getJobId());
+-            assertThat(releaseCall.getReleasedPartitions(), contains(resultPartitionId2));
+-            assertThat(releaseCall.getPromotedPartitions(), is(empty()));
++        partitionTracker.startTrackingPartition(
++                tmId,
++                AbstractPartitionTrackerTest.createResultPartitionDeploymentDescriptor(
++                        resultPartitionId, false));
++        assertThat(partitionTracker.isTrackingPartitionsFor(tmId), is(false));
+ 
+-            assertEquals(1, shuffleMaster.externallyReleasedPartitions.size());
+-            assertEquals(resultPartitionId2, shuffleMaster.externallyReleasedPartitions.remove());
++        partitionTracker.stopTrackingAndReleasePartitions(Arrays.asList(resultPartitionId));
+ 
+-            assertThat(partitionTracker.isTrackingPartitionsFor(taskExecutorId2), is(false));
+-        }
++        assertEquals(0, releaseCalls.size());
++        assertEquals(1, shuffleMaster.externallyReleasedPartitions.size());
++        assertThat(shuffleMaster.externallyReleasedPartitions, contains(resultPartitionId));
+     }
+ 
+     @Test
+-    public void testReleaseCallsWithoutLocalResources() {
++    public void testStopTrackingIssuesNoReleaseCalls() {
+         final TestingShuffleMaster shuffleMaster = new TestingShuffleMaster();
+ 
+         final Queue<ReleaseCall> taskExecutorReleaseCalls = new ArrayBlockingQueue<>(4);
+-        final JobMasterPartitionTracker partitionTracker =
++        final JobMasterPartitionTrackerImpl partitionTracker =
+                 new JobMasterPartitionTrackerImpl(
+                         new JobID(),
+                         shuffleMaster,
+@@ -161,45 +160,21 @@ public class JobMasterPartitionTrackerImplTest extends TestLogger {
+                                                 resourceId, taskExecutorReleaseCalls)));
+ 
+         final ResourceID taskExecutorId1 = ResourceID.generate();
+-        final ResourceID taskExecutorId2 = ResourceID.generate();
+         final ResultPartitionID resultPartitionId1 = new ResultPartitionID();
+-        final ResultPartitionID resultPartitionId2 = new ResultPartitionID();
+ 
+         partitionTracker.startTrackingPartition(
+                 taskExecutorId1,
+                 AbstractPartitionTrackerTest.createResultPartitionDeploymentDescriptor(
+-                        resultPartitionId1, false));
+-        partitionTracker.startTrackingPartition(
+-                taskExecutorId2,
+-                AbstractPartitionTrackerTest.createResultPartitionDeploymentDescriptor(
+-                        resultPartitionId2, false));
+-
+-        {
+-            partitionTracker.stopTrackingAndReleasePartitionsFor(taskExecutorId1);
+-
+-            assertEquals(0, taskExecutorReleaseCalls.size());
+-
+-            assertEquals(1, shuffleMaster.externallyReleasedPartitions.size());
+-            assertEquals(resultPartitionId1, shuffleMaster.externallyReleasedPartitions.remove());
+-
+-            assertThat(partitionTracker.isTrackingPartitionsFor(taskExecutorId1), is(false));
+-        }
+-
+-        {
+-            partitionTracker.stopTrackingAndReleasePartitions(
+-                    Collections.singletonList(resultPartitionId2));
+-
+-            assertEquals(0, taskExecutorReleaseCalls.size());
++                        resultPartitionId1, true));
+ 
+-            assertEquals(1, shuffleMaster.externallyReleasedPartitions.size());
+-            assertEquals(resultPartitionId2, shuffleMaster.externallyReleasedPartitions.remove());
++        partitionTracker.stopTrackingPartitionsFor(taskExecutorId1);
+ 
+-            assertThat(partitionTracker.isTrackingPartitionsFor(taskExecutorId2), is(false));
+-        }
++        assertEquals(0, taskExecutorReleaseCalls.size());
++        assertEquals(0, shuffleMaster.externallyReleasedPartitions.size());
+     }
+ 
+     @Test
+-    public void testStopTrackingIssuesNoReleaseCalls() {
++    public void testTrackingInternalAndExternalPartitionsByTmId() {
+         final TestingShuffleMaster shuffleMaster = new TestingShuffleMaster();
+ 
+         final Queue<ReleaseCall> taskExecutorReleaseCalls = new ArrayBlockingQueue<>(4);
+@@ -212,25 +187,47 @@ public class JobMasterPartitionTrackerImplTest extends TestLogger {
+                                         createTaskExecutorGateway(
+                                                 resourceId, taskExecutorReleaseCalls)));
+ 
+-        final ResourceID taskExecutorId1 = ResourceID.generate();
++        final ResourceID taskExecutorId = ResourceID.generate();
+         final ResultPartitionID resultPartitionId1 = new ResultPartitionID();
++        final ResultPartitionID resultPartitionId2 = new ResultPartitionID();
+ 
+         partitionTracker.startTrackingPartition(
+-                taskExecutorId1,
++                taskExecutorId,
++                AbstractPartitionTrackerTest.createResultPartitionDeploymentDescriptor(
++                        resultPartitionId2, false));
++        // No local resource is occupied
++        assertThat(partitionTracker.isTrackingPartitionsFor(taskExecutorId), is(false));
++
++        partitionTracker.startTrackingPartition(
++                taskExecutorId,
+                 AbstractPartitionTrackerTest.createResultPartitionDeploymentDescriptor(
+                         resultPartitionId1, true));
++        // Local resource is occupied
++        assertThat(partitionTracker.isTrackingPartitionsFor(taskExecutorId), is(true));
+ 
+-        partitionTracker.stopTrackingPartitionsFor(taskExecutorId1);
++        assertThat(
++                partitionTracker.getAllTrackedPartitions().stream()
++                        .map(desc -> desc.getShuffleDescriptor().getResultPartitionID())
++                        .collect(Collectors.toList()),
++                containsInAnyOrder(resultPartitionId1, resultPartitionId2));
+ 
+-        assertEquals(0, taskExecutorReleaseCalls.size());
+-        assertEquals(0, shuffleMaster.externallyReleasedPartitions.size());
++        partitionTracker.stopTrackingPartitionsFor(taskExecutorId);
++
++        assertThat(partitionTracker.isTrackingPartitionsFor(taskExecutorId), is(false));
++        assertThat(partitionTracker.isPartitionTracked(resultPartitionId1), is(false));
++        assertThat(partitionTracker.isPartitionTracked(resultPartitionId2), is(true));
++        assertThat(
++                Iterables.getOnlyElement(partitionTracker.getAllTrackedPartitions())
++                        .getShuffleDescriptor()
++                        .getResultPartitionID(),
++                is(resultPartitionId2));
+     }
+ 
+     @Test
+     public void testReleaseOrPromote() {
+         final TestingShuffleMaster shuffleMaster = new TestingShuffleMaster();
+ 
+-        final Queue<ReleaseCall> taskExecutorReleaseCalls = new ArrayBlockingQueue<>(4);
++        final Queue<ReleaseCall> taskExecutorReleaseOrPromoteCalls = new ArrayBlockingQueue<>(4);
+         final JobMasterPartitionTracker partitionTracker =
+                 new JobMasterPartitionTrackerImpl(
+                         new JobID(),
+@@ -238,56 +235,78 @@ public class JobMasterPartitionTrackerImplTest extends TestLogger {
+                         resourceId ->
+                                 Optional.of(
+                                         createTaskExecutorGateway(
+-                                                resourceId, taskExecutorReleaseCalls)));
++                                                resourceId, taskExecutorReleaseOrPromoteCalls)));
+ 
+         final ResourceID taskExecutorId1 = ResourceID.generate();
+-        final ResultPartitionID jobPartitionId = new ResultPartitionID();
+-        final ResultPartitionID clusterPartitionId = new ResultPartitionID();
++        final ResultPartitionID jobPartitionId0 = new ResultPartitionID();
++        final ResultPartitionID jobPartitionId1 = new ResultPartitionID();
++        final ResultPartitionID clusterPartitionId0 = new ResultPartitionID();
++        final ResultPartitionID clusterPartitionId1 = new ResultPartitionID();
++
++        // Any partition type that is not BLOCKING_PERSISTENT denotes a job partition;
++        // A local job partition (occupies tm local resource)
++        final ResultPartitionDeploymentDescriptor jobPartition0 =
++                AbstractPartitionTrackerTest.createResultPartitionDeploymentDescriptor(
++                        jobPartitionId0, ResultPartitionType.BLOCKING, true);
++        partitionTracker.startTrackingPartition(taskExecutorId1, jobPartition0);
+ 
+-        // any partition type that is not BLOCKING_PERSISTENT denotes a job partition
+-        final ResultPartitionDeploymentDescriptor jobPartition =
++        // An external job partition (accommodated by external shuffle service)
++        final ResultPartitionDeploymentDescriptor jobPartition1 =
+                 AbstractPartitionTrackerTest.createResultPartitionDeploymentDescriptor(
+-                        jobPartitionId, ResultPartitionType.BLOCKING, true);
+-        partitionTracker.startTrackingPartition(taskExecutorId1, jobPartition);
++                        jobPartitionId1, ResultPartitionType.BLOCKING, false);
++        partitionTracker.startTrackingPartition(taskExecutorId1, jobPartition1);
+ 
+         // BLOCKING_PERSISTENT denotes a cluster partition
+-        final ResultPartitionDeploymentDescriptor clusterPartition =
++        // An local cluster partition
++        final ResultPartitionDeploymentDescriptor clusterPartition0 =
+                 AbstractPartitionTrackerTest.createResultPartitionDeploymentDescriptor(
+-                        clusterPartitionId, ResultPartitionType.BLOCKING_PERSISTENT, true);
+-        partitionTracker.startTrackingPartition(taskExecutorId1, clusterPartition);
++                        clusterPartitionId0, ResultPartitionType.BLOCKING_PERSISTENT, true);
++        partitionTracker.startTrackingPartition(taskExecutorId1, clusterPartition0);
+ 
+-        partitionTracker.stopTrackingAndReleaseOrPromotePartitionsFor(taskExecutorId1);
++        // An external cluster partition
++        final ResultPartitionDeploymentDescriptor clusterPartition1 =
++                AbstractPartitionTrackerTest.createResultPartitionDeploymentDescriptor(
++                        clusterPartitionId1, ResultPartitionType.BLOCKING_PERSISTENT, false);
++        partitionTracker.startTrackingPartition(taskExecutorId1, clusterPartition1);
+ 
+-        // exactly one call should have been made to the hosting task executor
+-        assertEquals(1, taskExecutorReleaseCalls.size());
++        partitionTracker.stopTrackingAndReleaseOrPromotePartitions(
++                Arrays.asList(
++                        jobPartitionId0,
++                        jobPartitionId1,
++                        clusterPartitionId0,
++                        clusterPartitionId1));
+ 
+-        // the job partition should have been released on the shuffle master
+-        assertEquals(1, shuffleMaster.externallyReleasedPartitions.size());
+-        assertEquals(jobPartitionId, shuffleMaster.externallyReleasedPartitions.remove());
++        // Exactly one call should have been made to the hosting task executor
++        assertEquals(1, taskExecutorReleaseOrPromoteCalls.size());
+ 
+-        final ReleaseCall taskExecutorReleaseOrPromoteCall = taskExecutorReleaseCalls.remove();
++        final ReleaseCall taskExecutorReleaseOrPromoteCall =
++                taskExecutorReleaseOrPromoteCalls.remove();
+ 
+-        // the job partition should be passed as a partition to release
++        // One local partition released and one local partition promoted.
+         assertEquals(
+-                jobPartitionId,
++                jobPartitionId0,
+                 Iterables.getOnlyElement(taskExecutorReleaseOrPromoteCall.getReleasedPartitions()));
+-
+-        // the cluster partition should be passed as a partition to promote
+         assertEquals(
+-                clusterPartitionId,
++                clusterPartitionId0,
+                 Iterables.getOnlyElement(taskExecutorReleaseOrPromoteCall.getPromotedPartitions()));
++
++        // Both internal and external partitions will be fed into shuffle-master for releasing.
++        Collection<ResultPartitionID> externallyReleasedPartitions =
++                new ArrayList<>(shuffleMaster.externallyReleasedPartitions);
++        assertThat(
++                externallyReleasedPartitions, containsInAnyOrder(jobPartitionId0, jobPartitionId1));
+     }
+ 
+     private static TaskExecutorGateway createTaskExecutorGateway(
+-            ResourceID taskExecutorId, Collection<ReleaseCall> releaseCalls) {
++            ResourceID taskExecutorId, Collection<ReleaseCall> releaseOrPromoteCalls) {
+         return new TestingTaskExecutorGatewayBuilder()
+                 .setReleaseOrPromotePartitionsConsumer(
+-                        (jobId, partitionToRelease, partitionsToPromote) ->
+-                                releaseCalls.add(
++                        (jobId, partitionsToRelease, partitionsToPromote) ->
++                                releaseOrPromoteCalls.add(
+                                         new ReleaseCall(
+                                                 taskExecutorId,
+                                                 jobId,
+-                                                partitionToRelease,
++                                                partitionsToRelease,
+                                                 partitionsToPromote)))
+                 .createTestingTaskExecutorGateway();
+     }
+@@ -298,7 +317,9 @@ public class JobMasterPartitionTrackerImplTest extends TestLogger {
+ 
+         @Override
+         public CompletableFuture<ShuffleDescriptor> registerPartitionWithProducer(
+-                PartitionDescriptor partitionDescriptor, ProducerDescriptor producerDescriptor) {
++                JobID jobID,
++                PartitionDescriptor partitionDescriptor,
++                ProducerDescriptor producerDescriptor) {
+             return null;
+         }
+ 
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/NoOpJobMasterPartitionTracker.java b/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/NoOpJobMasterPartitionTracker.java
+index 40f972e4d25..8572f2e63b0 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/NoOpJobMasterPartitionTracker.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/NoOpJobMasterPartitionTracker.java
+@@ -42,19 +42,22 @@ public enum NoOpJobMasterPartitionTracker implements JobMasterPartitionTracker {
+ 
+     @Override
+     public void stopTrackingAndReleasePartitions(
++            Collection<ResultPartitionID> resultPartitionIds, boolean releaseOnShuffleMaster) {}
++
++    @Override
++    public void stopTrackingAndReleaseOrPromotePartitions(
+             Collection<ResultPartitionID> resultPartitionIds) {}
+ 
+     @Override
+-    public Collection<PartitionTrackerEntry<ResourceID, ResultPartitionDeploymentDescriptor>>
+-            stopTrackingPartitions(Collection<ResultPartitionID> resultPartitionIds) {
++    public Collection<ResultPartitionDeploymentDescriptor> getAllTrackedPartitions() {
+         return Collections.emptyList();
+     }
+ 
+     @Override
+-    public void stopTrackingAndReleasePartitionsFor(ResourceID producingTaskExecutorId) {}
+-
+-    @Override
+-    public void stopTrackingAndReleaseOrPromotePartitionsFor(ResourceID producingTaskExecutorId) {}
++    public Collection<PartitionTrackerEntry<ResourceID, ResultPartitionDeploymentDescriptor>>
++            stopTrackingPartitions(Collection<ResultPartitionID> resultPartitionIds) {
++        return Collections.emptyList();
++    }
+ 
+     @Override
+     public boolean isTrackingPartitionsFor(ResourceID producingTaskExecutorId) {
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/TestingJobMasterPartitionTracker.java b/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/TestingJobMasterPartitionTracker.java
+index 5d631d74355..8aecfd88180 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/TestingJobMasterPartitionTracker.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/io/network/partition/TestingJobMasterPartitionTracker.java
+@@ -25,6 +25,7 @@ import java.util.Collections;
+ import java.util.function.BiConsumer;
+ import java.util.function.Consumer;
+ import java.util.function.Function;
++import java.util.function.Supplier;
+ 
+ /** Test {@link JobMasterPartitionTracker} implementation. */
+ public class TestingJobMasterPartitionTracker implements JobMasterPartitionTracker {
+@@ -32,13 +33,15 @@ public class TestingJobMasterPartitionTracker implements JobMasterPartitionTrack
+     private Function<ResourceID, Boolean> isTrackingPartitionsForFunction = ignored -> false;
+     private Function<ResultPartitionID, Boolean> isPartitionTrackedFunction = ignored -> false;
+     private Consumer<ResourceID> stopTrackingAllPartitionsConsumer = ignored -> {};
+-    private Consumer<ResourceID> stopTrackingAndReleaseAllPartitionsConsumer = ignored -> {};
+-    private Consumer<ResourceID> stopTrackingAndReleaseOrPromotePartitionsConsumer = ignored -> {};
+     private BiConsumer<ResourceID, ResultPartitionDeploymentDescriptor>
+             startTrackingPartitionsConsumer = (ignoredA, ignoredB) -> {};
+     private Consumer<Collection<ResultPartitionID>> stopTrackingAndReleasePartitionsConsumer =
+             ignored -> {};
++    private Consumer<Collection<ResultPartitionID>>
++            stopTrackingAndReleaseOrPromotePartitionsConsumer = ignored -> {};
+     private Consumer<Collection<ResultPartitionID>> stopTrackingPartitionsConsumer = ignored -> {};
++    private Supplier<Collection<ResultPartitionDeploymentDescriptor>>
++            getAllTrackedPartitionsSupplier = () -> Collections.emptyList();
+ 
+     public void setStartTrackingPartitionsConsumer(
+             BiConsumer<ResourceID, ResultPartitionDeploymentDescriptor>
+@@ -61,28 +64,29 @@ public class TestingJobMasterPartitionTracker implements JobMasterPartitionTrack
+         this.stopTrackingAllPartitionsConsumer = stopTrackingAllPartitionsConsumer;
+     }
+ 
+-    public void setStopTrackingAndReleaseAllPartitionsConsumer(
+-            Consumer<ResourceID> stopTrackingAndReleaseAllPartitionsConsumer) {
+-        this.stopTrackingAndReleaseAllPartitionsConsumer =
+-                stopTrackingAndReleaseAllPartitionsConsumer;
++    public void setStopTrackingAndReleasePartitionsConsumer(
++            Consumer<Collection<ResultPartitionID>> stopTrackingAndReleasePartitionsConsumer) {
++        this.stopTrackingAndReleasePartitionsConsumer = stopTrackingAndReleasePartitionsConsumer;
+     }
+ 
+     public void setStopTrackingAndReleaseOrPromotePartitionsConsumer(
+-            Consumer<ResourceID> stopTrackingAndReleaseOrPromotePartitionsConsumer) {
++            Consumer<Collection<ResultPartitionID>>
++                    stopTrackingAndReleaseOrPromotePartitionsConsumer) {
+         this.stopTrackingAndReleaseOrPromotePartitionsConsumer =
+                 stopTrackingAndReleaseOrPromotePartitionsConsumer;
+     }
+ 
+-    public void setStopTrackingAndReleasePartitionsConsumer(
+-            Consumer<Collection<ResultPartitionID>> stopTrackingAndReleasePartitionsConsumer) {
+-        this.stopTrackingAndReleasePartitionsConsumer = stopTrackingAndReleasePartitionsConsumer;
+-    }
+-
+     public void setStopTrackingPartitionsConsumer(
+             Consumer<Collection<ResultPartitionID>> stopTrackingPartitionsConsumer) {
+         this.stopTrackingPartitionsConsumer = stopTrackingPartitionsConsumer;
+     }
+ 
++    public void setGetAllTrackedPartitionsSupplier(
++            Supplier<Collection<ResultPartitionDeploymentDescriptor>>
++                    getAllTrackedPartitionsSupplier) {
++        this.getAllTrackedPartitionsSupplier = getAllTrackedPartitionsSupplier;
++    }
++
+     @Override
+     public void startTrackingPartition(
+             ResourceID producingTaskExecutorId,
+@@ -99,7 +103,8 @@ public class TestingJobMasterPartitionTracker implements JobMasterPartitionTrack
+     }
+ 
+     @Override
+-    public void stopTrackingAndReleasePartitions(Collection<ResultPartitionID> resultPartitionIds) {
++    public void stopTrackingAndReleasePartitions(
++            Collection<ResultPartitionID> resultPartitionIds, boolean releaseOnShuffleMaster) {
+         stopTrackingAndReleasePartitionsConsumer.accept(resultPartitionIds);
+     }
+ 
+@@ -111,13 +116,14 @@ public class TestingJobMasterPartitionTracker implements JobMasterPartitionTrack
+     }
+ 
+     @Override
+-    public void stopTrackingAndReleasePartitionsFor(ResourceID producingTaskExecutorId) {
+-        stopTrackingAndReleaseAllPartitionsConsumer.accept(producingTaskExecutorId);
++    public void stopTrackingAndReleaseOrPromotePartitions(
++            Collection<ResultPartitionID> resultPartitionIds) {
++        stopTrackingAndReleaseOrPromotePartitionsConsumer.accept(resultPartitionIds);
+     }
+ 
+     @Override
+-    public void stopTrackingAndReleaseOrPromotePartitionsFor(ResourceID producingTaskExecutorId) {
+-        stopTrackingAndReleaseOrPromotePartitionsConsumer.accept(producingTaskExecutorId);
++    public Collection<ResultPartitionDeploymentDescriptor> getAllTrackedPartitions() {
++        return getAllTrackedPartitionsSupplier.get();
+     }
+ 
+     @Override
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/jobmaster/JobMasterPartitionReleaseTest.java b/flink-runtime/src/test/java/org/apache/flink/runtime/jobmaster/JobMasterPartitionReleaseTest.java
+index 724dbaa2874..dc98b4856c7 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/jobmaster/JobMasterPartitionReleaseTest.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/jobmaster/JobMasterPartitionReleaseTest.java
+@@ -26,10 +26,13 @@ import org.apache.flink.runtime.checkpoint.StandaloneCheckpointRecoveryFactory;
+ import org.apache.flink.runtime.clusterframework.types.AllocationID;
+ import org.apache.flink.runtime.clusterframework.types.ResourceID;
+ import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
++import org.apache.flink.runtime.deployment.ResultPartitionDeploymentDescriptor;
+ import org.apache.flink.runtime.deployment.TaskDeploymentDescriptor;
+ import org.apache.flink.runtime.execution.ExecutionState;
+ import org.apache.flink.runtime.heartbeat.HeartbeatServices;
+ import org.apache.flink.runtime.highavailability.TestingHighAvailabilityServices;
++import org.apache.flink.runtime.io.network.partition.AbstractPartitionTrackerTest;
++import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
+ import org.apache.flink.runtime.io.network.partition.TestingJobMasterPartitionTracker;
+ import org.apache.flink.runtime.jobgraph.JobGraph;
+ import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
+@@ -57,6 +60,7 @@ import org.junit.Test;
+ import org.junit.rules.TemporaryFolder;
+ 
+ import java.io.IOException;
++import java.util.Arrays;
+ import java.util.Collection;
+ import java.util.Collections;
+ import java.util.concurrent.CompletableFuture;
+@@ -64,6 +68,7 @@ import java.util.concurrent.ExecutionException;
+ import java.util.function.Function;
+ 
+ import static org.hamcrest.MatcherAssert.assertThat;
++import static org.hamcrest.Matchers.containsInAnyOrder;
+ import static org.hamcrest.Matchers.equalTo;
+ 
+ /** Tests for the partition release logic of the {@link JobMaster}. */
+@@ -131,17 +136,17 @@ public class JobMasterPartitionReleaseTest extends TestLogger {
+     @Test
+     public void testPartitionReleaseOrPromotionOnJobSuccess() throws Exception {
+         testPartitionReleaseOrPromotionOnJobTermination(
+-                TestSetup::getReleaseOrPromotePartitionsTargetResourceId, ExecutionState.FINISHED);
++                TestSetup::getPartitionsForReleaseOrPromote, ExecutionState.FINISHED);
+     }
+ 
+     @Test
+     public void testPartitionReleaseOrPromotionOnJobFailure() throws Exception {
+         testPartitionReleaseOrPromotionOnJobTermination(
+-                TestSetup::getReleasePartitionsTargetResourceId, ExecutionState.FAILED);
++                TestSetup::getPartitionsForRelease, ExecutionState.FAILED);
+     }
+ 
+     private void testPartitionReleaseOrPromotionOnJobTermination(
+-            Function<TestSetup, CompletableFuture<ResourceID>> taskExecutorCallSelector,
++            Function<TestSetup, CompletableFuture<Collection<ResultPartitionID>>> callSelector,
+             ExecutionState finalExecutionState)
+             throws Exception {
+         final CompletableFuture<TaskDeploymentDescriptor> taskDeploymentDescriptorFuture =
+@@ -157,6 +162,23 @@ public class JobMasterPartitionReleaseTest extends TestLogger {
+ 
+         try (final TestSetup testSetup =
+                 new TestSetup(rpcService, testingFatalErrorHandler, testingTaskExecutorGateway)) {
++            ResultPartitionID partitionID0 = new ResultPartitionID();
++            ResultPartitionID partitionID1 = new ResultPartitionID();
++            testSetup
++                    .getPartitionTracker()
++                    .setGetAllTrackedPartitionsSupplier(
++                            () -> {
++                                ResultPartitionDeploymentDescriptor partitionDesc0 =
++                                        AbstractPartitionTrackerTest
++                                                .createResultPartitionDeploymentDescriptor(
++                                                        partitionID0, true);
++                                ResultPartitionDeploymentDescriptor partitionDesc1 =
++                                        AbstractPartitionTrackerTest
++                                                .createResultPartitionDeploymentDescriptor(
++                                                        partitionID1, false);
++                                return Arrays.asList(partitionDesc0, partitionDesc1);
++                            });
++
+             final JobMasterGateway jobMasterGateway = testSetup.getJobMasterGateway();
+ 
+             // update the execution state of the only execution to target state
+@@ -166,10 +188,9 @@ public class JobMasterPartitionReleaseTest extends TestLogger {
+             jobMasterGateway.updateTaskExecutionState(
+                     new TaskExecutionState(
+                             taskDeploymentDescriptor.getExecutionAttemptId(), finalExecutionState));
+-
+             assertThat(
+-                    taskExecutorCallSelector.apply(testSetup).get(),
+-                    equalTo(testSetup.getTaskExecutorResourceID()));
++                    callSelector.apply(testSetup).get(),
++                    containsInAnyOrder(partitionID0, partitionID1));
+         }
+     }
+ 
+@@ -182,12 +203,16 @@ public class JobMasterPartitionReleaseTest extends TestLogger {
+ 
+         private final CompletableFuture<ResourceID> taskExecutorIdForStopTracking =
+                 new CompletableFuture<>();
+-        private final CompletableFuture<ResourceID> taskExecutorIdForPartitionRelease =
+-                new CompletableFuture<>();
+-        private final CompletableFuture<ResourceID> taskExecutorIdForPartitionReleaseOrPromote =
++
++        private final CompletableFuture<Collection<ResultPartitionID>> partitionsForRelease =
+                 new CompletableFuture<>();
+ 
+-        private JobMaster jobMaster;
++        private final CompletableFuture<Collection<ResultPartitionID>>
++                partitionsForReleaseOrPromote = new CompletableFuture<>();
++
++        private final JobMaster jobMaster;
++
++        private final TestingJobMasterPartitionTracker partitionTracker;
+ 
+         public TestSetup(
+                 TestingRpcService rpcService,
+@@ -203,15 +228,14 @@ public class JobMasterPartitionReleaseTest extends TestLogger {
+             haServices.setResourceManagerLeaderRetriever(
+                     new SettableLeaderRetrievalService(null, null));
+ 
+-            final TestingJobMasterPartitionTracker partitionTracker =
+-                    new TestingJobMasterPartitionTracker();
++            partitionTracker = new TestingJobMasterPartitionTracker();
+ 
+             partitionTracker.setStopTrackingAllPartitionsConsumer(
+                     taskExecutorIdForStopTracking::complete);
+-            partitionTracker.setStopTrackingAndReleaseAllPartitionsConsumer(
+-                    taskExecutorIdForPartitionRelease::complete);
++            partitionTracker.setStopTrackingAndReleasePartitionsConsumer(
++                    partitionsForRelease::complete);
+             partitionTracker.setStopTrackingAndReleaseOrPromotePartitionsConsumer(
+-                    taskExecutorIdForPartitionReleaseOrPromote::complete);
++                    partitionsForReleaseOrPromote::complete);
+ 
+             Configuration configuration = new Configuration();
+             configuration.setString(
+@@ -267,6 +291,10 @@ public class JobMasterPartitionReleaseTest extends TestLogger {
+                     .get();
+         }
+ 
++        public TestingJobMasterPartitionTracker getPartitionTracker() {
++            return partitionTracker;
++        }
++
+         public JobMasterGateway getJobMasterGateway() {
+             return jobMaster.getSelfGateway(JobMasterGateway.class);
+         }
+@@ -279,12 +307,12 @@ public class JobMasterPartitionReleaseTest extends TestLogger {
+             return taskExecutorIdForStopTracking;
+         }
+ 
+-        public CompletableFuture<ResourceID> getReleasePartitionsTargetResourceId() {
+-            return taskExecutorIdForPartitionRelease;
++        public CompletableFuture<Collection<ResultPartitionID>> getPartitionsForRelease() {
++            return partitionsForRelease;
+         }
+ 
+-        public CompletableFuture<ResourceID> getReleaseOrPromotePartitionsTargetResourceId() {
+-            return taskExecutorIdForPartitionReleaseOrPromote;
++        public CompletableFuture<Collection<ResultPartitionID>> getPartitionsForReleaseOrPromote() {
++            return partitionsForReleaseOrPromote;
+         }
+ 
+         public void close() throws Exception {
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/jobmaster/TestingJobManagerSharedServicesBuilder.java b/flink-runtime/src/test/java/org/apache/flink/runtime/jobmaster/TestingJobManagerSharedServicesBuilder.java
+index 0b9aa2a3e6a..9e7fcccb251 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/jobmaster/TestingJobManagerSharedServicesBuilder.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/jobmaster/TestingJobManagerSharedServicesBuilder.java
+@@ -22,6 +22,8 @@ import org.apache.flink.runtime.blob.BlobWriter;
+ import org.apache.flink.runtime.blob.VoidBlobWriter;
+ import org.apache.flink.runtime.execution.librarycache.ContextClassLoaderLibraryCacheManager;
+ import org.apache.flink.runtime.execution.librarycache.LibraryCacheManager;
++import org.apache.flink.runtime.shuffle.NettyShuffleMaster;
++import org.apache.flink.runtime.shuffle.ShuffleMaster;
+ import org.apache.flink.runtime.testingUtils.TestingUtils;
+ 
+ import java.util.concurrent.ScheduledExecutorService;
+@@ -33,11 +35,14 @@ public class TestingJobManagerSharedServicesBuilder {
+ 
+     private LibraryCacheManager libraryCacheManager;
+ 
++    private ShuffleMaster<?> shuffleMaster;
++
+     private BlobWriter blobWriter;
+ 
+     public TestingJobManagerSharedServicesBuilder() {
+         scheduledExecutorService = TestingUtils.defaultExecutor();
+         libraryCacheManager = ContextClassLoaderLibraryCacheManager.INSTANCE;
++        shuffleMaster = NettyShuffleMaster.INSTANCE;
+         blobWriter = VoidBlobWriter.getInstance();
+     }
+ 
+@@ -47,6 +52,11 @@ public class TestingJobManagerSharedServicesBuilder {
+         return this;
+     }
+ 
++    public TestingJobManagerSharedServicesBuilder setShuffleMaster(ShuffleMaster<?> shuffleMaster) {
++        this.shuffleMaster = shuffleMaster;
++        return this;
++    }
++
+     public TestingJobManagerSharedServicesBuilder setLibraryCacheManager(
+             LibraryCacheManager libraryCacheManager) {
+         this.libraryCacheManager = libraryCacheManager;
+@@ -59,6 +69,6 @@ public class TestingJobManagerSharedServicesBuilder {
+ 
+     public JobManagerSharedServices build() {
+         return new JobManagerSharedServices(
+-                scheduledExecutorService, libraryCacheManager, blobWriter);
++                scheduledExecutorService, libraryCacheManager, shuffleMaster, blobWriter);
+     }
+ }
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/jobmaster/utils/TestingJobMasterGateway.java b/flink-runtime/src/test/java/org/apache/flink/runtime/jobmaster/utils/TestingJobMasterGateway.java
+index e7b878ac8d1..8449b2a2c5e 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/jobmaster/utils/TestingJobMasterGateway.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/jobmaster/utils/TestingJobMasterGateway.java
+@@ -512,4 +512,10 @@ public class TestingJobMasterGateway implements JobMasterGateway {
+             Time timeout) {
+         return deliverCoordinationRequestFunction.apply(operatorId, serializedRequest);
+     }
++
++    @Override
++    public CompletableFuture<?> stopTrackingAndReleasePartitions(
++            Collection<ResultPartitionID> partitionIds) {
++        return CompletableFuture.completedFuture(null);
++    }
+ }
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/scheduler/DefaultSchedulerTest.java b/flink-runtime/src/test/java/org/apache/flink/runtime/scheduler/DefaultSchedulerTest.java
+index f9c7995110b..d06172e46bc 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/scheduler/DefaultSchedulerTest.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/scheduler/DefaultSchedulerTest.java
+@@ -20,6 +20,7 @@
+ package org.apache.flink.runtime.scheduler;
+ 
+ import org.apache.flink.api.common.JobStatus;
++import org.apache.flink.api.common.time.Time;
+ import org.apache.flink.configuration.Configuration;
+ import org.apache.flink.configuration.WebOptions;
+ import org.apache.flink.core.testutils.ScheduledTask;
+@@ -42,7 +43,9 @@ import org.apache.flink.runtime.executiongraph.failover.flip1.RestartPipelinedRe
+ import org.apache.flink.runtime.executiongraph.failover.flip1.TestRestartBackoffTimeStrategy;
+ import org.apache.flink.runtime.executiongraph.utils.SimpleAckingTaskManagerGateway;
+ import org.apache.flink.runtime.executiongraph.utils.TestFailoverStrategyFactory;
++import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
+ import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
++import org.apache.flink.runtime.io.network.partition.TestingJobMasterPartitionTracker;
+ import org.apache.flink.runtime.jobgraph.DistributionPattern;
+ import org.apache.flink.runtime.jobgraph.JobGraph;
+ import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
+@@ -60,6 +63,7 @@ import org.apache.flink.runtime.scheduler.strategy.SchedulingExecutionVertex;
+ import org.apache.flink.runtime.scheduler.strategy.SchedulingStrategyFactory;
+ import org.apache.flink.runtime.scheduler.strategy.SchedulingTopology;
+ import org.apache.flink.runtime.scheduler.strategy.TestSchedulingStrategy;
++import org.apache.flink.runtime.shuffle.TestingShuffleMaster;
+ import org.apache.flink.runtime.taskmanager.LocalTaskManagerLocation;
+ import org.apache.flink.runtime.taskmanager.TaskExecutionState;
+ import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
+@@ -105,6 +109,7 @@ import static org.apache.flink.runtime.scheduler.SchedulerTestingUtils.enableChe
+ import static org.apache.flink.runtime.scheduler.SchedulerTestingUtils.getCheckpointCoordinator;
+ import static org.apache.flink.util.ExceptionUtils.findThrowable;
+ import static org.apache.flink.util.ExceptionUtils.findThrowableWithMessage;
++import static org.hamcrest.MatcherAssert.assertThat;
+ import static org.hamcrest.Matchers.contains;
+ import static org.hamcrest.Matchers.containsInAnyOrder;
+ import static org.hamcrest.Matchers.containsString;
+@@ -116,7 +121,6 @@ import static org.hamcrest.Matchers.notNullValue;
+ import static org.hamcrest.Matchers.nullValue;
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertFalse;
+-import static org.junit.Assert.assertThat;
+ import static org.junit.Assert.assertTrue;
+ import static org.junit.Assert.fail;
+ 
+@@ -146,6 +150,12 @@ public class DefaultSchedulerTest extends TestLogger {
+ 
+     private TestExecutionSlotAllocator testExecutionSlotAllocator;
+ 
++    private TestingShuffleMaster shuffleMaster;
++
++    private TestingJobMasterPartitionTracker partitionTracker;
++
++    private Time timeout;
++
+     @Before
+     public void setUp() throws Exception {
+         executor = Executors.newSingleThreadExecutor();
+@@ -162,6 +172,11 @@ public class DefaultSchedulerTest extends TestLogger {
+ 
+         executionSlotAllocatorFactory = new TestExecutionSlotAllocatorFactory();
+         testExecutionSlotAllocator = executionSlotAllocatorFactory.getTestExecutionSlotAllocator();
++
++        shuffleMaster = new TestingShuffleMaster();
++        partitionTracker = new TestingJobMasterPartitionTracker();
++
++        timeout = Time.seconds(60);
+     }
+ 
+     @After
+@@ -1355,6 +1370,118 @@ public class DefaultSchedulerTest extends TestLogger {
+                                 executionVertex1.getCurrentAssignedResourceLocation())));
+     }
+ 
++    @Test
++    public void testDeploymentWaitForProducedPartitionRegistration() {
++        shuffleMaster.setAutoCompleteRegistration(false);
++
++        final List<ResultPartitionID> trackedPartitions = new ArrayList<>();
++        partitionTracker.setStartTrackingPartitionsConsumer(
++                (resourceID, resultPartitionDeploymentDescriptor) ->
++                        trackedPartitions.add(
++                                resultPartitionDeploymentDescriptor
++                                        .getShuffleDescriptor()
++                                        .getResultPartitionID()));
++
++        final JobGraph jobGraph = nonParallelSourceSinkJobGraph();
++
++        createSchedulerAndStartScheduling(jobGraph);
++
++        assertThat(trackedPartitions, hasSize(0));
++        assertThat(testExecutionVertexOperations.getDeployedVertices(), hasSize(0));
++
++        shuffleMaster.completeAllPendingRegistrations();
++        assertThat(trackedPartitions, hasSize(1));
++        assertThat(testExecutionVertexOperations.getDeployedVertices(), hasSize(2));
++    }
++
++    @Test
++    public void testFailedProducedPartitionRegistration() {
++        shuffleMaster.setAutoCompleteRegistration(false);
++
++        final JobGraph jobGraph = nonParallelSourceSinkJobGraph();
++
++        createSchedulerAndStartScheduling(jobGraph);
++
++        assertThat(testExecutionVertexOperations.getCanceledVertices(), hasSize(0));
++        assertThat(testExecutionVertexOperations.getFailedVertices(), hasSize(0));
++
++        shuffleMaster.failAllPendingRegistrations();
++        assertThat(testExecutionVertexOperations.getCanceledVertices(), hasSize(2));
++        assertThat(testExecutionVertexOperations.getFailedVertices(), hasSize(1));
++    }
++
++    @Test
++    public void testDirectExceptionOnProducedPartitionRegistration() {
++        shuffleMaster.setThrowExceptionalOnRegistration(true);
++
++        final JobGraph jobGraph = nonParallelSourceSinkJobGraph();
++
++        createSchedulerAndStartScheduling(jobGraph);
++
++        assertThat(testExecutionVertexOperations.getCanceledVertices(), hasSize(2));
++        assertThat(testExecutionVertexOperations.getFailedVertices(), hasSize(1));
++    }
++
++    @Test
++    public void testProducedPartitionRegistrationTimeout() throws Exception {
++        ScheduledExecutorService scheduledExecutorService = null;
++        try {
++            scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
++            final ComponentMainThreadExecutor mainThreadExecutor =
++                    ComponentMainThreadExecutorServiceAdapter.forSingleThreadExecutor(
++                            scheduledExecutorService);
++
++            shuffleMaster.setAutoCompleteRegistration(false);
++
++            final JobGraph jobGraph = nonParallelSourceSinkJobGraph();
++
++            timeout = Time.milliseconds(1);
++            createSchedulerAndStartScheduling(jobGraph, mainThreadExecutor);
++
++            Thread.sleep(100);
++
++            assertThat(testExecutionVertexOperations.getCanceledVertices(), hasSize(2));
++            assertThat(testExecutionVertexOperations.getFailedVertices(), hasSize(1));
++        } finally {
++            if (scheduledExecutorService != null) {
++                scheduledExecutorService.shutdown();
++            }
++        }
++    }
++
++    @Test
++    public void testLateRegisteredPartitionsWillBeReleased() {
++        shuffleMaster.setAutoCompleteRegistration(false);
++
++        final List<ResultPartitionID> trackedPartitions = new ArrayList<>();
++        partitionTracker.setStartTrackingPartitionsConsumer(
++                (resourceID, resultPartitionDeploymentDescriptor) ->
++                        trackedPartitions.add(
++                                resultPartitionDeploymentDescriptor
++                                        .getShuffleDescriptor()
++                                        .getResultPartitionID()));
++
++        final JobGraph jobGraph = nonParallelSourceSinkJobGraph();
++
++        final DefaultScheduler scheduler = createSchedulerAndStartScheduling(jobGraph);
++
++        final ArchivedExecutionVertex sourceExecutionVertex =
++                scheduler
++                        .requestJob()
++                        .getArchivedExecutionGraph()
++                        .getAllExecutionVertices()
++                        .iterator()
++                        .next();
++        final ExecutionAttemptID attemptId =
++                sourceExecutionVertex.getCurrentExecutionAttempt().getAttemptId();
++        scheduler.updateTaskExecutionState(createFailedTaskExecutionState(attemptId));
++
++        // late registered partitions will not be tracked and will be released
++        shuffleMaster.completeAllPendingRegistrations();
++        assertThat(trackedPartitions, hasSize(0));
++        assertThat(shuffleMaster.getExternallyReleasedPartitions(), hasSize(1));
++    }
++
+     private static TaskExecutionState createFailedTaskExecutionState(
+             ExecutionAttemptID executionAttemptID) {
+         return new TaskExecutionState(
+@@ -1456,16 +1583,19 @@ public class DefaultSchedulerTest extends TestLogger {
+     }
+ 
+     private DefaultScheduler createSchedulerAndStartScheduling(final JobGraph jobGraph) {
++        return createSchedulerAndStartScheduling(
++                jobGraph, ComponentMainThreadExecutorServiceAdapter.forMainThread());
++    }
++
++    private DefaultScheduler createSchedulerAndStartScheduling(
++            final JobGraph jobGraph, final ComponentMainThreadExecutor mainThreadExecutor) {
+         final SchedulingStrategyFactory schedulingStrategyFactory =
+                 new PipelinedRegionSchedulingStrategy.Factory();
+ 
+         try {
+             final DefaultScheduler scheduler =
+-                    createScheduler(
+-                            jobGraph,
+-                            ComponentMainThreadExecutorServiceAdapter.forMainThread(),
+-                            schedulingStrategyFactory);
+-            scheduler.startScheduling();
++                    createScheduler(jobGraph, mainThreadExecutor, schedulingStrategyFactory);
++            mainThreadExecutor.execute(scheduler::startScheduling);
+             return scheduler;
+         } catch (Exception e) {
+             throw new RuntimeException(e);
+@@ -1517,6 +1647,9 @@ public class DefaultSchedulerTest extends TestLogger {
+                 .setExecutionVertexOperations(testExecutionVertexOperations)
+                 .setExecutionVertexVersioner(executionVertexVersioner)
+                 .setExecutionSlotAllocatorFactory(executionSlotAllocatorFactory)
++                .setShuffleMaster(shuffleMaster)
++                .setPartitionTracker(partitionTracker)
++                .setRpcTimeout(timeout)
+                 .build();
+     }
+ 
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/scheduler/SchedulerTestingUtils.java b/flink-runtime/src/test/java/org/apache/flink/runtime/scheduler/SchedulerTestingUtils.java
+index ac5b1cd69e7..83909e5a515 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/scheduler/SchedulerTestingUtils.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/scheduler/SchedulerTestingUtils.java
+@@ -560,7 +560,9 @@ public class SchedulerTestingUtils {
+                     System.currentTimeMillis(),
+                     mainThreadExecutor,
+                     jobStatusListener,
+-                    executionGraphFactory);
++                    executionGraphFactory,
++                    shuffleMaster,
++                    rpcTimeout);
+         }
+     }
+ }
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/scheduler/TestExecutionVertexOperationsDecorator.java b/flink-runtime/src/test/java/org/apache/flink/runtime/scheduler/TestExecutionVertexOperationsDecorator.java
+index 64c431e7266..9e4a69542d5 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/scheduler/TestExecutionVertexOperationsDecorator.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/scheduler/TestExecutionVertexOperationsDecorator.java
+@@ -40,6 +40,10 @@ public class TestExecutionVertexOperationsDecorator implements ExecutionVertexOp
+ 
+     private final List<ExecutionVertexID> deployedVertices = new ArrayList<>();
+ 
++    private final List<ExecutionVertexID> canceledVertices = new ArrayList<>();
++
++    private final List<ExecutionVertexID> failedVertices = new ArrayList<>();
++
+     private boolean failDeploy;
+ 
+     public TestExecutionVertexOperationsDecorator(final ExecutionVertexOperations delegate) {
+@@ -59,11 +63,13 @@ public class TestExecutionVertexOperationsDecorator implements ExecutionVertexOp
+ 
+     @Override
+     public CompletableFuture<?> cancel(final ExecutionVertex executionVertex) {
++        canceledVertices.add(executionVertex.getID());
+         return delegate.cancel(executionVertex);
+     }
+ 
+     @Override
+     public void markFailed(ExecutionVertex executionVertex, Throwable cause) {
++        failedVertices.add(executionVertex.getID());
+         delegate.markFailed(executionVertex, cause);
+     }
+ 
+@@ -78,4 +84,12 @@ public class TestExecutionVertexOperationsDecorator implements ExecutionVertexOp
+     public List<ExecutionVertexID> getDeployedVertices() {
+         return Collections.unmodifiableList(deployedVertices);
+     }
++
++    public List<ExecutionVertexID> getCanceledVertices() {
++        return Collections.unmodifiableList(canceledVertices);
++    }
++
++    public List<ExecutionVertexID> getFailedVertices() {
++        return Collections.unmodifiableList(failedVertices);
++    }
+ }
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/shuffle/ShuffleMasterTest.java b/flink-runtime/src/test/java/org/apache/flink/runtime/shuffle/ShuffleMasterTest.java
+new file mode 100644
+index 00000000000..a2d251efb97
+--- /dev/null
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/shuffle/ShuffleMasterTest.java
+@@ -0,0 +1,251 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.flink.runtime.shuffle;
++
++import org.apache.flink.api.common.ExecutionConfig;
++import org.apache.flink.api.common.JobID;
++import org.apache.flink.api.common.time.Time;
++import org.apache.flink.configuration.Configuration;
++import org.apache.flink.configuration.RestOptions;
++import org.apache.flink.runtime.io.network.NettyShuffleServiceFactory;
++import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
++import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
++import org.apache.flink.runtime.jobgraph.DistributionPattern;
++import org.apache.flink.runtime.jobgraph.JobGraph;
++import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
++import org.apache.flink.runtime.jobgraph.JobVertex;
++import org.apache.flink.runtime.minicluster.MiniCluster;
++import org.apache.flink.runtime.minicluster.MiniClusterConfiguration;
++import org.apache.flink.runtime.testtasks.NoOpInvokable;
++import org.apache.flink.util.TestLogger;
++
++import org.junit.Before;
++import org.junit.Test;
++
++import java.util.Collections;
++import java.util.concurrent.BlockingQueue;
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.LinkedBlockingQueue;
++import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.concurrent.atomic.AtomicReference;
++
++import static org.apache.flink.api.common.restartstrategy.RestartStrategies.fixedDelayRestart;
++import static org.junit.Assert.assertArrayEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertTrue;
++
++/** Tests for {@link ShuffleMaster}. */
++public class ShuffleMasterTest extends TestLogger {
++
++    private static final String STOP_TRACKING_PARTITION_KEY = "stop_tracking_partition_key";
++
++    private static final String PARTITION_REGISTRATION_EVENT = "registerPartitionWithProducer";
++
++    private static final String EXTERNAL_PARTITION_RELEASE_EVENT = "releasePartitionExternally";
++
++    @Before
++    public void before() {
++        TestShuffleMaster.partitionEvents.clear();
++    }
++
++    @Test
++    public void testShuffleMasterLifeCycle() throws Exception {
++        try (MiniCluster cluster = new MiniCluster(createClusterConfiguration(false))) {
++            cluster.start();
++            cluster.executeJobBlocking(createJobGraph());
++        }
++        assertTrue(TestShuffleMaster.currentInstance.get().closed.get());
++
++        String[] expectedPartitionEvents =
++                new String[] {
++                    PARTITION_REGISTRATION_EVENT,
++                    PARTITION_REGISTRATION_EVENT,
++                    EXTERNAL_PARTITION_RELEASE_EVENT,
++                    EXTERNAL_PARTITION_RELEASE_EVENT,
++                };
++        assertArrayEquals(expectedPartitionEvents, TestShuffleMaster.partitionEvents.toArray());
++    }
++
++    @Test
++    public void testStopTrackingPartition() throws Exception {
++        try (MiniCluster cluster = new MiniCluster(createClusterConfiguration(true))) {
++            cluster.start();
++            cluster.executeJobBlocking(createJobGraph());
++        }
++        assertTrue(TestShuffleMaster.currentInstance.get().closed.get());
++
++        String[] expectedPartitionEvents =
++                new String[] {
++                    PARTITION_REGISTRATION_EVENT,
++                    PARTITION_REGISTRATION_EVENT,
++                    PARTITION_REGISTRATION_EVENT,
++                    PARTITION_REGISTRATION_EVENT,
++                    EXTERNAL_PARTITION_RELEASE_EVENT,
++                    EXTERNAL_PARTITION_RELEASE_EVENT,
++                };
++        assertArrayEquals(expectedPartitionEvents, TestShuffleMaster.partitionEvents.toArray());
++    }
++
++    private MiniClusterConfiguration createClusterConfiguration(boolean stopTrackingPartition) {
++        Configuration configuration = new Configuration();
++        configuration.setString(
++                ShuffleServiceOptions.SHUFFLE_SERVICE_FACTORY_CLASS,
++                TestShuffleServiceFactory.class.getName());
++        configuration.setString(RestOptions.BIND_PORT, "0");
++        configuration.setBoolean(STOP_TRACKING_PARTITION_KEY, stopTrackingPartition);
++        return new MiniClusterConfiguration.Builder()
++                .setNumTaskManagers(1)
++                .setNumSlotsPerTaskManager(1)
++                .setConfiguration(configuration)
++                .build();
++    }
++
++    private JobGraph createJobGraph() throws Exception {
++        JobVertex source = new JobVertex("source");
++        source.setParallelism(2);
++        source.setInvokableClass(NoOpInvokable.class);
++
++        JobVertex sink = new JobVertex("sink");
++        sink.setParallelism(2);
++        sink.setInvokableClass(NoOpInvokable.class);
++
++        sink.connectNewDataSetAsInput(
++                source, DistributionPattern.ALL_TO_ALL, ResultPartitionType.BLOCKING);
++
++        JobGraph jobGraph = JobGraphTestUtils.batchJobGraph(source, sink);
++        ExecutionConfig config = new ExecutionConfig();
++        config.setRestartStrategy(fixedDelayRestart(2, Time.seconds(2)));
++        jobGraph.setExecutionConfig(config);
++        return jobGraph;
++    }
++
++    /** An {@link TestShuffleServiceFactory} implementation for testing. */
++    public static class TestShuffleServiceFactory extends NettyShuffleServiceFactory {
++        @Override
++        public NettyShuffleMaster createShuffleMaster(ShuffleMasterContext shuffleMasterContext) {
++            return new TestShuffleMaster(shuffleMasterContext.getConfiguration());
++        }
++    }
++
++    /** An {@link ShuffleMaster} implementation for testing. */
++    private static class TestShuffleMaster extends NettyShuffleMaster {
++
++        private static final AtomicReference<TestShuffleMaster> currentInstance =
++                new AtomicReference<>();
++
++        private static final BlockingQueue<String> partitionEvents = new LinkedBlockingQueue<>();
++
++        private final AtomicBoolean started = new AtomicBoolean();
++
++        private final AtomicBoolean closed = new AtomicBoolean();
++
++        private final BlockingQueue<ResultPartitionID> partitions = new LinkedBlockingQueue<>();
++
++        private final AtomicReference<JobShuffleContext> jobContext = new AtomicReference<>();
++
++        private final boolean stopTrackingPartition;
++
++        public TestShuffleMaster(Configuration conf) {
++            super();
++            this.stopTrackingPartition = conf.getBoolean(STOP_TRACKING_PARTITION_KEY, false);
++            currentInstance.set(this);
++        }
++
++        @Override
++        public void start() throws Exception {
++            assertFalse(started.get());
++            assertFalse(closed.get());
++            started.set(true);
++            super.start();
++        }
++
++        @Override
++        public void close() throws Exception {
++            assertShuffleMasterAlive();
++            closed.set(true);
++            super.close();
++        }
++
++        @Override
++        public void registerJob(JobShuffleContext context) {
++            assertShuffleMasterAlive();
++            assertTrue(jobContext.compareAndSet(null, context));
++            super.registerJob(context);
++        }
++
++        @Override
++        public void unregisterJob(JobID jobID) {
++            assertJobRegistered();
++            jobContext.set(null);
++            super.unregisterJob(jobID);
++        }
++
++        @Override
++        public CompletableFuture<NettyShuffleDescriptor> registerPartitionWithProducer(
++                JobID jobID,
++                PartitionDescriptor partitionDescriptor,
++                ProducerDescriptor producerDescriptor) {
++            assertJobRegistered();
++            partitionEvents.add(PARTITION_REGISTRATION_EVENT);
++
++            CompletableFuture<NettyShuffleDescriptor> future = new CompletableFuture<>();
++            try {
++                NettyShuffleDescriptor shuffleDescriptor =
++                        super.registerPartitionWithProducer(
++                                        jobID, partitionDescriptor, producerDescriptor)
++                                .get();
++                // stop tracking the first registered partition when registering the second
++                // partition and trigger the failure of the second task, it is expected that
++                // the first partition will be reproduced
++                if (partitions.size() == 1 && stopTrackingPartition) {
++                    jobContext
++                            .get()
++                            .stopTrackingAndReleasePartitions(
++                                    Collections.singletonList(partitions.peek()))
++                            .thenRun(() -> future.completeExceptionally(new Exception("Test")));
++                } else {
++                    future.complete(shuffleDescriptor);
++                }
++                partitions.add(shuffleDescriptor.getResultPartitionID());
++            } catch (Throwable throwable) {
++                future.completeExceptionally(throwable);
++            }
++            return future;
++        }
++
++        @Override
++        public void releasePartitionExternally(ShuffleDescriptor shuffleDescriptor) {
++            assertJobRegistered();
++            partitionEvents.add(EXTERNAL_PARTITION_RELEASE_EVENT);
++
++            super.releasePartitionExternally(shuffleDescriptor);
++        }
++
++        private void assertShuffleMasterAlive() {
++            assertFalse(closed.get());
++            assertTrue(started.get());
++        }
++
++        private void assertJobRegistered() {
++            assertShuffleMasterAlive();
++            assertNotNull(jobContext.get());
++        }
++    }
++}
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/shuffle/ShuffleServiceLoaderTest.java b/flink-runtime/src/test/java/org/apache/flink/runtime/shuffle/ShuffleServiceLoaderTest.java
+index 2e71b1986ad..ecbc4793176 100644
+--- a/flink-runtime/src/test/java/org/apache/flink/runtime/shuffle/ShuffleServiceLoaderTest.java
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/shuffle/ShuffleServiceLoaderTest.java
+@@ -76,7 +76,8 @@ public class ShuffleServiceLoaderTest extends TestLogger {
+             implements ShuffleServiceFactory<
+                     ShuffleDescriptor, ResultPartitionWriter, IndexedInputGate> {
+         @Override
+-        public ShuffleMaster<ShuffleDescriptor> createShuffleMaster(Configuration configuration) {
++        public ShuffleMaster<ShuffleDescriptor> createShuffleMaster(
++                ShuffleMasterContext shuffleMasterContext) {
+             throw new UnsupportedOperationException();
+         }
+ 
+diff --git a/flink-runtime/src/test/java/org/apache/flink/runtime/shuffle/TestingShuffleMaster.java b/flink-runtime/src/test/java/org/apache/flink/runtime/shuffle/TestingShuffleMaster.java
+new file mode 100644
+index 00000000000..0787718d9bc
+--- /dev/null
++++ b/flink-runtime/src/test/java/org/apache/flink/runtime/shuffle/TestingShuffleMaster.java
+@@ -0,0 +1,147 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.flink.runtime.shuffle;
++
++import org.apache.flink.api.common.JobID;
++import org.apache.flink.api.java.tuple.Tuple2;
++import org.apache.flink.runtime.clusterframework.types.ResourceID;
++import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
++
++import java.util.Optional;
++import java.util.Queue;
++import java.util.concurrent.ArrayBlockingQueue;
++import java.util.concurrent.CompletableFuture;
++import java.util.function.BiConsumer;
++
++import static org.apache.flink.util.Preconditions.checkState;
++
++/** A {@link ShuffleMaster} implementation for tests. */
++public class TestingShuffleMaster implements ShuffleMaster<ShuffleDescriptor> {
++
++    boolean autoCompleteRegistration = true;
++
++    boolean throwExceptionalOnRegistration = false;
++
++    private final Queue<Tuple2<PartitionDescriptor, ProducerDescriptor>>
++            pendingPartitionRegistrations = new ArrayBlockingQueue<>(4);
++
++    private final Queue<CompletableFuture<ShuffleDescriptor>>
++            pendingPartitionRegistrationResponses = new ArrayBlockingQueue<>(4);
++
++    private final Queue<ShuffleDescriptor> externallyReleasedPartitions =
++            new ArrayBlockingQueue<>(4);
++
++    @Override
++    public CompletableFuture<ShuffleDescriptor> registerPartitionWithProducer(
++            JobID jobID,
++            PartitionDescriptor partitionDescriptor,
++            ProducerDescriptor producerDescriptor) {
++        if (throwExceptionalOnRegistration) {
++            throw new RuntimeException("Forced partition registration failure");
++        } else if (autoCompleteRegistration) {
++            return CompletableFuture.completedFuture(
++                    createShuffleDescriptor(partitionDescriptor, producerDescriptor));
++        } else {
++            CompletableFuture<ShuffleDescriptor> response = new CompletableFuture<>();
++            pendingPartitionRegistrations.add(
++                    new Tuple2<>(partitionDescriptor, producerDescriptor));
++            pendingPartitionRegistrationResponses.add(response);
++            return response;
++        }
++    }
++
++    private ShuffleDescriptor createShuffleDescriptor(
++            PartitionDescriptor partitionDescriptor, ProducerDescriptor producerDescriptor) {
++
++        ResultPartitionID resultPartitionId =
++                new ResultPartitionID(
++                        partitionDescriptor.getPartitionId(),
++                        producerDescriptor.getProducerExecutionId());
++        return new TestingShuffleDescriptor(
++                resultPartitionId, producerDescriptor.getProducerLocation());
++    }
++
++    @Override
++    public void releasePartitionExternally(ShuffleDescriptor shuffleDescriptor) {
++        externallyReleasedPartitions.add(shuffleDescriptor);
++    }
++
++    public Queue<ShuffleDescriptor> getExternallyReleasedPartitions() {
++        return externallyReleasedPartitions;
++    }
++
++    public void setAutoCompleteRegistration(boolean autoCompleteRegistration) {
++        this.autoCompleteRegistration = autoCompleteRegistration;
++    }
++
++    public void setThrowExceptionalOnRegistration(boolean throwExceptionalOnRegistration) {
++        this.throwExceptionalOnRegistration = throwExceptionalOnRegistration;
++    }
++
++    public void completeAllPendingRegistrations() {
++        processPendingRegistrations(
++                (response, tuple) ->
++                        response.complete(createShuffleDescriptor(tuple.f0, tuple.f1)));
++    }
++
++    public void failAllPendingRegistrations() {
++        processPendingRegistrations(
++                (response, ignore) ->
++                        response.completeExceptionally(
++                                new Exception("Forced partition registration failure")));
++    }
++
++    private void processPendingRegistrations(
++            BiConsumer<
++                            CompletableFuture<ShuffleDescriptor>,
++                            Tuple2<PartitionDescriptor, ProducerDescriptor>>
++                    processor) {
++
++        checkState(
++                pendingPartitionRegistrationResponses.size()
++                        == pendingPartitionRegistrations.size());
++
++        Tuple2<PartitionDescriptor, ProducerDescriptor> tuple;
++        while ((tuple = pendingPartitionRegistrations.poll()) != null) {
++            processor.accept(pendingPartitionRegistrationResponses.poll(), tuple);
++        }
++    }
++
++    private static class TestingShuffleDescriptor implements ShuffleDescriptor {
++
++        private final ResultPartitionID resultPartitionId;
++
++        private final ResourceID location;
++
++        TestingShuffleDescriptor(ResultPartitionID resultPartitionId, ResourceID location) {
++            this.resultPartitionId = resultPartitionId;
++            this.location = location;
++        }
++
++        @Override
++        public ResultPartitionID getResultPartitionID() {
++            return resultPartitionId;
++        }
++
++        @Override
++        public Optional<ResourceID> storesLocalResourcesOn() {
++            return Optional.of(location);
++        }
++    }
++}
+-- 
+2.30.1 (Apple Git-130)
+
