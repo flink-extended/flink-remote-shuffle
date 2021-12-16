@@ -43,16 +43,13 @@ import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcService;
 import com.alibaba.flink.shuffle.rpc.utils.AkkaRpcServiceUtils;
 
 import org.apache.flink.configuration.AkkaOptions;
-import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
-import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.shuffle.JobShuffleContext;
 import org.apache.flink.runtime.shuffle.PartitionDescriptor;
 import org.apache.flink.runtime.shuffle.ProducerDescriptor;
 import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.shuffle.ShuffleMasterContext;
-import org.apache.flink.runtime.shuffle.TaskInputsOutputsDescriptor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -348,35 +345,6 @@ public class RemoteShuffleMaster implements ShuffleMaster<RemoteShuffleDescripto
                 AkkaRpcServiceUtils.remoteServiceBuilder(
                         ConfigurationUtils.fromFlinkConfiguration(configuration), null, "0");
         return rpcServiceBuilder.withBindAddress("0.0.0.0").createAndStart();
-    }
-
-    @Override
-    public MemorySize computeShuffleMemorySizeForTask(
-            TaskInputsOutputsDescriptor taskInputsOutputsDescriptor) {
-        for (ResultPartitionType partitionType :
-                taskInputsOutputsDescriptor.getPartitionTypes().values()) {
-            if (!partitionType.isBlocking()) {
-                throw new ShuffleException(
-                        "Blocking result partition type expected but found " + partitionType);
-            }
-        }
-
-        int numResultPartitions = taskInputsOutputsDescriptor.getSubpartitionNums().size();
-        long numBytesPerPartition =
-                configuration.getMemorySize(PluginOptions.MEMORY_PER_RESULT_PARTITION).getBytes();
-        long numBytesForOutput = numBytesPerPartition * numResultPartitions;
-
-        int numInputGates = taskInputsOutputsDescriptor.getInputChannelNums().size();
-        long numBytesPerGate =
-                configuration.getMemorySize(PluginOptions.MEMORY_PER_INPUT_GATE).getBytes();
-        long numBytesForInput = numBytesPerGate * numInputGates;
-
-        LOG.debug(
-                "Announcing number of bytes {} for output and {} for input.",
-                numBytesForOutput,
-                numBytesForInput);
-
-        return new MemorySize(numBytesForInput + numBytesForOutput);
     }
 
     private class ShuffleWorkerStatusListenerImpl implements ShuffleWorkerStatusListener {

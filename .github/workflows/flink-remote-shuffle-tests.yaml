@@ -1,9 +1,9 @@
 name: Remote Shuffle Service
 on:
   push:
-    branches: [main, release-*]
+    branches: [ main, release-* ]
   pull_request:
-    branches: [main, release-*]
+    branches: [ main, release-* ]
 jobs:
   build-and-test:
     runs-on: ubuntu-18.04
@@ -21,4 +21,4 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
       - name: Build and test with maven
-        run: mvn clean install -DskipTests; mvn -PincludeE2E -B clean verify
+        run: cd ..; git clone https://github.com/apache/flink.git; cd flink; git fetch origin release-1.13:release-1.13; git checkout release-1.13.3; git apply ../flink-remote-shuffle/patches/Patch-Flink-1.13.patch; mvn clean install -DskipTests; cd ../flink-remote-shuffle; mvn clean install -DskipTests; mvn -PincludeE2E -B clean verify

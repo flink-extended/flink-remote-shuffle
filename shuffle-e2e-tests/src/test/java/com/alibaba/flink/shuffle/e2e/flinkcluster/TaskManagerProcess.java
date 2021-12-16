@@ -19,7 +19,6 @@
 package com.alibaba.flink.shuffle.e2e.flinkcluster;
 
 import com.alibaba.flink.shuffle.e2e.TestJvmProcess;
-import com.alibaba.flink.shuffle.e2e.utils.LogErrorHandler;
 import com.alibaba.flink.shuffle.plugin.RemoteShuffleEnvironment;
 
 import org.apache.flink.api.java.utils.ParameterTool;
@@ -179,8 +178,7 @@ public class TaskManagerProcess extends TestJvmProcess {
             field.setAccessible(true);
             RemoteShuffleEnvironment env = (RemoteShuffleEnvironment) field.get(taskExecutor);
             NetworkBufferPool bufferPool = env.getNetworkBufferPool();
-            CuratorFramework zkClient =
-                    ZooKeeperUtils.startCuratorFramework(conf, LogErrorHandler.INSTANCE);
+            CuratorFramework zkClient = ZooKeeperUtils.startCuratorFramework(conf);
             int index = conf.getInteger("taskmanager.index", -1);
             String zkPath = "/taskmanager-" + index;
             if (zkClient.checkExists().forPath(zkPath) != null) {

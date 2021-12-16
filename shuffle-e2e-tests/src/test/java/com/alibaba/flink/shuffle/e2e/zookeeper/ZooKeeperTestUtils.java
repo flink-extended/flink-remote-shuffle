@@ -21,7 +21,6 @@ package com.alibaba.flink.shuffle.e2e.zookeeper;
 import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.coordinator.highavailability.zookeeper.ZooKeeperUtils;
 import com.alibaba.flink.shuffle.core.config.HighAvailabilityOptions;
-import com.alibaba.flink.shuffle.e2e.utils.LogErrorHandler;
 
 import org.apache.flink.configuration.AkkaOptions;
 import org.apache.flink.configuration.CheckpointingOptions;
@@ -131,8 +130,7 @@ public class ZooKeeperTestUtils {
 
     public static CuratorFramework createZKClientForFlink(
             org.apache.flink.configuration.Configuration configuration) {
-        return org.apache.flink.runtime.util.ZooKeeperUtils.startCuratorFramework(
-                configuration, LogErrorHandler.INSTANCE);
+        return org.apache.flink.runtime.util.ZooKeeperUtils.startCuratorFramework(configuration);
     }
 
     public static CuratorFramework createZKClientForRemoteShuffle(Configuration configuration) {

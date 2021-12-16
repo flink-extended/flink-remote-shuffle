@@ -264,10 +264,5 @@ public class BufferPacker {
         public void setDataType(DataType dataType) {
             this.dataType = dataType;
         }
-
-        @Override
-        public int refCnt() {
-            return buffer.refCnt();
-        }
     }
 }

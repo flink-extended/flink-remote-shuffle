@@ -30,7 +30,7 @@ import org.apache.flink.runtime.jobmaster.JobResult;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
-import org.apache.flink.streaming.api.graph.GlobalStreamExchangeMode;
+import org.apache.flink.streaming.api.graph.GlobalDataExchangeMode;
 import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.streaming.api.graph.StreamingJobGraphGenerator;
 import org.apache.flink.util.Collector;
@@ -72,7 +72,7 @@ public class WordCountITCase extends BatchJobITCaseBase {
                 .addSink(new VerifySink((long) parallelism * WORD_COUNT));
 
         StreamGraph streamGraph = env.getStreamGraph();
-        streamGraph.setGlobalStreamExchangeMode(GlobalStreamExchangeMode.ALL_EDGES_BLOCKING);
+        streamGraph.setGlobalDataExchangeMode(GlobalDataExchangeMode.ALL_EDGES_BLOCKING);
         streamGraph.setJobType(JobType.BATCH);
         JobGraph jobGraph = StreamingJobGraphGenerator.createJobGraph(streamGraph);
 

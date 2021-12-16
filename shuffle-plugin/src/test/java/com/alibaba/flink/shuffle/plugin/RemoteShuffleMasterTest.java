@@ -26,7 +26,6 @@ import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
-import com.alibaba.flink.shuffle.plugin.config.PluginOptions;
 import com.alibaba.flink.shuffle.plugin.utils.ConfigurationUtils;
 import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcService;
 import com.alibaba.flink.shuffle.rpc.message.Acknowledge;
@@ -34,7 +33,6 @@ import com.alibaba.flink.shuffle.rpc.message.Acknowledge;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
@@ -45,16 +43,12 @@ import org.apache.flink.runtime.shuffle.JobShuffleContext;
 import org.apache.flink.runtime.shuffle.PartitionDescriptor;
 import org.apache.flink.runtime.shuffle.ProducerDescriptor;
 import org.apache.flink.runtime.shuffle.ShuffleMasterContext;
-import org.apache.flink.runtime.shuffle.TaskInputsOutputsDescriptor;
 
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.net.InetAddress;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -127,49 +121,6 @@ public class RemoteShuffleMasterTest extends RemoteShuffleShuffleTestBase {
                             shuffleDescriptor.getDataSetId(),
                             shuffleDescriptor.getDataPartitionID()),
                     resourceReleaseFuture.get(TIMEOUT, TimeUnit.MILLISECONDS));
-        }
-    }
-
-    @Test
-    public void testShuffleMemoryAnnouncing() throws Exception {
-        try (RemoteShuffleMaster shuffleMaster =
-                createAndInitializeShuffleMaster(new org.apache.flink.api.common.JobID())) {
-            Map<IntermediateDataSetID, Integer> numberOfInputGateChannels = new HashMap<>();
-            Map<IntermediateDataSetID, Integer> numbersOfResultSubpartitions = new HashMap<>();
-            Map<IntermediateDataSetID, ResultPartitionType> resultPartitionTypes = new HashMap<>();
-            IntermediateDataSetID inputDataSetID0 = new IntermediateDataSetID();
-            IntermediateDataSetID inputDataSetID1 = new IntermediateDataSetID();
-            IntermediateDataSetID outputDataSetID0 = new IntermediateDataSetID();
-            IntermediateDataSetID outputDataSetID1 = new IntermediateDataSetID();
-            IntermediateDataSetID outputDataSetID2 = new IntermediateDataSetID();
-            Random random = new Random();
-            numberOfInputGateChannels.put(inputDataSetID0, random.nextInt(1000));
-            numberOfInputGateChannels.put(inputDataSetID1, random.nextInt(1000));
-            numbersOfResultSubpartitions.put(outputDataSetID0, random.nextInt(1000));
-            numbersOfResultSubpartitions.put(outputDataSetID1, random.nextInt(1000));
-            numbersOfResultSubpartitions.put(outputDataSetID2, random.nextInt(1000));
-            resultPartitionTypes.put(outputDataSetID0, ResultPartitionType.BLOCKING);
-            resultPartitionTypes.put(outputDataSetID1, ResultPartitionType.BLOCKING);
-            resultPartitionTypes.put(outputDataSetID2, ResultPartitionType.BLOCKING);
-            MemorySize calculated =
-                    shuffleMaster.computeShuffleMemorySizeForTask(
-                            TaskInputsOutputsDescriptor.from(
-                                    numberOfInputGateChannels,
-                                    numbersOfResultSubpartitions,
-                                    resultPartitionTypes));
-
-            long numBytesPerGate =
-                    configuration.getMemorySize(PluginOptions.MEMORY_PER_INPUT_GATE).getBytes();
-            long expectedInput = 2 * numBytesPerGate;
-
-            long numBytesPerResultPartition =
-                    configuration
-                            .getMemorySize(PluginOptions.MEMORY_PER_RESULT_PARTITION)
-                            .getBytes();
-            long expectedOutput = 3 * numBytesPerResultPartition;
-            MemorySize expected = new MemorySize(expectedInput + expectedOutput);
-
-            assertEquals(expected, calculated);
         }
     }
 

@@ -19,7 +19,6 @@ package com.alibaba.flink.shuffle.e2e;
 
 import com.alibaba.flink.shuffle.common.functions.ConsumerWithException;
 import com.alibaba.flink.shuffle.e2e.flinkcluster.FlinkLocalCluster;
-import com.alibaba.flink.shuffle.e2e.utils.LogErrorHandler;
 import com.alibaba.flink.shuffle.e2e.zookeeper.ZooKeeperTestUtils;
 
 import org.apache.flink.api.common.ExecutionConfig;
@@ -45,7 +44,7 @@ import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
 import org.apache.flink.runtime.util.ZooKeeperUtils;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.graph.GlobalStreamExchangeMode;
+import org.apache.flink.streaming.api.graph.GlobalDataExchangeMode;
 import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
@@ -159,6 +158,10 @@ public class JobForShuffleTesting {
 
         StreamExecutionEnvironment env = createRemoteEnvironment("localhost", 1337, config);
         env.setParallelism(parallelism);
+        env.setBufferTimeout(-1L);
+        ExecutionConfig executionConfig = env.getConfig();
+        executionConfig.setDefaultInputDependencyConstraint(InputDependencyConstraint.ALL);
+        executionConfig.setExecutionMode(ExecutionMode.BATCH);
 
         TupleTypeInfo<Tuple2<Long, Long>> typeInfo =
                 new TupleTypeInfo<>(BasicTypeInfo.LONG_TYPE_INFO, BasicTypeInfo.LONG_TYPE_INFO);
@@ -193,16 +196,12 @@ public class JobForShuffleTesting {
                 .name(STAGE2_NAME)
                 .writeAsText(outputPath, FileSystem.WriteMode.OVERWRITE);
 
-        ExecutionConfig executionConfig = env.getConfig();
-        executionConfig.setDefaultInputDependencyConstraint(InputDependencyConstraint.ALL);
-        executionConfig.setExecutionMode(ExecutionMode.BATCH);
-
         if (executionConfigModifier != null) {
             executionConfigModifier.accept(executionConfig);
         }
 
         StreamGraph streamGraph = env.getStreamGraph();
-        streamGraph.setGlobalStreamExchangeMode(GlobalStreamExchangeMode.ALL_EDGES_BLOCKING);
+        streamGraph.setGlobalDataExchangeMode(GlobalDataExchangeMode.ALL_EDGES_BLOCKING);
         streamGraph.setJobName("Streaming WordCount");
         env.execute(streamGraph);
 
@@ -373,7 +372,7 @@ public class JobForShuffleTesting {
             super.open();
             Configuration conf =
                     ZooKeeperTestUtils.createZooKeeperHAConfigForFlink(zkConnect, zkPath);
-            zkClient = ZooKeeperUtils.startCuratorFramework(conf, LogErrorHandler.INSTANCE);
+            zkClient = ZooKeeperUtils.startCuratorFramework(conf);
             taskIdx = getRuntimeContext().getIndexOfThisSubtask();
             attempt = getRuntimeContext().getAttemptNumber();
             final ResultPartitionID resultPartitionID;

@@ -22,7 +22,6 @@ import com.alibaba.flink.shuffle.core.config.HeartbeatOptions;
 import com.alibaba.flink.shuffle.core.config.TransferOptions;
 import com.alibaba.flink.shuffle.core.config.WorkerOptions;
 import com.alibaba.flink.shuffle.e2e.TestingListener;
-import com.alibaba.flink.shuffle.e2e.utils.LogErrorHandler;
 import com.alibaba.flink.shuffle.e2e.zookeeper.ZooKeeperTestUtils;
 import com.alibaba.flink.shuffle.plugin.RemoteShuffleServiceFactory;
 import com.alibaba.flink.shuffle.plugin.config.PluginOptions;
@@ -41,6 +40,8 @@ import org.apache.flink.configuration.RestOptions;
 import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.configuration.TaskManagerOptions;
 import org.apache.flink.configuration.WebOptions;
+import org.apache.flink.runtime.concurrent.FutureUtils;
+import org.apache.flink.runtime.concurrent.ScheduledExecutorServiceAdapter;
 import org.apache.flink.runtime.dispatcher.DispatcherGateway;
 import org.apache.flink.runtime.dispatcher.DispatcherId;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
@@ -48,12 +49,10 @@ import org.apache.flink.runtime.highavailability.HighAvailabilityServicesUtils;
 import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalService;
 import org.apache.flink.runtime.messages.webmonitor.ClusterOverview;
 import org.apache.flink.runtime.rpc.RpcService;
-import org.apache.flink.runtime.rpc.RpcSystem;
 import org.apache.flink.runtime.rpc.RpcUtils;
+import org.apache.flink.runtime.rpc.akka.AkkaRpcServiceUtils;
 import org.apache.flink.runtime.shuffle.ShuffleServiceOptions;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
-import org.apache.flink.util.concurrent.FutureUtils;
-import org.apache.flink.util.concurrent.ScheduledExecutorServiceAdapter;
 
 import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
 
@@ -122,9 +121,9 @@ public class FlinkLocalCluster {
         this.dispatcher.startProcess();
         this.highAvailabilityServices =
                 HighAvailabilityServicesUtils.createAvailableOrEmbeddedServices(
-                        conf, Executors.newSingleThreadExecutor(), LogErrorHandler.INSTANCE);
-        RpcSystem rpcSystem = RpcSystem.load(conf);
-        rpcService = rpcSystem.remoteServiceBuilder(conf, "localhost", "0").createAndStart();
+                        conf, Executors.newSingleThreadExecutor());
+        rpcService =
+                AkkaRpcServiceUtils.remoteServiceBuilder(conf, "localhost", 0).createAndStart();
         for (int i = 0; i < numTaskManagers; i++) {
             taskManagers[i] = new TaskManagerProcess(logDirName, conf, i);
             taskManagers[i].startProcess();

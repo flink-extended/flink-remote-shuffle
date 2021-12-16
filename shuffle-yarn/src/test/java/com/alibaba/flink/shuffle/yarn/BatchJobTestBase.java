@@ -133,7 +133,7 @@ public abstract class BatchJobTestBase {
         shuffleCluster.start();
 
         TestingMiniClusterConfiguration miniClusterConfiguration =
-                TestingMiniClusterConfiguration.newBuilder()
+                new TestingMiniClusterConfiguration.Builder()
                         .setConfiguration(flinkConfiguration)
                         .setNumTaskManagers(numTaskManagers)
                         .setNumSlotsPerTaskManager(numSlotsPerTaskManager)

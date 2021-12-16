@@ -18,7 +18,6 @@
 
 package com.alibaba.flink.shuffle.plugin.transfer;
 
-import com.alibaba.flink.shuffle.common.utils.CommonUtils;
 import com.alibaba.flink.shuffle.common.utils.ExceptionUtils;
 import com.alibaba.flink.shuffle.coordinator.manager.ShuffleWorkerDescriptor;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
@@ -42,7 +41,6 @@ import org.apache.flink.runtime.event.TaskEvent;
 import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.LocalConnectionManager;
 import org.apache.flink.runtime.io.network.api.CheckpointBarrier;
-import org.apache.flink.runtime.io.network.api.EndOfData;
 import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
 import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
@@ -154,9 +152,6 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
     /** Whether we have opened all initial channels or not. */
     private boolean initialChannelsOpened;
 
-    /** Number of pending {@link EndOfData} events to be received. */
-    private long pendingEndOfDataEvents;
-
     public RemoteShuffleInputGate(
             String taskName,
             boolean shuffleChannels,
@@ -183,7 +178,6 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
         this.channelsInfo = createChannelInfos();
         this.numUnconsumedSubpartitions =
                 initShuffleReadClients(networkBufferSize, shuffleChannels);
-        this.pendingEndOfDataEvents = numUnconsumedSubpartitions;
     }
 
     private long initShuffleReadClients(int bufferSize, boolean shuffleChannels) {
@@ -583,9 +577,6 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
                     availabilityHelper.getUnavailableToResetAvailable().complete(null);
                 }
             }
-        } else if (event.getClass() == EndOfData.class) {
-            CommonUtils.checkState(!hasReceivedEndOfData());
-            --pendingEndOfDataEvents;
         }
 
         return Optional.of(
@@ -628,24 +619,6 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
     }
 
     @Override
-    public List<InputChannelInfo> getUnfinishedChannels() {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public int getBuffersInUseCount() {
-        return 0;
-    }
-
-    @Override
-    public boolean hasReceivedEndOfData() {
-        return pendingEndOfDataEvents <= 0;
-    }
-
-    @Override
-    public void announceBufferSize(int bufferSize) {}
-
-    @Override
     public void finishReadRecoveredState() {
         // do-nothing.
     }
@@ -664,9 +637,6 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
     public void resumeConsumption(InputChannelInfo channelInfo) {
         throw new FlinkRuntimeException("Method should not be called.");
     }
-
-    @Override
-    public void acknowledgeAllRecordsProcessed(InputChannelInfo inputChannelInfo) {}
 
     @Override
     public CompletableFuture<Void> getStateConsumedFuture() {
