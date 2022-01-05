@@ -34,6 +34,8 @@ import com.alibaba.flink.shuffle.core.storage.WritingViewContext;
 
 import javax.annotation.Nullable;
 
+import java.util.Set;
+
 /** An empty partitioned data store used for tests. */
 public class NoOpPartitionedDataStore implements PartitionedDataStore {
 
@@ -71,6 +73,11 @@ public class NoOpPartitionedDataStore implements PartitionedDataStore {
     public void releaseDataByJobID(JobID jobID, @Nullable Throwable throwable) {}
 
     @Override
+    public long numDataPartitionTotalBytes() {
+        return 0;
+    }
+
+    @Override
     public void shutDown(boolean releaseData) {}
 
     @Override
@@ -95,6 +102,16 @@ public class NoOpPartitionedDataStore implements PartitionedDataStore {
 
     @Override
     public SingleThreadExecutorPool getExecutorPool(StorageMeta storageMeta) {
+        return null;
+    }
+
+    @Override
+    public Set<StorageMeta> getHddStorageMetas() {
+        return null;
+    }
+
+    @Override
+    public Set<StorageMeta> getSsdStorageMetas() {
         return null;
     }
 }

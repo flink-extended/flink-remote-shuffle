@@ -117,6 +117,11 @@ public class LocalFileMapPartition extends BaseMapPartition {
     }
 
     @Override
+    public long totalBytes() {
+        return partitionFile.totalBytes();
+    }
+
+    @Override
     protected DataPartitionReader getDataPartitionReader(
             int startPartitionIndex,
             int endPartitionIndex,

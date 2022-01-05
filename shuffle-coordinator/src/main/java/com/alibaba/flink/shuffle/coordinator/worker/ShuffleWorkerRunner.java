@@ -36,6 +36,8 @@ import com.alibaba.flink.shuffle.coordinator.metrics.MetricsRestHandler;
 import com.alibaba.flink.shuffle.coordinator.utils.ClusterEntrypointUtils;
 import com.alibaba.flink.shuffle.coordinator.utils.EnvironmentInformation;
 import com.alibaba.flink.shuffle.coordinator.utils.LeaderRetrievalUtils;
+import com.alibaba.flink.shuffle.coordinator.worker.checker.ShuffleWorkerChecker;
+import com.alibaba.flink.shuffle.coordinator.worker.checker.ShuffleWorkerCheckerImpl;
 import com.alibaba.flink.shuffle.coordinator.worker.metastore.LocalShuffleMetaStore;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.config.WorkerOptions;
@@ -272,6 +274,9 @@ public class ShuffleWorkerRunner implements FatalErrorHandler, AutoCloseable {
                 recoveredCount,
                 failedCount);
 
+        ShuffleWorkerChecker shuffleWorkerChecker =
+                new ShuffleWorkerCheckerImpl(configuration, dataStore);
+
         NettyConfig nettyConfig = new NettyConfig(configuration);
         NettyServer nettyServer = new NettyServer(dataStore, nettyConfig);
         nettyServer.start();
@@ -289,6 +294,7 @@ public class ShuffleWorkerRunner implements FatalErrorHandler, AutoCloseable {
                 shuffleWorkerLocation,
                 fileSystemShuffleMetaStore,
                 dataStore,
+                shuffleWorkerChecker,
                 nettyServer);
     }
 

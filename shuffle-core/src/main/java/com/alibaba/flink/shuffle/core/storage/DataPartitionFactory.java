@@ -24,6 +24,7 @@ import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 
 import java.io.DataInput;
+import java.util.List;
 
 /**
  * Factory to create new {@link DataPartition}s. Different type of {@link DataPartition}s need
@@ -73,6 +74,12 @@ public interface DataPartitionFactory {
 
     /** Returns the data partition type this partition factory is going to create. */
     DataPartition.DataPartitionType getDataPartitionType();
+
+    /** Returns the HDD storage metas of this partition factory. */
+    List<StorageMeta> getHddStorageMetas();
+
+    /** Returns the SSD storage metas of this partition factory. */
+    List<StorageMeta> getSsdStorageMetas();
 
     static DataPartition.DataPartitionType getDataPartitionType(String dataPartitionFactoryName)
             throws ClassNotFoundException, InstantiationException, IllegalAccessException {

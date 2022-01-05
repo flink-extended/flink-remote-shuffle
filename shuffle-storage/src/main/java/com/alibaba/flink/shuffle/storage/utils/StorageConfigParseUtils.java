@@ -18,8 +18,10 @@
 
 package com.alibaba.flink.shuffle.storage.utils;
 
+import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.common.exception.ConfigurationException;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
+import com.alibaba.flink.shuffle.core.storage.StorageType;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -110,5 +112,23 @@ public class StorageConfigParseUtils {
         }
 
         return new ParsedPathLists(ssdPaths, hddPaths, allPaths);
+    }
+
+    /**
+     * Helper method which parses the configuration and obtains the configured preferred storage
+     * type.
+     */
+    public static StorageType confPreferredStorageType(Configuration configuration) {
+        StorageType preferredStorageType;
+        String diskTypeString = configuration.getString(StorageOptions.STORAGE_PREFERRED_TYPE);
+        try {
+            preferredStorageType = StorageType.valueOf(checkNotNull(diskTypeString).trim());
+        } catch (Exception exception) {
+            throw new ConfigurationException(
+                    String.format(
+                            "Illegal configured value %s for %s. Must be SSD, HDD or UNKNOWN.",
+                            diskTypeString, StorageOptions.STORAGE_PREFERRED_TYPE.key()));
+        }
+        return preferredStorageType;
     }
 }

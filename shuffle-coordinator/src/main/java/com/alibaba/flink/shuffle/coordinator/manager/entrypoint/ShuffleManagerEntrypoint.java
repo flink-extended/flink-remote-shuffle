@@ -130,7 +130,7 @@ public class ShuffleManagerEntrypoint implements AutoCloseableAsync, FatalErrorH
                         ioExecutor,
                         jobHeartbeatServices,
                         workerHeartbeatServices,
-                        new AssignmentTrackerImpl());
+                        new AssignmentTrackerImpl(configuration));
     }
 
     public Configuration getConfiguration() {

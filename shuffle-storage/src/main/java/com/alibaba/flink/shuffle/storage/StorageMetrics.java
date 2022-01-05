@@ -39,6 +39,13 @@ public class StorageMetrics {
     public static final String NUM_AVAILABLE_READING_BUFFERS =
             STORAGE + ".num_available_reading_buffers";
 
+    public static final String NUM_HDD_MAX_USABLE_BYTES = STORAGE + ".num_hdd_max_usable_bytes";
+
+    public static final String NUM_SSD_MAX_USABLE_BYTES = STORAGE + ".num_ssd_max_usable_bytes";
+
+    public static final String NUM_TOTAL_PARTITION_FILE_BYTES =
+            STORAGE + ".num_total_partition_file_bytes";
+
     // Number of data partitions stored.
     public static final String NUM_DATA_PARTITIONS = STORAGE + ".num_data_partitions";
 
@@ -73,6 +80,58 @@ public class StorageMetrics {
                     @Override
                     public Integer getValue() {
                         return availableNum.get();
+                    }
+
+                    @Override
+                    public long lastUpdateTime() {
+                        return System.currentTimeMillis();
+                    }
+                });
+    }
+
+    public static void registerGaugeForNumHddMaxUsableBytes(Supplier<Long> numHddMaxUsableBytes) {
+        MetricUtils.registerMetric(
+                STORAGE,
+                NUM_HDD_MAX_USABLE_BYTES,
+                new Gauge<Long>() {
+                    @Override
+                    public Long getValue() {
+                        return numHddMaxUsableBytes.get();
+                    }
+
+                    @Override
+                    public long lastUpdateTime() {
+                        return System.currentTimeMillis();
+                    }
+                });
+    }
+
+    public static void registerGaugeForNumSsdMaxUsableBytes(Supplier<Long> numSsdMaxUsableBytes) {
+        MetricUtils.registerMetric(
+                STORAGE,
+                NUM_SSD_MAX_USABLE_BYTES,
+                new Gauge<Long>() {
+                    @Override
+                    public Long getValue() {
+                        return numSsdMaxUsableBytes.get();
+                    }
+
+                    @Override
+                    public long lastUpdateTime() {
+                        return System.currentTimeMillis();
+                    }
+                });
+    }
+
+    public static void registerGaugeForNumTotalPartitionFileBytes(
+            Supplier<Long> umTotalPartitionFileBytes) {
+        MetricUtils.registerMetric(
+                STORAGE,
+                NUM_TOTAL_PARTITION_FILE_BYTES,
+                new Gauge<Long>() {
+                    @Override
+                    public Long getValue() {
+                        return umTotalPartitionFileBytes.get();
                     }
 
                     @Override

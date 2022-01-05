@@ -96,6 +96,12 @@ public interface DataPartition {
     boolean isConsumable();
 
     /**
+     * Returns the total length of this data partition in bytes, including data files and index
+     * files.
+     */
+    long totalBytes();
+
+    /**
      * Type definition of {@link DataPartition}. All {@link DataPartition}s must be either of type
      * {@link #MAP_PARTITION} or type {@link #REDUCE_PARTITION}.
      */

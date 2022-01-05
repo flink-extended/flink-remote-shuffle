@@ -22,11 +22,15 @@ import com.alibaba.flink.shuffle.common.config.ConfigOption;
 import com.alibaba.flink.shuffle.common.config.MemorySize;
 import com.alibaba.flink.shuffle.core.storage.StorageType;
 
+import java.time.Duration;
+
 /** Config options for storage. */
 public class StorageOptions {
 
     /** Minimum size of memory to be used for data partition writing and reading. */
     public static final MemorySize MIN_WRITING_READING_MEMORY_SIZE = MemorySize.parse("16m");
+
+    private static final MemorySize STORAGE_RESERVED_SPACE_BYTES_DEFAULT = MemorySize.parse("5g");
 
     /** Whether to enable data checksum for data integrity verification or not. */
     public static final ConfigOption<Boolean> STORAGE_ENABLE_DATA_CHECKSUM =
@@ -152,6 +156,22 @@ public class StorageOptions {
                                             + "smaller than %s, the minimum %s will be used.",
                                     MIN_WRITING_READING_MEMORY_SIZE.toHumanReadableString(),
                                     MIN_WRITING_READING_MEMORY_SIZE.toHumanReadableString()));
+
+    public static final ConfigOption<Duration> STORAGE_CHECK_UPDATE_PERIOD =
+            new ConfigOption<Duration>("remote-shuffle.storage.check-update-period")
+                    .defaultValue(Duration.ofSeconds(10))
+                    .description(
+                            "The update interval of the worker check thread. The"
+                                    + " thread will periodically get the status at this time interval.");
+
+    public static final ConfigOption<MemorySize> STORAGE_RESERVED_SPACE_BYTES =
+            new ConfigOption<MemorySize>("remote-shuffle.storage.min-reserved-space-bytes")
+                    .defaultValue(STORAGE_RESERVED_SPACE_BYTES_DEFAULT)
+                    .description(
+                            "Minimum reserved space size for shuffle workers. This option"
+                                    + " is used to filter out the worker with small remaining storage space"
+                                    + " to ensure that the storage space will not be exhausted during use."
+                                    + " However, setting the value too large will waste storage resources.");
 
     // ------------------------------------------------------------------------
 

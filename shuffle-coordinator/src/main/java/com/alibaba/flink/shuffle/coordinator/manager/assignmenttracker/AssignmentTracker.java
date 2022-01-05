@@ -174,4 +174,10 @@ public interface AssignmentTracker {
      * @return The data partition distribution.
      */
     Map<DataPartitionCoordinate, InstanceID> getDataPartitionDistribution(JobID jobID);
+
+    void reportWorkerStorageSpaces(
+            InstanceID instanceID,
+            RegistrationID shuffleWorkerRegisterId,
+            long numHddUsableBytes,
+            long numSsdUsableBytes);
 }
