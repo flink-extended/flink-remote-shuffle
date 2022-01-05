@@ -23,6 +23,7 @@ import com.alibaba.flink.shuffle.client.ShuffleManagerClientConfiguration;
 import com.alibaba.flink.shuffle.client.ShuffleManagerClientImpl;
 import com.alibaba.flink.shuffle.client.ShuffleWorkerStatusListener;
 import com.alibaba.flink.shuffle.common.config.Configuration;
+import com.alibaba.flink.shuffle.common.config.MemorySize;
 import com.alibaba.flink.shuffle.common.functions.AutoCloseableAsync;
 import com.alibaba.flink.shuffle.common.handler.FatalErrorHandler;
 import com.alibaba.flink.shuffle.common.utils.FutureUtils;
@@ -36,6 +37,7 @@ import com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.Assignmen
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorker;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerRunner;
 import com.alibaba.flink.shuffle.core.config.MemoryOptions;
+import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.config.TransferOptions;
 import com.alibaba.flink.shuffle.core.executor.ExecutorThreadFactory;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
@@ -202,6 +204,9 @@ public class ShuffleMiniCluster implements AutoCloseableAsync {
                         HeartbeatServicesUtils.createManagerWorkerHeartbeatServices(configuration);
                 jobHeartbeatServices =
                         HeartbeatServicesUtils.createManagerJobHeartbeatServices(configuration);
+
+                configuration.setMemorySize(
+                        StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
 
                 AkkaRpcServiceUtils.loadRpcSystem(configuration);
                 startShuffleManager();
@@ -384,7 +389,7 @@ public class ShuffleMiniCluster implements AutoCloseableAsync {
                         ioExecutor,
                         jobHeartbeatServices,
                         workerHeartbeatServices,
-                        new AssignmentTrackerImpl());
+                        new AssignmentTrackerImpl(miniClusterConfiguration.getConfiguration()));
 
         shuffleManager.start();
     }

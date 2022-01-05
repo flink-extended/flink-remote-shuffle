@@ -23,6 +23,7 @@ import javax.annotation.Nullable;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 /** Utility for manipulating exceptions. */
 public class ExceptionUtils {
@@ -124,6 +125,33 @@ public class ExceptionUtils {
                 cause = cause.getCause();
             }
         }
+        return Optional.empty();
+    }
+
+    /**
+     * Checks whether a throwable chain contains an exception matching a predicate and returns it.
+     *
+     * <p>This method is copied from Apache Flink (org.apache.flink.util.ExceptionUtils).
+     *
+     * @param throwable the throwable chain to check.
+     * @param predicate the predicate of the exception to search for in the chain.
+     * @return Optional throwable of the requested type if available, otherwise empty.
+     */
+    public static Optional<Throwable> findThrowable(
+            Throwable throwable, Predicate<Throwable> predicate) {
+        if (throwable == null || predicate == null) {
+            return Optional.empty();
+        }
+
+        Throwable t = throwable;
+        while (t != null) {
+            if (predicate.test(t)) {
+                return Optional.of(t);
+            } else {
+                t = t.getCause();
+            }
+        }
+
         return Optional.empty();
     }
 

@@ -84,4 +84,9 @@ public class NoOpDataPartition implements DataPartition {
     public boolean isConsumable() {
         return false;
     }
+
+    @Override
+    public long totalBytes() {
+        return 0;
+    }
 }

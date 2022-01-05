@@ -18,6 +18,8 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager;
 
+import com.alibaba.flink.shuffle.common.config.Configuration;
+import com.alibaba.flink.shuffle.common.config.MemorySize;
 import com.alibaba.flink.shuffle.common.utils.ExceptionUtils;
 import com.alibaba.flink.shuffle.coordinator.heartbeat.HeartbeatManagerImpl;
 import com.alibaba.flink.shuffle.coordinator.heartbeat.HeartbeatServices;
@@ -31,6 +33,7 @@ import com.alibaba.flink.shuffle.coordinator.utils.TestingFatalErrorHandler;
 import com.alibaba.flink.shuffle.coordinator.utils.TestingUtils;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerGateway;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerMetrics;
+import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.ids.DataPartitionID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
@@ -549,7 +552,7 @@ public class ShuffleManagerTest extends TestLogger {
         shuffleManager.heartbeatFromWorker(
                 worker.getWorkerID(),
                 new WorkerToManagerHeartbeatPayload(
-                        Arrays.asList(dataPartitionStatus, releasingDataPartitionStatus)));
+                        Arrays.asList(dataPartitionStatus, releasingDataPartitionStatus), 0, 0));
 
         assertTrue(
                 shuffleManager
@@ -579,7 +582,9 @@ public class ShuffleManagerTest extends TestLogger {
             throws InterruptedException, ExecutionException, TimeoutException {
         testingFatalErrorHandler = new TestingFatalErrorHandler();
         InstanceID shuffleManagerInstanceID = new InstanceID();
-        testAssignmentTracker = new AssignmentTrackerImpl();
+        Configuration configuration = new Configuration();
+        configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
+        testAssignmentTracker = new AssignmentTrackerImpl(configuration);
 
         leaderElectionService = new TestingLeaderElectionService();
         final TestingHighAvailabilityServices highAvailabilityServices =

@@ -45,6 +45,10 @@ class WorkerStatus {
 
     private final int dataPort;
 
+    private long numHddUsableSpaceBytes;
+
+    private long numSsdUsableSpaceBytes;
+
     private final Map<DataPartitionCoordinate, DataPartitionStatus> dataPartitions =
             new HashMap<>();
 
@@ -62,12 +66,28 @@ class WorkerStatus {
         this.dataPort = dataPort;
     }
 
+    void setNumHddUsableSpaceBytes(long numHddUsableSpaceBytes) {
+        this.numHddUsableSpaceBytes = numHddUsableSpaceBytes;
+    }
+
+    void setNumSsdUsableSpaceBytes(long numSsdUsableSpaceBytes) {
+        this.numSsdUsableSpaceBytes = numSsdUsableSpaceBytes;
+    }
+
     public InstanceID getWorkerID() {
         return workerID;
     }
 
     public RegistrationID getRegistrationID() {
         return registrationID;
+    }
+
+    public long getNumHddUsableSpaceBytes() {
+        return numHddUsableSpaceBytes;
+    }
+
+    public long getNumSsdUsableSpaceBytes() {
+        return numSsdUsableSpaceBytes;
     }
 
     public ShuffleWorkerDescriptor createShuffleWorkerDescriptor() {
@@ -113,6 +133,10 @@ class WorkerStatus {
                 + '\''
                 + ", dataPort="
                 + dataPort
+                + ", numHddUsableSpaceBytes="
+                + numHddUsableSpaceBytes
+                + ", numSsdUsableSpaceBytes="
+                + numSsdUsableSpaceBytes
                 + '}';
     }
 }
