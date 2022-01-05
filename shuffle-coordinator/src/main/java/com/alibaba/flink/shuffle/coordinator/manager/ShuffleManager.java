@@ -824,6 +824,11 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
                         instanceID,
                         shuffleWorkerRegistrationInstance.getShuffleWorkerRegisterId(),
                         payload.getDataPartitionStatuses());
+                assignmentTracker.reportWorkerStorageSpaces(
+                        instanceID,
+                        shuffleWorkers.get(instanceID).getShuffleWorkerRegisterId(),
+                        payload.getNumHddUsableBytes(),
+                        payload.getNumSsdUsableBytes());
             } else {
                 LOG.warn(
                         "The shuffle worker with id {} is not registered before but receive the heartbeat.",

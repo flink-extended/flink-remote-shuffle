@@ -182,4 +182,41 @@ public class LocalFileMapPartitionFactoryTest {
             assertEquals(path2, dataPartition.getPartitionMeta().getStorageMeta().getStoragePath());
         }
     }
+
+    @Test
+    public void testAllDisksWillBeUsed() {
+        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        Properties properties = new Properties();
+        properties.setProperty(
+                StorageOptions.STORAGE_LOCAL_DATA_DIRS.key(),
+                String.format(
+                        "[HDD]%s,[HDD]%s",
+                        temporaryFolder1.getRoot().getAbsolutePath(),
+                        temporaryFolder2.getRoot().getAbsolutePath()));
+        partitionFactory.initialize(new Configuration(properties));
+
+        expectedEvenDiskUsedCount(
+                partitionFactory, temporaryFolder1, temporaryFolder2, StorageType.HDD);
+    }
+
+    static void expectedEvenDiskUsedCount(
+            LocalFileMapPartitionFactory partitionFactory,
+            TemporaryFolder temporaryFolder1,
+            TemporaryFolder temporaryFolder2,
+            StorageType expectedStorageType) {
+        int numHdd1 = 0;
+        int numHdd2 = 0;
+        for (int i = 0; i < 100; ++i) {
+            StorageMeta storageMeta = partitionFactory.getNextDataStorageMeta();
+            if (StorageTestUtils.getStoragePath(temporaryFolder1)
+                    .equals(storageMeta.getStoragePath())) {
+                numHdd1++;
+            } else if (StorageTestUtils.getStoragePath(temporaryFolder2)
+                    .equals(storageMeta.getStoragePath())) {
+                numHdd2++;
+            }
+            assertEquals(expectedStorageType, storageMeta.getStorageType());
+        }
+        assertTrue(numHdd1 == 50 && numHdd2 == 50);
+    }
 }

@@ -28,6 +28,8 @@ import com.alibaba.flink.shuffle.core.memory.BufferDispatcher;
 
 import javax.annotation.Nullable;
 
+import java.util.Set;
+
 /**
  * {@link PartitionedDataStore} is the storage of {@link DataPartition}s. Different types of {@link
  * DataPartition}s can be added to and removed from this data store.
@@ -98,6 +100,12 @@ public interface PartitionedDataStore {
     void releaseDataByJobID(JobID jobID, @Nullable Throwable throwable);
 
     /**
+     * Returns the total bytes of all data partition in the data store, including total bytes of
+     * data files and index files.
+     */
+    long numDataPartitionTotalBytes();
+
+    /**
      * Shuts down this data store and releases the resources.
      *
      * @param releaseData Whether to also release all data or not.
@@ -127,4 +135,10 @@ public interface PartitionedDataStore {
      * {@link DataPartition} processing.
      */
     SingleThreadExecutorPool getExecutorPool(StorageMeta storageMeta);
+
+    /** Returns all HDD {@link StorageMeta}s of this data store. */
+    Set<StorageMeta> getHddStorageMetas();
+
+    /** Returns all SSD {@link StorageMeta}s of this data store. */
+    Set<StorageMeta> getSsdStorageMetas();
 }

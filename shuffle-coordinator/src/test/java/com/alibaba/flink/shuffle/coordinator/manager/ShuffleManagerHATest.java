@@ -208,6 +208,13 @@ public class ShuffleManagerHATest {
         }
 
         @Override
+        public void reportWorkerStorageSpaces(
+                InstanceID instanceID,
+                RegistrationID shuffleWorkerRegisterId,
+                long numHddUsableBytes,
+                long numSsdUsableBytes) {}
+
+        @Override
         public Map<DataPartitionCoordinate, InstanceID> getDataPartitionDistribution(JobID jobID) {
             return null;
         }

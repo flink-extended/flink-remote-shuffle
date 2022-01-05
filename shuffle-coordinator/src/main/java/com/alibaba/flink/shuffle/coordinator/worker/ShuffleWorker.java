@@ -38,6 +38,7 @@ import com.alibaba.flink.shuffle.coordinator.manager.WorkerToManagerHeartbeatPay
 import com.alibaba.flink.shuffle.coordinator.registration.ConnectingConnection;
 import com.alibaba.flink.shuffle.coordinator.registration.EstablishedConnection;
 import com.alibaba.flink.shuffle.coordinator.registration.RegistrationConnectionListener;
+import com.alibaba.flink.shuffle.coordinator.worker.checker.ShuffleWorkerChecker;
 import com.alibaba.flink.shuffle.coordinator.worker.metastore.Metastore;
 import com.alibaba.flink.shuffle.core.ids.DataPartitionID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
@@ -77,6 +78,8 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
 
     private final ShuffleWorkerLocation shuffleWorkerLocation;
 
+    private final ShuffleWorkerChecker workerChecker;
+
     /** The fatal error handler to use in case of a fatal error. */
     private final FatalErrorHandler fatalErrorHandler;
 
@@ -113,6 +116,7 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
             ShuffleWorkerLocation shuffleWorkerLocation,
             Metastore metaStore,
             PartitionedDataStore dataStore,
+            ShuffleWorkerChecker workerChecker,
             NettyServer nettyServer) {
 
         super(rpcService, AkkaRpcServiceUtils.createRandomName(SHUFFLE_WORKER_NAME));
@@ -126,6 +130,7 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
         metaStore.setPartitionRemovedConsumer(this::onPartitionRemoved);
 
         this.dataStore = checkNotNull(dataStore);
+        this.workerChecker = checkNotNull(workerChecker);
         this.nettyServer = checkNotNull(nettyServer);
 
         this.leaderRetrieveService =
@@ -173,6 +178,12 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
 
         try {
             metaStore.close();
+        } catch (Exception e) {
+            exception = exception == null ? e : exception;
+        }
+
+        try {
+            workerChecker.close();
         } catch (Exception e) {
             exception = exception == null ? e : exception;
         }
@@ -569,9 +580,15 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
         public WorkerToManagerHeartbeatPayload retrievePayload(InstanceID instanceID) {
             validateRunsInMainThread();
             try {
-                return new WorkerToManagerHeartbeatPayload(metaStore.listDataPartitions());
+                return new WorkerToManagerHeartbeatPayload(
+                        metaStore.listDataPartitions(),
+                        workerChecker.getNumHddMaxUsableBytes(),
+                        workerChecker.getNumSsdMaxUsableBytes());
             } catch (Exception e) {
-                return new WorkerToManagerHeartbeatPayload(new ArrayList<>());
+                return new WorkerToManagerHeartbeatPayload(
+                        new ArrayList<>(),
+                        workerChecker.getNumHddMaxUsableBytes(),
+                        workerChecker.getNumSsdMaxUsableBytes());
             }
         }
     }

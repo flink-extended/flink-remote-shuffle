@@ -35,12 +35,15 @@ public class StorageMeta implements Serializable {
 
     private final StorageType storageType;
 
+    private volatile long numUsableSpaceBytes;
+
     public StorageMeta(String storagePath, StorageType storageType) {
         CommonUtils.checkArgument(storagePath != null, "Must be not null.");
         CommonUtils.checkArgument(storageType != null, "Must be not null.");
 
         this.storagePath = storagePath;
         this.storageType = storageType;
+        this.numUsableSpaceBytes = 0;
     }
 
     public String getStoragePath() {
@@ -49,6 +52,14 @@ public class StorageMeta implements Serializable {
 
     public StorageType getStorageType() {
         return storageType;
+    }
+
+    public long getNumUsableSpaceBytes() {
+        return numUsableSpaceBytes;
+    }
+
+    public void setNumUsableSpaceBytes(long numUsableSpaceBytes) {
+        this.numUsableSpaceBytes = numUsableSpaceBytes;
     }
 
     public void writeTo(DataOutput dataOutput) throws IOException {

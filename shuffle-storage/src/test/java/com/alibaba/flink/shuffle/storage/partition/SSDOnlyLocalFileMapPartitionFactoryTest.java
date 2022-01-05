@@ -31,6 +31,7 @@ import org.junit.rules.TemporaryFolder;
 
 import java.util.Properties;
 
+import static com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactoryTest.expectedEvenDiskUsedCount;
 import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link SSDOnlyLocalFileMapPartitionFactory}. */
@@ -71,5 +72,22 @@ public class SSDOnlyLocalFileMapPartitionFactoryTest {
                     storageMeta.getStoragePath());
             assertEquals(StorageType.SSD, storageMeta.getStorageType());
         }
+    }
+
+    @Test
+    public void testAllDisksWillBeUsed() {
+        SSDOnlyLocalFileMapPartitionFactory partitionFactory =
+                new SSDOnlyLocalFileMapPartitionFactory();
+        Properties properties = new Properties();
+        properties.setProperty(
+                StorageOptions.STORAGE_LOCAL_DATA_DIRS.key(),
+                String.format(
+                        "[SSD]%s,[SSD]%s",
+                        temporaryFolder1.getRoot().getAbsolutePath(),
+                        temporaryFolder2.getRoot().getAbsolutePath()));
+        partitionFactory.initialize(new Configuration(properties));
+
+        expectedEvenDiskUsedCount(
+                partitionFactory, temporaryFolder1, temporaryFolder2, StorageType.SSD);
     }
 }

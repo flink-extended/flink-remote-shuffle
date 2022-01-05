@@ -18,6 +18,7 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
+import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.coordinator.manager.DataPartitionCoordinate;
 import com.alibaba.flink.shuffle.coordinator.manager.DataPartitionStatus;
 import com.alibaba.flink.shuffle.coordinator.manager.DefaultShuffleResource;
@@ -41,13 +42,11 @@ import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -72,13 +71,17 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
 
     private static final Logger LOG = LoggerFactory.getLogger(AssignmentTrackerImpl.class);
 
+    private final PartitionPlacementStrategy partitionPlacementStrategy;
+
     /** The currently registered jobs. */
     private final Map<JobID, JobStatus> jobs = new HashMap<>();
 
     /** The currently registered workers. */
     private final Map<RegistrationID, WorkerStatus> workers = new HashMap<>();
 
-    public AssignmentTrackerImpl() {
+    public AssignmentTrackerImpl(Configuration configuration) {
+        this.partitionPlacementStrategy =
+                PartitionPlacementStrategyLoader.loadPlacementStrategyFactory(configuration);
         registerMetrics();
     }
 
@@ -287,24 +290,21 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
                     getDataPartitionType(dataPartitionFactoryName));
         }
 
-        Optional<Map.Entry<RegistrationID, WorkerStatus>> min =
-                workers.entrySet().stream()
-                        .min(
-                                Comparator.comparingInt(
-                                        entry -> entry.getValue().getDataPartitions().size()));
+        WorkerStatus[] selectedWorkerStatuses =
+                partitionPlacementStrategy.selectNextWorker(
+                        workers, new PartitionPlacementContext(dataPartitionFactoryName));
+        checkState(
+                selectedWorkerStatuses.length == 1,
+                "Currently only one worker need to be selected");
+        WorkerStatus workerStatus = selectedWorkerStatuses[0];
 
-        if (!min.isPresent()) {
-            throw new ShuffleResourceAllocationException("No available workers");
-        }
-
-        WorkerStatus minWorkerStatus = min.get().getValue();
         internalAddDataPartition(
-                minWorkerStatus,
+                workerStatus,
                 new DataPartitionStatus(
                         jobID, new DataPartitionCoordinate(dataSetID, mapPartitionID)));
 
         return new DefaultShuffleResource(
-                new ShuffleWorkerDescriptor[] {minWorkerStatus.createShuffleWorkerDescriptor()},
+                new ShuffleWorkerDescriptor[] {workerStatus.createShuffleWorkerDescriptor()},
                 getDataPartitionType(dataPartitionFactoryName));
     }
 
@@ -399,6 +399,23 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
     public Map<DataPartitionCoordinate, InstanceID> getDataPartitionDistribution(JobID jobID) {
         return jobs.get(jobID).getDataPartitions().entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getWorkerID()));
+    }
+
+    @Override
+    public void reportWorkerStorageSpaces(
+            InstanceID instanceID,
+            RegistrationID workerRegistrationID,
+            long numHddUsableBytes,
+            long numSsdUsableBytes) {
+        WorkerStatus workerStatus = workers.get(workerRegistrationID);
+        if (workerStatus == null) {
+            LOG.warn("Received worker storage spaces from unknown worker {}", workerRegistrationID);
+            return;
+        }
+
+        checkState(instanceID.equals(workerStatus.getWorkerID()));
+        workerStatus.setNumHddUsableSpaceBytes(numHddUsableBytes);
+        workerStatus.setNumSsdUsableSpaceBytes(numSsdUsableBytes);
     }
 
     public Map<JobID, JobStatus> getJobs() {

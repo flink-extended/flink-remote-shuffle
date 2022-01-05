@@ -66,6 +66,8 @@ import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
+
 /** Implementation of {@link PartitionedDataStore}. */
 public class PartitionedDataStoreImpl implements PartitionedDataStore {
 
@@ -175,8 +177,7 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
         CommonUtils.checkArgument(memorySizeOption != null, "Must be not null.");
 
         MemorySize bufferSize =
-                CommonUtils.checkNotNull(
-                        configuration.getMemorySize(MemoryOptions.MEMORY_BUFFER_SIZE));
+                checkNotNull(configuration.getMemorySize(MemoryOptions.MEMORY_BUFFER_SIZE));
         if (bufferSize.getBytes() <= 0) {
             throw new ConfigurationException(
                     String.format(
@@ -184,8 +185,7 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
                             MemoryOptions.MEMORY_BUFFER_SIZE.key()));
         }
 
-        MemorySize memorySize =
-                CommonUtils.checkNotNull(configuration.getMemorySize(memorySizeOption));
+        MemorySize memorySize = checkNotNull(configuration.getMemorySize(memorySizeOption));
         if (memorySize.getBytes() < MemoryOptions.MIN_VALID_MEMORY_SIZE.getBytes()) {
             throw new ConfigurationException(
                     String.format(
@@ -365,8 +365,7 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
     @Override
     public void addDataPartition(DataPartitionMeta partitionMeta) throws Exception {
         DataPartitionFactory factory =
-                CommonUtils.checkNotNull(
-                        partitionFactories.get(partitionMeta.getPartitionFactoryClassName()));
+                checkNotNull(partitionFactories.get(partitionMeta.getPartitionFactoryClassName()));
 
         final DataPartition dataPartition;
         try {
@@ -535,6 +534,19 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
     }
 
     @Override
+    public long numDataPartitionTotalBytes() {
+        long numTotalBytes = 0;
+        synchronized (lock) {
+            for (DataSet dataSet : dataSets.values()) {
+                for (DataPartition dataPartition : dataSet.getDataPartitions()) {
+                    numTotalBytes += dataPartition.totalBytes();
+                }
+            }
+        }
+        return numTotalBytes;
+    }
+
+    @Override
     public void shutDown(boolean releaseData) {
         LOG.info(String.format("Shutting down the data store: releaseData=%s.", releaseData));
 
@@ -627,6 +639,24 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
 
             return executorPools.computeIfAbsent(storageMeta, this::createExecutorPool);
         }
+    }
+
+    @Override
+    public Set<StorageMeta> getHddStorageMetas() {
+        Set<StorageMeta> hddStorageMetas = new HashSet<>();
+        for (DataPartitionFactory partitionFactory : partitionFactories.values()) {
+            hddStorageMetas.addAll(partitionFactory.getHddStorageMetas());
+        }
+        return hddStorageMetas;
+    }
+
+    @Override
+    public Set<StorageMeta> getSsdStorageMetas() {
+        Set<StorageMeta> ssdStorageMetas = new HashSet<>();
+        for (DataPartitionFactory partitionFactory : partitionFactories.values()) {
+            ssdStorageMetas.addAll(partitionFactory.getSsdStorageMetas());
+        }
+        return ssdStorageMetas;
     }
 
     // ---------------------------------------------------------------------------------------------

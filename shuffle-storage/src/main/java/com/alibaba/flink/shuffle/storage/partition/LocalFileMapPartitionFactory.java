@@ -48,6 +48,8 @@ import java.util.List;
 import java.util.Queue;
 import java.util.stream.Collectors;
 
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
+
 /** {@link DataPartitionFactory} of {@link LocalFileMapPartition}. */
 @NotThreadSafe
 public class LocalFileMapPartitionFactory implements DataPartitionFactory {
@@ -57,6 +59,8 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
     protected final Queue<StorageMeta> ssdStorageMetas = new ArrayDeque<>();
 
     protected final Queue<StorageMeta> hddStorageMetas = new ArrayDeque<>();
+
+    protected long reservedSpaceBytes;
 
     protected StorageType preferredStorageType;
 
@@ -108,6 +112,9 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
                     "No valid data dir of HDD type is configured for {}.",
                     StorageOptions.STORAGE_LOCAL_DATA_DIRS.key());
         }
+
+        this.reservedSpaceBytes =
+                configuration.getMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES).getBytes();
     }
 
     /**
@@ -122,7 +129,7 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
                     if (storageMeta == null) {
                         storageMeta = getStorageMeta(hddStorageMetas);
                     }
-                    return CommonUtils.checkNotNull(storageMeta);
+                    return checkNotNull(storageMeta);
                 }
             case HDD:
                 {
@@ -130,7 +137,7 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
                     if (storageMeta == null) {
                         storageMeta = getStorageMeta(ssdStorageMetas);
                     }
-                    return CommonUtils.checkNotNull(storageMeta);
+                    return checkNotNull(storageMeta);
                 }
             default:
                 throw new ShuffleException("Illegal preferred storage type.");
@@ -138,11 +145,40 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
     }
 
     private StorageMeta getStorageMeta(Queue<StorageMeta> storageMetas) {
+        int numStorageMetas = storageMetas.size();
+        if (numStorageMetas == 0) {
+            return null;
+        }
+
+        return getStorageMetaInNonEmptyQueue(storageMetas);
+    }
+
+    protected StorageMeta getStorageMetaInNonEmptyQueue(Queue<StorageMeta> storageMetas) {
+        int numStorageMetas = storageMetas.size();
+        StorageMeta maxUsableMeta = null;
+        for (int i = 0; i < numStorageMetas; i++) {
+            StorageMeta storageMeta = storageMetas.poll();
+
+            if (storageMeta != null) {
+                storageMetas.add(storageMeta);
+                long usableSpace = storageMeta.getNumUsableSpaceBytes();
+                if (maxUsableMeta == null
+                        || usableSpace >= maxUsableMeta.getNumUsableSpaceBytes()) {
+                    maxUsableMeta = storageMeta;
+                }
+
+                if (usableSpace >= reservedSpaceBytes) {
+                    return storageMeta;
+                }
+            }
+        }
+
         StorageMeta storageMeta = storageMetas.poll();
         if (storageMeta != null) {
             storageMetas.add(storageMeta);
         }
-        return storageMeta;
+
+        return maxUsableMeta;
     }
 
     @Override
@@ -186,19 +222,21 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
         return DataPartition.DataPartitionType.MAP_PARTITION;
     }
 
+    @Override
+    public List<StorageMeta> getHddStorageMetas() {
+        return new ArrayList<>(hddStorageMetas);
+    }
+
+    @Override
+    public List<StorageMeta> getSsdStorageMetas() {
+        return new ArrayList<>(ssdStorageMetas);
+    }
+
     // ---------------------------------------------------------------------------------------------
     // For test
     // ---------------------------------------------------------------------------------------------
 
     StorageType getPreferredStorageType() {
         return preferredStorageType;
-    }
-
-    List<StorageMeta> getSsdStorageMetas() {
-        return new ArrayList<>(ssdStorageMetas);
-    }
-
-    List<StorageMeta> getHddStorageMetas() {
-        return new ArrayList<>(hddStorageMetas);
     }
 }

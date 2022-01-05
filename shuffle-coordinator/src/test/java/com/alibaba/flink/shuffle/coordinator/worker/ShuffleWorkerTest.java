@@ -34,6 +34,8 @@ import com.alibaba.flink.shuffle.coordinator.utils.RandomIDUtils;
 import com.alibaba.flink.shuffle.coordinator.utils.RecordingHeartbeatServices;
 import com.alibaba.flink.shuffle.coordinator.utils.TestingFatalErrorHandler;
 import com.alibaba.flink.shuffle.coordinator.utils.TestingShuffleManagerGateway;
+import com.alibaba.flink.shuffle.coordinator.worker.checker.ShuffleWorkerChecker;
+import com.alibaba.flink.shuffle.coordinator.worker.checker.ShuffleWorkerCheckerImpl;
 import com.alibaba.flink.shuffle.coordinator.worker.metastore.LocalShuffleMetaStore;
 import com.alibaba.flink.shuffle.coordinator.worker.metastore.LocalShuffleMetaStoreTest;
 import com.alibaba.flink.shuffle.core.config.TransferOptions;
@@ -96,6 +98,8 @@ public class ShuffleWorkerTest {
 
     private PartitionedDataStore dataStore;
 
+    private ShuffleWorkerChecker shuffleWorkerChecker;
+
     private NettyServer nettyServer;
 
     @Before
@@ -113,6 +117,8 @@ public class ShuffleWorkerTest {
         testingFatalErrorHandler = new TestingFatalErrorHandler();
 
         dataStore = new EmptyPartitionedDataStore();
+
+        shuffleWorkerChecker = new ShuffleWorkerCheckerImpl(configuration, dataStore);
 
         // choose random worker port
         Random random = new Random(System.currentTimeMillis());
@@ -189,6 +195,7 @@ public class ShuffleWorkerTest {
                             }
                         },
                         dataStore,
+                        shuffleWorkerChecker,
                         nettyServer)) {
             shuffleWorker.start();
             shuffleManagerLeaderRetrieveService.notifyListener(
@@ -239,6 +246,7 @@ public class ShuffleWorkerTest {
                         shuffleWorkerLocation,
                         new EmptyMetaStore(),
                         dataStore,
+                        shuffleWorkerChecker,
                         nettyServer)) {
             shuffleWorker.start();
             shuffleManagerLeaderRetrieveService.notifyListener(
@@ -340,6 +348,7 @@ public class ShuffleWorkerTest {
                             }
                         },
                         dataStore,
+                        shuffleWorkerChecker,
                         nettyServer)) {
             shuffleWorker.start();
             shuffleManagerLeaderRetrieveService.notifyListener(
@@ -380,6 +389,7 @@ public class ShuffleWorkerTest {
                         shuffleWorkerLocation,
                         new EmptyMetaStore(),
                         dataStore,
+                        shuffleWorkerChecker,
                         nettyServer)) {
             shuffleWorker.start();
 
@@ -426,6 +436,7 @@ public class ShuffleWorkerTest {
                         shuffleWorkerLocation,
                         new EmptyMetaStore(),
                         dataStore,
+                        shuffleWorkerChecker,
                         nettyServer)) {
             shuffleWorker.start();
             shuffleManagerLeaderRetrieveService.notifyListener(
@@ -484,6 +495,7 @@ public class ShuffleWorkerTest {
                         shuffleWorkerLocation,
                         metaStore,
                         dataStore,
+                        shuffleWorkerChecker,
                         nettyServer)) {
             shuffleWorker.start();
             shuffleManagerLeaderRetrieveService.notifyListener(

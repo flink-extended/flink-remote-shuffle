@@ -20,6 +20,7 @@ package com.alibaba.flink.shuffle.minicluster;
 
 import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.core.config.ManagerOptions;
+import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.config.WorkerOptions;
 
 import javax.annotation.Nullable;
@@ -89,6 +90,10 @@ public class ShuffleMiniClusterConfiguration {
         return commonBindAddress != null
                 ? commonBindAddress
                 : configuration.getString(WorkerOptions.BIND_HOST, "localhost");
+    }
+
+    public long getReservedSpaceBytes() {
+        return configuration.getMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES).getBytes();
     }
 
     public Configuration getConfiguration() {

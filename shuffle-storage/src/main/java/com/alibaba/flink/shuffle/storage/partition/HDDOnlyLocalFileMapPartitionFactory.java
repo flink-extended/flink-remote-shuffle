@@ -20,9 +20,12 @@ package com.alibaba.flink.shuffle.storage.partition;
 
 import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.common.exception.ConfigurationException;
-import com.alibaba.flink.shuffle.common.utils.CommonUtils;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
+import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
+import com.alibaba.flink.shuffle.core.storage.StorageType;
+
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 
 /**
  * A {@link LocalFileMapPartitionFactory} variant which only uses HDD to store data partition data.
@@ -43,8 +46,15 @@ public class HDDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
 
     @Override
     protected StorageMeta getNextDataStorageMeta() {
-        StorageMeta storageMeta = CommonUtils.checkNotNull(hddStorageMetas.poll());
-        hddStorageMetas.add(storageMeta);
-        return storageMeta;
+        return checkNotNull(getStorageMetaInNonEmptyQueue(hddStorageMetas));
+    }
+
+    @Override
+    public DataPartition.DataPartitionType getDataPartitionType() {
+        return super.getDataPartitionType();
+    }
+
+    public StorageType getPreferredStorageType() {
+        return StorageType.HDD;
     }
 }
