@@ -193,6 +193,7 @@ public class LocalMapPartitionFileWriter {
 
             long length = data.remaining() + header.remaining();
             totalBytes += length;
+            partitionFile.incrementTotalBytes(length);
             numReducePartitionBytes[reducePartitionIndex] += length;
 
             bufferWithHeaders[index] = header;
@@ -256,6 +257,7 @@ public class LocalMapPartitionFileWriter {
             for (int index = 0; index < indexBuffer.limit(); ++index) {
                 checksum.update(indexBuffer.get(index));
             }
+            partitionFile.incrementTotalBytes(indexBuffer.remaining());
             IOUtils.writeBuffer(indexFileChannel, indexBuffer);
         }
         indexBuffer.clear();

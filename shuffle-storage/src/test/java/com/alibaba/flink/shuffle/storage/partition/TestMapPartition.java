@@ -66,6 +66,11 @@ public class TestMapPartition extends BaseMapPartition {
     }
 
     @Override
+    public long totalBytes() {
+        return 0;
+    }
+
+    @Override
     protected DataPartitionReader getDataPartitionReader(
             int startPartitionIndex,
             int endPartitionIndex,

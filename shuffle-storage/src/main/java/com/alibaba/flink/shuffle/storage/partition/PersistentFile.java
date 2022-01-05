@@ -30,6 +30,9 @@ public interface PersistentFile {
     /** Checks whether this persistent file is consumable or not and returns true if so. */
     boolean isConsumable();
 
+    /** Returns the total length in bytes, including data file and index file. */
+    long totalBytes();
+
     /** Gets the corresponding meta of this persistent file. */
     PersistentFileMeta getFileMeta();
 
@@ -41,4 +44,10 @@ public interface PersistentFile {
 
     /** Changes the consumable state of this persistent file. */
     void setConsumable(boolean consumable);
+
+    /**
+     * Increments the total length of this data partition in bytes, including data files and index
+     * files.
+     */
+    void incrementTotalBytes(long incrementBytes);
 }

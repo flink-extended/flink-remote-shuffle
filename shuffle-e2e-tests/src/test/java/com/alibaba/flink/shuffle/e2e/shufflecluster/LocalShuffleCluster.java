@@ -33,6 +33,7 @@ import com.alibaba.flink.shuffle.coordinator.heartbeat.HeartbeatServicesUtils;
 import com.alibaba.flink.shuffle.coordinator.highavailability.HaServiceUtils;
 import com.alibaba.flink.shuffle.coordinator.highavailability.HaServices;
 import com.alibaba.flink.shuffle.coordinator.manager.DataPartitionCoordinate;
+import com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PartitionPlacementStrategyLoader;
 import com.alibaba.flink.shuffle.coordinator.utils.RandomIDUtils;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerMetricKeys;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerMetrics;
@@ -40,6 +41,7 @@ import com.alibaba.flink.shuffle.core.config.HeartbeatOptions;
 import com.alibaba.flink.shuffle.core.config.HighAvailabilityOptions;
 import com.alibaba.flink.shuffle.core.config.ManagerOptions;
 import com.alibaba.flink.shuffle.core.config.MemoryOptions;
+import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.config.WorkerOptions;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.e2e.TestJvmProcess;
@@ -121,6 +123,10 @@ public class LocalShuffleCluster {
                 MemoryOptions.MEMORY_SIZE_FOR_DATA_READING, MemoryOptions.MIN_VALID_MEMORY_SIZE);
         config.setMemorySize(
                 MemoryOptions.MEMORY_SIZE_FOR_DATA_WRITING, MemoryOptions.MIN_VALID_MEMORY_SIZE);
+        config.setString(
+                ManagerOptions.PARTITION_PLACEMENT_STRATEGY,
+                PartitionPlacementStrategyLoader.MIN_NUM_PLACEMENT_STRATEGY_NAME);
+        config.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
     }
 
     public void start() throws Exception {

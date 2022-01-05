@@ -20,9 +20,11 @@ package com.alibaba.flink.shuffle.storage.partition;
 
 import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.common.exception.ConfigurationException;
-import com.alibaba.flink.shuffle.common.utils.CommonUtils;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
+import com.alibaba.flink.shuffle.core.storage.StorageType;
+
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 
 /**
  * A {@link LocalFileMapPartitionFactory} variant which only uses SSD to store data partition data.
@@ -43,8 +45,10 @@ public class SSDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
 
     @Override
     protected StorageMeta getNextDataStorageMeta() {
-        StorageMeta storageMeta = CommonUtils.checkNotNull(ssdStorageMetas.poll());
-        ssdStorageMetas.add(storageMeta);
-        return storageMeta;
+        return checkNotNull(getStorageMetaInNonEmptyQueue(ssdStorageMetas));
+    }
+
+    public StorageType getPreferredStorageType() {
+        return StorageType.SSD;
     }
 }

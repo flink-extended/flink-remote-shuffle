@@ -28,11 +28,28 @@ public class WorkerToManagerHeartbeatPayload implements Serializable {
 
     private final List<DataPartitionStatus> dataPartitionStatuses;
 
-    public WorkerToManagerHeartbeatPayload(List<DataPartitionStatus> dataPartitionStatuses) {
+    private final long numHddUsableBytes;
+
+    private final long numSsdUsableBytes;
+
+    public WorkerToManagerHeartbeatPayload(
+            List<DataPartitionStatus> dataPartitionStatuses,
+            long numHddUsableBytes,
+            long numSsdUsableBytes) {
         this.dataPartitionStatuses = dataPartitionStatuses;
+        this.numHddUsableBytes = numHddUsableBytes;
+        this.numSsdUsableBytes = numSsdUsableBytes;
     }
 
     public List<DataPartitionStatus> getDataPartitionStatuses() {
         return dataPartitionStatuses;
+    }
+
+    public long getNumHddUsableBytes() {
+        return numHddUsableBytes;
+    }
+
+    public long getNumSsdUsableBytes() {
+        return numSsdUsableBytes;
     }
 }

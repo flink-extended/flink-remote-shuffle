@@ -38,6 +38,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.CRC32;
 import java.util.zip.Checksum;
 
@@ -111,6 +112,9 @@ public class LocalMapPartitionFile implements PersistentFile {
     /** Whether this persistent file is consumable and ready for data reading. */
     private volatile boolean isConsumable;
 
+    /** The total length of this data partition in bytes, including data files and index files. */
+    private final AtomicLong totalBytes;
+
     /** Whether the checksum of the corresponding index data is verified or not. */
     private volatile boolean indexDataChecksumVerified;
 
@@ -118,12 +122,22 @@ public class LocalMapPartitionFile implements PersistentFile {
             LocalMapPartitionFileMeta fileMeta,
             int tolerableFailures,
             boolean indexDataChecksumVerified) {
+        this(fileMeta, tolerableFailures, indexDataChecksumVerified, 0);
+    }
+
+    public LocalMapPartitionFile(
+            LocalMapPartitionFileMeta fileMeta,
+            int tolerableFailures,
+            boolean indexDataChecksumVerified,
+            long originalTotalBytes) {
         CommonUtils.checkArgument(fileMeta != null, "Must be not null.");
         CommonUtils.checkArgument(tolerableFailures >= 0, "Must be non-negative.");
+        CommonUtils.checkArgument(originalTotalBytes >= 0, "Must be non-negative.");
 
         this.fileMeta = fileMeta;
         this.tolerableFailures = tolerableFailures;
         this.indexDataChecksumVerified = indexDataChecksumVerified;
+        this.totalBytes = new AtomicLong(originalTotalBytes);
     }
 
     @Override
@@ -136,6 +150,11 @@ public class LocalMapPartitionFile implements PersistentFile {
         return isConsumable
                 && Files.isReadable(fileMeta.getDataFilePath())
                 && Files.isReadable(fileMeta.getIndexFilePath());
+    }
+
+    @Override
+    public long totalBytes() {
+        return totalBytes.get();
     }
 
     @Override
@@ -261,6 +280,11 @@ public class LocalMapPartitionFile implements PersistentFile {
             CommonUtils.runQuietly(this::closeFileChannels);
             CommonUtils.runQuietly(this::deleteFile);
         }
+    }
+
+    @Override
+    public void incrementTotalBytes(long incrementBytes) {
+        totalBytes.addAndGet(incrementBytes);
     }
 
     @Nullable
