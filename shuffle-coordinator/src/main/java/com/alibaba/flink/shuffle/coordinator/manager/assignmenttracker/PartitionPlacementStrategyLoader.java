@@ -42,6 +42,9 @@ public final class PartitionPlacementStrategyLoader {
     /** Config name for the {@link RoundRobinPlacementStrategy}. */
     public static final String ROUND_ROBIN_PLACEMENT_STRATEGY_NAME = "round-robin";
 
+    /** Config name for the {@link LocalityPlacementStrategy}. */
+    public static final String LOCALITY_PLACEMENT_STRATEGY_NAME = "locality";
+
     private PartitionPlacementStrategyLoader() {}
 
     /**
@@ -65,6 +68,8 @@ public final class PartitionPlacementStrategyLoader {
                 return new RandomPlacementStrategy(reservedSpaceBytes);
             case ROUND_ROBIN_PLACEMENT_STRATEGY_NAME:
                 return new RoundRobinPlacementStrategy(reservedSpaceBytes);
+            case LOCALITY_PLACEMENT_STRATEGY_NAME:
+                return new LocalityPlacementStrategy(reservedSpaceBytes);
             default:
                 throw new IllegalArgumentException(
                         "Unknown partition placement strategy: " + strategyParam);

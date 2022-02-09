@@ -182,6 +182,7 @@ conf/remote-shuffle-conf.yaml file.
 | `remote-shuffle.manager.rpc-bind-address` | String | `null` | 1.0.0 | false | The local address of the network interface that the `ShuffleManager` binds to. |
 | `remote-shuffle.manager.rpc-port` | Integer | `23123` | 1.0.0 | false | Defines the external network port to connect to for communication with the `ShuffleManager`. |
 | `remote-shuffle.manager.rpc-bind-port` | Integer | `null` | 1.0.0 | false | The local network port that the `ShuffleManager` binds to. If not configured, the external port (configured by `remote-shuffle.manager.rpc-port` ) will be used. |
+| `remote-shuffle.manager.rpc-port` | Integer | `23123` | 1.0.0 | false | Defines the external network port to connect to for communication with the `ShuffleManager`. |
 
 ### Data Transmission Related (Server)
 
@@ -190,7 +191,7 @@ conf/remote-shuffle-conf.yaml file.
 | `remote-shuffle.transfer.transport-type` | String | `auto` | 1.0.0 | false | The Netty transport type, either `nio` or `epoll`. The `auto` means "selecting the proper mode automatically based on the platform. Note that the `epoll` mode can get better performance, less GC and have more advanced features which are only available on modern Linux. |
 | `remote-shuffle.transfer.send-receive-buffer-size` | MemorySize | `0b` | 1.0.0 | false | The Netty send and receive buffer size. The default `0b` means the system buffer size (cat /proc/sys/net/ipv4/tcp_[rw]mem) and is 4 MiB in modern Linux. |
 | `remote-shuffle.transfer.heartbeat.interval` | Duration | `1min` | 1.0.0 | false | The time interval to send heartbeat between the Netty server and Netty client. |
-| `remote-shuffle.transfer.heartbeat.timeout` | Duration | `5min` | 1.0.0 | false | Heartbeat timeout used to detect broken Netty connections. |
+| `remote-shuffle.manager.partition-placement-strategy` | String | `round-robin` | 1.1.0 | false | Worker selection strategy deciding which worker the next data partition to store. Different selection strategies can be specified through this option: `min-num`: select the next worker with minimum number of data partitions; `random`: select the next worker in random order; `round-robin`: select the next worker in round-robin order; `locality`: select the local worker first, if not satisfied, select other remote workers in round-robin order. |
 
 ### Metric & Rest Related
 

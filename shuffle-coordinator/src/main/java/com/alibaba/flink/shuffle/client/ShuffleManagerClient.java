@@ -44,6 +44,13 @@ public interface ShuffleManagerClient extends AutoCloseable {
             int numberOfSubpartitions,
             String dataPartitionFactoryName);
 
+    CompletableFuture<ShuffleResource> requestShuffleResource(
+            DataSetID dataSetId,
+            MapPartitionID mapPartitionId,
+            int numberOfSubpartitions,
+            String dataPartitionFactoryName,
+            String taskLocation);
+
     void releaseShuffleResource(DataSetID dataSetId, MapPartitionID mapPartitionId);
 
     CompletableFuture<Integer> getNumberOfRegisteredWorkers();

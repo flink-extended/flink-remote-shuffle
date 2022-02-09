@@ -27,6 +27,7 @@ import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
 import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
+import java.net.InetAddress;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -43,6 +44,8 @@ class WorkerStatus {
     private final ShuffleWorkerGateway gateway;
 
     private final String dataAddress;
+
+    private final String hostName;
 
     private final int dataPort;
 
@@ -63,6 +66,15 @@ class WorkerStatus {
         this.gateway = checkNotNull(gateway);
         this.dataAddress = checkNotNull(dataAddress);
         this.dataPort = dataPort;
+        this.hostName = getHostName(dataAddress);
+    }
+
+    private static String getHostName(String dataAddress) {
+        try {
+            return InetAddress.getByName(dataAddress).getHostName();
+        } catch (Exception e) {
+            return dataAddress;
+        }
     }
 
     public void updateStorageUsableSpace(Map<String, UsableStorageSpaceInfo> usableSpace) {
@@ -111,6 +123,14 @@ class WorkerStatus {
 
     public ShuffleWorkerGateway getGateway() {
         return gateway;
+    }
+
+    String getWorkerAddress() {
+        return dataAddress;
+    }
+
+    String getWorkerHostName() {
+        return hostName;
     }
 
     @Override
