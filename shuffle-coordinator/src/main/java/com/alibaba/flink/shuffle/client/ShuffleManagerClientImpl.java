@@ -495,6 +495,25 @@ public class ShuffleManagerClientImpl implements ShuffleManagerClient, LeaderRet
     }
 
     @Override
+    public CompletableFuture<ShuffleResource> requestShuffleResource(
+            DataSetID dataSetId,
+            MapPartitionID mapPartitionId,
+            int numberOfSubpartitions,
+            String dataPartitionFactoryName,
+            String taskLocation) {
+        return sendRpcCall(
+                (shuffleManagerJobGateway) ->
+                        shuffleManagerJobGateway.requestShuffleResource(
+                                jobID,
+                                clientID,
+                                dataSetId,
+                                mapPartitionId,
+                                numberOfSubpartitions,
+                                dataPartitionFactoryName,
+                                taskLocation));
+    }
+
+    @Override
     public void releaseShuffleResource(DataSetID dataSetId, MapPartitionID mapPartitionId) {
         sendRpcCall(
                 shuffleManagerJobGateway ->

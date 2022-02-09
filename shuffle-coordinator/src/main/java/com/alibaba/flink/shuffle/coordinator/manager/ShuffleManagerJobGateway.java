@@ -27,6 +27,8 @@ import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.rpc.RemoteShuffleFencedRpcGateway;
 import com.alibaba.flink.shuffle.rpc.message.Acknowledge;
 
+import javax.annotation.Nullable;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -79,6 +81,28 @@ public interface ShuffleManagerJobGateway extends RemoteShuffleFencedRpcGateway<
             MapPartitionID mapPartitionID,
             int numberOfConsumers,
             String dataPartitionFactoryName);
+
+    /**
+     * Requests a shuffle resource for storing all the data partitions produced by one map task in
+     * one dataset. This method can achieve better data locality based on the map task location.
+     * Note that we keep both {@link #requestShuffleResource} methods for compatibility.
+     *
+     * @param jobID The job id.
+     * @param dataSetID The id of the dataset that contains this partition.
+     * @param mapPartitionID The id represents the map task.
+     * @param numberOfConsumers The number of consumers of the partition.
+     * @param dataPartitionFactoryName The factory name of the data partition.
+     * @param taskLocation The location (host name) of the target task requesting resources.
+     * @return The allocated shuffle resources.
+     */
+    CompletableFuture<ShuffleResource> requestShuffleResource(
+            JobID jobID,
+            InstanceID clientID,
+            DataSetID dataSetID,
+            MapPartitionID mapPartitionID,
+            int numberOfConsumers,
+            String dataPartitionFactoryName,
+            @Nullable String taskLocation);
 
     /**
      * Releases resources for all the data partitions produced by one map task in one dataset.

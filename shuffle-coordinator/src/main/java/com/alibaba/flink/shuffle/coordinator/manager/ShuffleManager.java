@@ -344,7 +344,25 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
             MapPartitionID mapPartitionID,
             int numberOfConsumers,
             String dataPartitionFactoryName) {
+        return requestShuffleResource(
+                jobID,
+                clientID,
+                dataSetID,
+                mapPartitionID,
+                numberOfConsumers,
+                dataPartitionFactoryName,
+                null);
+    }
 
+    @Override
+    public CompletableFuture<ShuffleResource> requestShuffleResource(
+            JobID jobID,
+            InstanceID clientID,
+            DataSetID dataSetID,
+            MapPartitionID mapPartitionID,
+            int numberOfConsumers,
+            String dataPartitionFactoryName,
+            String taskLocation) {
         try {
             checkInstanceIdConsistent(jobID, clientID, "Allocate shuffle resource");
         } catch (Exception e) {
@@ -352,10 +370,11 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
         }
 
         LOG.info(
-                "Request resource for session {}, dataset {}, producer {} and total consumer {}",
+                "Request resource for session {}, dataset {}, producer {} @ {} and total consumer {}",
                 jobID,
                 dataSetID,
                 mapPartitionID,
+                taskLocation,
                 numberOfConsumers);
 
         try {
@@ -365,10 +384,11 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
                             dataSetID,
                             mapPartitionID,
                             numberOfConsumers,
-                            dataPartitionFactoryName);
+                            dataPartitionFactoryName,
+                            taskLocation);
             return CompletableFuture.completedFuture(allocatedShuffleResource);
         } catch (Exception e) {
-            LOG.error("Request new Shuffle Resource failed.", e);
+            LOG.error("Request new shuffle resource failed.", e);
             return FutureUtils.completedExceptionally(e);
         }
     }

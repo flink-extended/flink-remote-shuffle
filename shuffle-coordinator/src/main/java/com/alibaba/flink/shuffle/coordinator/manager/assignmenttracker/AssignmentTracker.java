@@ -124,6 +124,7 @@ public interface AssignmentTracker {
      * @param mapPartitionID The id represents the map task.
      * @param numberOfConsumers The number of consumers of the partition.
      * @param dataPartitionFactoryName The factory name of the data partition.
+     * @param taskLocation The location (host name) of the target task requesting resources.
      * @return The allocated shuffle resources.
      */
     ShuffleResource requestShuffleResource(
@@ -131,7 +132,8 @@ public interface AssignmentTracker {
             DataSetID dataSetID,
             MapPartitionID mapPartitionID,
             int numberOfConsumers,
-            String dataPartitionFactoryName)
+            String dataPartitionFactoryName,
+            String taskLocation)
             throws ShuffleResourceAllocationException;
 
     /**

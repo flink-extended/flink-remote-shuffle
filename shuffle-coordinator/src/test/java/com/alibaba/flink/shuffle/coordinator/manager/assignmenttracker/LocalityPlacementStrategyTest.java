@@ -19,20 +19,17 @@
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
 import com.alibaba.flink.shuffle.common.config.MemorySize;
-import com.alibaba.flink.shuffle.coordinator.manager.DataPartitionCoordinate;
 import com.alibaba.flink.shuffle.coordinator.manager.ShuffleResource;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementStrategyTestUtils.PARTITION_FACTORY_CLASS;
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementStrategyTestUtils.createAssignmentTrackerImpl;
@@ -43,16 +40,10 @@ import static com.alibaba.flink.shuffle.coordinator.utils.RandomIDUtils.randomDa
 import static com.alibaba.flink.shuffle.coordinator.utils.RandomIDUtils.randomJobId;
 import static com.alibaba.flink.shuffle.coordinator.utils.RandomIDUtils.randomMapPartitionId;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
 
-/** Tests for {@link RoundRobinPlacementStrategy}. */
-public class RoundRobinPlacementStrategyTest {
+/** Tests for {@link LocalityPlacementStrategy}. */
+public class LocalityPlacementStrategyTest {
     private JobID jobId;
-
-    private InstanceID workerInstance1;
-
-    private InstanceID workerInstance2;
 
     private AssignmentTrackerImpl assignmentTracker;
 
@@ -61,23 +52,19 @@ public class RoundRobinPlacementStrategyTest {
         jobId = randomJobId();
         assignmentTracker =
                 createAssignmentTrackerImpl(
-                        PartitionPlacementStrategyLoader.ROUND_ROBIN_PLACEMENT_STRATEGY_NAME,
-                        MemorySize.ZERO);
+                        PartitionPlacementStrategyLoader.LOCALITY_PLACEMENT_STRATEGY_NAME,
+                        MemorySize.parse("1b"));
         assignmentTracker.registerJob(jobId);
 
-        workerInstance1 = new InstanceID("worker1");
-        workerInstance2 = new InstanceID("worker2");
+        InstanceID workerInstance1 = new InstanceID("localhost");
+        InstanceID workerInstance2 = new InstanceID("remote");
 
-        registerWorkerToTracker(assignmentTracker, workerInstance1, "worker1", 1024);
-        registerWorkerToTracker(assignmentTracker, workerInstance2, "worker2", 1025);
+        registerWorkerToTracker(assignmentTracker, workerInstance1, "localhost", 1024);
+        registerWorkerToTracker(assignmentTracker, workerInstance2, "remote", 1025);
     }
 
     @Test
-    public void testSelectRightWorker() throws ShuffleResourceAllocationException {
-        List<ShuffleResource> shuffleResources = new ArrayList<>();
-        Set<String> workerNames = new HashSet<>();
-
-        String lastWorkerName = null;
+    public void testSelectRightWorker() throws Exception {
         for (int i = 0; i < 100; i++) {
             MapPartitionID dataPartitionId = randomMapPartitionId();
             ShuffleResource shuffleResource =
@@ -87,51 +74,47 @@ public class RoundRobinPlacementStrategyTest {
                             dataPartitionId,
                             2,
                             PARTITION_FACTORY_CLASS,
-                            null);
-            shuffleResources.add(shuffleResource);
-            String currentWorkerAddress =
-                    shuffleResource.getMapPartitionLocation().getWorkerAddress();
-            workerNames.add(currentWorkerAddress);
-            if (lastWorkerName == null) {
-                lastWorkerName = currentWorkerAddress;
-            } else {
-                assertNotEquals(lastWorkerName, currentWorkerAddress);
-                lastWorkerName = currentWorkerAddress;
-            }
+                            "localhost");
+            assertEquals("localhost", shuffleResource.getMapPartitionLocation().getWorkerAddress());
         }
-        assertEquals(100, shuffleResources.size());
-        assertTrue(workerNames.contains("worker1") && workerNames.contains("worker2"));
-        Map<DataPartitionCoordinate, InstanceID> distribution =
-                assignmentTracker.getDataPartitionDistribution(jobId);
 
-        int numWorker1 = 0;
-        int numWorker2 = 0;
-        for (InstanceID instanceID : distribution.values()) {
-            if (instanceID.equals(workerInstance1)) {
-                numWorker1++;
-            } else if (instanceID.equals(workerInstance2)) {
-                numWorker2++;
+        Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
+        usableSpace.put(PARTITION_FACTORY_CLASS, UsableStorageSpaceInfo.ZERO_USABLE_SPACE);
+        for (WorkerStatus worker : assignmentTracker.getWorkers().values()) {
+            if (worker.getWorkerAddress().equals("localhost")) {
+                worker.updateStorageUsableSpace(usableSpace);
             }
         }
-        assertEquals(50, numWorker1);
-        assertEquals(50, numWorker2);
+
+        for (int i = 0; i < 100; i++) {
+            MapPartitionID dataPartitionId = randomMapPartitionId();
+            ShuffleResource shuffleResource =
+                    assignmentTracker.requestShuffleResource(
+                            jobId,
+                            randomDataSetId(),
+                            dataPartitionId,
+                            2,
+                            PARTITION_FACTORY_CLASS,
+                            "localhost");
+            assertEquals("remote", shuffleResource.getMapPartitionLocation().getWorkerAddress());
+        }
     }
 
     @Test
-    public void testSelectWorkerWithEnoughSpace() throws ShuffleResourceAllocationException {
+    public void testSelectWorkerWithEnoughSpace() throws Exception {
         selectWorkerWithEnoughSpace(
-                PartitionPlacementStrategyLoader.ROUND_ROBIN_PLACEMENT_STRATEGY_NAME,
-                "worker1",
-                "worker2",
-                null);
+                PartitionPlacementStrategyLoader.LOCALITY_PLACEMENT_STRATEGY_NAME,
+                "localhost",
+                "remote",
+                "localhost");
     }
 
     @Test(expected = ShuffleResourceAllocationException.class)
-    public void testNoAvailableWorkersException() throws ShuffleResourceAllocationException {
+    public void testNoAvailableWorkersException() throws Exception {
         expectedNoAvailableWorkersException(
-                PartitionPlacementStrategyLoader.ROUND_ROBIN_PLACEMENT_STRATEGY_NAME,
-                "worker1",
-                "worker2",
-                null);
+                PartitionPlacementStrategyLoader.LOCALITY_PLACEMENT_STRATEGY_NAME,
+                "localhost",
+                "remote",
+                "localhost");
     }
 }

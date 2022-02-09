@@ -279,7 +279,8 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
             DataSetID dataSetID,
             MapPartitionID mapPartitionID,
             int numberOfConsumers,
-            String dataPartitionFactoryName)
+            String dataPartitionFactoryName,
+            String taskLocation)
             throws ShuffleResourceAllocationException {
         JobStatus jobStatus = jobs.get(jobID);
 
@@ -312,7 +313,7 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
 
         WorkerStatus[] selectedWorkerStatuses =
                 partitionPlacementStrategy.selectNextWorker(
-                        new PartitionPlacementContext(partitionFactory));
+                        new PartitionPlacementContext(partitionFactory, taskLocation));
         checkState(
                 selectedWorkerStatuses.length == 1,
                 "Currently only one worker need to be selected");

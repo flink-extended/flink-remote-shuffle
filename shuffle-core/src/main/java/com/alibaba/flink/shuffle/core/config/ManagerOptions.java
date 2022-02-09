@@ -96,15 +96,20 @@ public class ManagerOptions {
                     .defaultValue("")
                     .description("Java options to start the JVM of the shuffle manager with.");
 
+    /**
+     * Worker selection strategy deciding which worker the next data partition to store. Different
+     * selection strategies can be specified through this option.
+     */
     public static final ConfigOption<String> PARTITION_PLACEMENT_STRATEGY =
             new ConfigOption<String>("remote-shuffle.manager.partition-placement-strategy")
                     .defaultValue("round-robin")
                     .description(
-                            "Worker selection strategy for storing the next data partition. Different selection"
-                                    + " strategies can be specified through this option."
-                                    + " 'min-num': select the next worker with minimum number of data partitions."
-                                    + " 'random': select the next worker in random order. "
-                                    + " 'round-robin': select the next worker in round-robin order.");
+                            "Worker selection strategy deciding which worker the next data partition to store."
+                                    + " Different selection strategies can be specified through this option:"
+                                    + " 'min-num': select the next worker with minimum number of data partitions;"
+                                    + " 'random': select the next worker in random order;"
+                                    + " 'round-robin': select the next worker in round-robin order;"
+                                    + " 'locality': select the local worker first, if not satisfied, select other remote workers in round-robin order.");
 
     // ------------------------------------------------------------------------
 

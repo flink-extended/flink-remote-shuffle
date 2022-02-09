@@ -69,11 +69,21 @@ public class MinNumberPlacementStrategyTest {
 
         ShuffleResource shuffleResource1 =
                 assignmentTracker.requestShuffleResource(
-                        jobId, randomDataSetId(), dataPartitionId1, 2, PARTITION_FACTORY_CLASS);
+                        jobId,
+                        randomDataSetId(),
+                        dataPartitionId1,
+                        2,
+                        PARTITION_FACTORY_CLASS,
+                        null);
         String workerAddress1 = shuffleResource1.getMapPartitionLocation().getWorkerAddress();
         ShuffleResource shuffleResource2 =
                 assignmentTracker.requestShuffleResource(
-                        jobId, randomDataSetId(), dataPartitionId2, 2, PARTITION_FACTORY_CLASS);
+                        jobId,
+                        randomDataSetId(),
+                        dataPartitionId2,
+                        2,
+                        PARTITION_FACTORY_CLASS,
+                        null);
         String workerAddress2 = shuffleResource2.getMapPartitionLocation().getWorkerAddress();
 
         assertTrue(workerAddress1.equals("worker1") || workerAddress1.equals("worker2"));
@@ -87,12 +97,18 @@ public class MinNumberPlacementStrategyTest {
     @Test
     public void testSelectWorkerWithEnoughSpace() throws ShuffleResourceAllocationException {
         selectWorkerWithEnoughSpace(
-                PartitionPlacementStrategyLoader.MIN_NUM_PLACEMENT_STRATEGY_NAME);
+                PartitionPlacementStrategyLoader.MIN_NUM_PLACEMENT_STRATEGY_NAME,
+                "worker1",
+                "worker2",
+                null);
     }
 
     @Test(expected = ShuffleResourceAllocationException.class)
     public void testNoAvailableWorkersException() throws ShuffleResourceAllocationException {
         expectedNoAvailableWorkersException(
-                PartitionPlacementStrategyLoader.MIN_NUM_PLACEMENT_STRATEGY_NAME);
+                PartitionPlacementStrategyLoader.MIN_NUM_PLACEMENT_STRATEGY_NAME,
+                "worker1",
+                "worker2",
+                null);
     }
 }
