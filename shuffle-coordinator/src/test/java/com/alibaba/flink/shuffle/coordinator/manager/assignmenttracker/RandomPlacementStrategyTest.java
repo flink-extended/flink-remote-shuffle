@@ -18,6 +18,7 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
+import com.alibaba.flink.shuffle.common.config.MemorySize;
 import com.alibaba.flink.shuffle.coordinator.manager.DataPartitionCoordinate;
 import com.alibaba.flink.shuffle.coordinator.manager.ShuffleResource;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
@@ -59,7 +60,8 @@ public class RandomPlacementStrategyTest {
         jobId = randomJobId();
         assignmentTracker =
                 createAssignmentTrackerImpl(
-                        PartitionPlacementStrategyLoader.RANDOM_PLACEMENT_STRATEGY_NAME);
+                        PartitionPlacementStrategyLoader.RANDOM_PLACEMENT_STRATEGY_NAME,
+                        MemorySize.ZERO);
         assignmentTracker.registerJob(jobId);
 
         workerInstance1 = new InstanceID("worker1");
@@ -78,7 +80,12 @@ public class RandomPlacementStrategyTest {
             MapPartitionID dataPartitionId = randomMapPartitionId();
             ShuffleResource shuffleResource =
                     assignmentTracker.requestShuffleResource(
-                            jobId, randomDataSetId(), dataPartitionId, 2, PARTITION_FACTORY_CLASS);
+                            jobId,
+                            randomDataSetId(),
+                            dataPartitionId,
+                            2,
+                            PARTITION_FACTORY_CLASS,
+                            null);
             shuffleResources.add(shuffleResource);
             workerNames.add(shuffleResource.getMapPartitionLocation().getWorkerAddress());
         }
@@ -103,12 +110,18 @@ public class RandomPlacementStrategyTest {
     @Test
     public void testSelectWorkerWithEnoughSpace() throws ShuffleResourceAllocationException {
         selectWorkerWithEnoughSpace(
-                PartitionPlacementStrategyLoader.RANDOM_PLACEMENT_STRATEGY_NAME);
+                PartitionPlacementStrategyLoader.RANDOM_PLACEMENT_STRATEGY_NAME,
+                "worker1",
+                "worker2",
+                null);
     }
 
     @Test(expected = ShuffleResourceAllocationException.class)
     public void testNoAvailableWorkersException() throws ShuffleResourceAllocationException {
         expectedNoAvailableWorkersException(
-                PartitionPlacementStrategyLoader.RANDOM_PLACEMENT_STRATEGY_NAME);
+                PartitionPlacementStrategyLoader.RANDOM_PLACEMENT_STRATEGY_NAME,
+                "worker1",
+                "worker2",
+                null);
     }
 }

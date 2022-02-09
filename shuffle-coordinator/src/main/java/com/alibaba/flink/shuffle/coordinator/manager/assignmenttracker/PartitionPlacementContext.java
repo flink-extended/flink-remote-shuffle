@@ -30,12 +30,19 @@ public class PartitionPlacementContext {
 
     private final DataPartitionFactory partitionFactory;
 
-    PartitionPlacementContext(DataPartitionFactory partitionFactory) {
+    private final String taskLocation;
+
+    PartitionPlacementContext(DataPartitionFactory partitionFactory, String taskLocation) {
         checkArgument(partitionFactory != null, "Must be not null.");
         this.partitionFactory = partitionFactory;
+        this.taskLocation = taskLocation;
     }
 
     DataPartitionFactory getPartitionFactory() {
         return partitionFactory;
+    }
+
+    String getTaskLocation() {
+        return taskLocation;
     }
 }

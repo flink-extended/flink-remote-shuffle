@@ -163,7 +163,8 @@ public class RemoteShuffleMaster implements ShuffleMaster<RemoteShuffleDescripto
                                         dataSetID,
                                         mapPartitionId,
                                         partitionDescriptor.getNumberOfSubpartitions(),
-                                        partitionFactory)
+                                        partitionFactory,
+                                        producerDescriptor.getAddress().getHostName())
                                 .whenComplete(
                                         (shuffleResource, throwable) -> {
                                             if (throwable != null) {

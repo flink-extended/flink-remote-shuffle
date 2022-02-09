@@ -50,10 +50,11 @@ public class PlacementStrategyTestUtils {
     static final String PARTITION_FACTORY_CLASS =
             "com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactory";
 
-    static AssignmentTrackerImpl createAssignmentTrackerImpl(String placementStrategyName) {
+    static AssignmentTrackerImpl createAssignmentTrackerImpl(
+            String placementStrategyName, MemorySize reservedBytes) {
         Configuration configuration = new Configuration();
         configuration.setString(ManagerOptions.PARTITION_PLACEMENT_STRATEGY, placementStrategyName);
-        configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
+        configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, reservedBytes);
         return new AssignmentTrackerImpl(configuration);
     }
 
@@ -83,7 +84,8 @@ public class PlacementStrategyTestUtils {
         assignmentTracker.getWorkers().get(registrationID).updateStorageUsableSpace(usableSpace);
     }
 
-    static void selectWorkerWithEnoughSpace(String placementStrategyName)
+    static void selectWorkerWithEnoughSpace(
+            String placementStrategyName, String worker1, String worker2, String taskLocation)
             throws ShuffleResourceAllocationException {
         JobID jobId = randomJobId();
         Configuration configuration = new Configuration();
@@ -93,14 +95,14 @@ public class PlacementStrategyTestUtils {
         AssignmentTrackerImpl assignmentTracker = new AssignmentTrackerImpl(configuration);
         assignmentTracker.registerJob(jobId);
 
-        InstanceID workerInstance1 = new InstanceID("worker1");
-        InstanceID workerInstance2 = new InstanceID("worker2");
+        InstanceID workerInstance1 = new InstanceID(worker1);
+        InstanceID workerInstance2 = new InstanceID(worker2);
         RegistrationID registrationID1 = new RegistrationID();
         RegistrationID registrationID2 = new RegistrationID();
         assignmentTracker.registerWorker(
-                workerInstance1, registrationID1, new EmptyShuffleWorkerGateway(), "worker1", 1024);
+                workerInstance1, registrationID1, new EmptyShuffleWorkerGateway(), worker1, 1024);
         assignmentTracker.registerWorker(
-                workerInstance2, registrationID2, new EmptyShuffleWorkerGateway(), "worker2", 1025);
+                workerInstance2, registrationID2, new EmptyShuffleWorkerGateway(), worker2, 1025);
 
         assertNotNull(assignmentTracker.getWorkers().get(registrationID1));
         Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
@@ -117,7 +119,12 @@ public class PlacementStrategyTestUtils {
             MapPartitionID dataPartitionId = randomMapPartitionId();
             ShuffleResource shuffleResource =
                     assignmentTracker.requestShuffleResource(
-                            jobId, randomDataSetId(), dataPartitionId, 2, PARTITION_FACTORY_CLASS);
+                            jobId,
+                            randomDataSetId(),
+                            dataPartitionId,
+                            2,
+                            PARTITION_FACTORY_CLASS,
+                            taskLocation);
             shuffleResources.add(shuffleResource);
         }
 
@@ -137,7 +144,8 @@ public class PlacementStrategyTestUtils {
         assertTrue(numWorker1 == 100 && numWorker2 == 0);
     }
 
-    static void expectedNoAvailableWorkersException(String placementStrategyName)
+    static void expectedNoAvailableWorkersException(
+            String placementStrategyName, String worker1, String worker2, String taskLocation)
             throws ShuffleResourceAllocationException {
         JobID jobId = randomJobId();
         Configuration configuration = new Configuration();
@@ -147,14 +155,14 @@ public class PlacementStrategyTestUtils {
         AssignmentTrackerImpl assignmentTracker = new AssignmentTrackerImpl(configuration);
         assignmentTracker.registerJob(jobId);
 
-        InstanceID workerInstance1 = new InstanceID("worker1");
-        InstanceID workerInstance2 = new InstanceID("worker2");
+        InstanceID workerInstance1 = new InstanceID(worker1);
+        InstanceID workerInstance2 = new InstanceID(worker2);
         RegistrationID registrationID1 = new RegistrationID();
         RegistrationID registrationID2 = new RegistrationID();
         assignmentTracker.registerWorker(
-                workerInstance1, registrationID1, new EmptyShuffleWorkerGateway(), "worker1", 1024);
+                workerInstance1, registrationID1, new EmptyShuffleWorkerGateway(), worker1, 1024);
         assignmentTracker.registerWorker(
-                workerInstance2, registrationID2, new EmptyShuffleWorkerGateway(), "worker2", 1025);
+                workerInstance2, registrationID2, new EmptyShuffleWorkerGateway(), worker2, 1025);
 
         assertNotNull(assignmentTracker.getWorkers().get(registrationID1));
         Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
@@ -167,7 +175,12 @@ public class PlacementStrategyTestUtils {
 
         try {
             assignmentTracker.requestShuffleResource(
-                    jobId, randomDataSetId(), randomMapPartitionId(), 2, PARTITION_FACTORY_CLASS);
+                    jobId,
+                    randomDataSetId(),
+                    randomMapPartitionId(),
+                    2,
+                    PARTITION_FACTORY_CLASS,
+                    taskLocation);
         } catch (ShuffleResourceAllocationException e) {
             assertTrue(
                     ExceptionUtils.findThrowable(
