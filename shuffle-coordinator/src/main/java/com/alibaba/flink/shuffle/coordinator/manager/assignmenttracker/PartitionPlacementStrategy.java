@@ -18,14 +18,13 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
-import com.alibaba.flink.shuffle.core.ids.RegistrationID;
-
-import java.util.Map;
-
 /** Worker selection strategy for storing the next data partition. */
 interface PartitionPlacementStrategy {
-    WorkerStatus[] selectNextWorker(
-            Map<RegistrationID, WorkerStatus> workers,
-            PartitionPlacementContext partitionPlacementContext)
+
+    WorkerStatus[] selectNextWorker(PartitionPlacementContext partitionPlacementContext)
             throws ShuffleResourceAllocationException;
+
+    void addWorker(WorkerStatus worker);
+
+    void removeWorker(WorkerStatus worker);
 }

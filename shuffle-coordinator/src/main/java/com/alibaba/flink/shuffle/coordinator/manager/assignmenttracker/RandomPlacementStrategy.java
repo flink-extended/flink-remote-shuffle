@@ -18,11 +18,12 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
-import com.alibaba.flink.shuffle.core.ids.RegistrationID;
+import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementUtils.singleElementWorkerArray;
@@ -40,61 +41,26 @@ class RandomPlacementStrategy extends BasePartitionPlacementStrategy {
     }
 
     @Override
-    public WorkerStatus[] selectNextWorker(
-            Map<RegistrationID, WorkerStatus> workers,
-            PartitionPlacementContext partitionPlacementContext)
+    public WorkerStatus[] selectNextWorker(PartitionPlacementContext partitionPlacementContext)
             throws ShuffleResourceAllocationException {
-
-        WorkerStatus selectedWorker = selectNextRandomWorker(workers, partitionPlacementContext);
-        return singleElementWorkerArray(selectedWorker);
-    }
-
-    private WorkerStatus selectNextRandomWorker(
-            Map<RegistrationID, WorkerStatus> workers,
-            PartitionPlacementContext partitionPlacementContext)
-            throws ShuffleResourceAllocationException {
-        WorkerStatus selectedWorker = randomlySelectOneWorker(workers, partitionPlacementContext);
+        DataPartitionFactory partitionFactory = partitionPlacementContext.getPartitionFactory();
+        WorkerStatus selectedWorker = null;
+        List<WorkerStatus> candidates = new ArrayList<>(workers);
+        for (int startIndex = 0; startIndex < candidates.size(); startIndex++) {
+            int selectedIndex = RANDOM_ORDER.nextInt(candidates.size() - startIndex) + startIndex;
+            selectedWorker = candidates.get(selectedIndex);
+            UsableStorageSpaceInfo usableSpace =
+                    selectedWorker.getStorageUsableSpace(partitionFactory.getClass().getName());
+            if (isUsableSpaceEnough(partitionFactory, usableSpace)) {
+                break;
+            }
+            selectedWorker = null;
+            Collections.swap(candidates, startIndex, selectedIndex);
+        }
 
         if (selectedWorker == null) {
             throwNoAvailableWorkerException(workers.size());
         }
-
-        return selectedWorker;
-    }
-
-    private WorkerStatus randomlySelectOneWorker(
-            Map<RegistrationID, WorkerStatus> workers,
-            PartitionPlacementContext partitionPlacementContext) {
-        if (workers.isEmpty()) {
-            return null;
-        }
-
-        WorkerStatus selectedWorker = null;
-        List<RegistrationID> workerIDs = new ArrayList<>(workers.keySet());
-        for (int startIndex = 0; startIndex < workerIDs.size(); startIndex++) {
-            int selectedIndex = RANDOM_ORDER.nextInt(workerIDs.size() - startIndex) + startIndex;
-            RegistrationID registrationID = workerIDs.get(selectedIndex);
-            WorkerStatus currentWorker = workers.get(registrationID);
-            long usableSpaceBytes =
-                    PlacementUtils.getUsableSpaceBytes(
-                            partitionPlacementContext.getDataPartitionFactoryName(), currentWorker);
-            if (isUsableSpaceEnoughOrNotInit(usableSpaceBytes)) {
-                selectedWorker = currentWorker;
-                break;
-            }
-            swapRegistrationID(workerIDs, startIndex, selectedIndex);
-        }
-        return selectedWorker;
-    }
-
-    private static void swapRegistrationID(
-            List<RegistrationID> workerIDs, int startIndex, int selectedIndex) {
-        if (startIndex == selectedIndex) {
-            return;
-        }
-        RegistrationID currentRegistrationID = workerIDs.get(selectedIndex);
-        RegistrationID startRegistrationID = workerIDs.get(startIndex);
-        workerIDs.set(startIndex, currentRegistrationID);
-        workerIDs.set(selectedIndex, startRegistrationID);
+        return singleElementWorkerArray(selectedWorker);
     }
 }

@@ -18,12 +18,8 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
-import com.alibaba.flink.shuffle.core.ids.RegistrationID;
-
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementUtils.singleElementWorkerArray;
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementUtils.throwNoAvailableWorkerException;
@@ -33,76 +29,34 @@ import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.Pl
  * worker should be greater than the minimum configurable value.
  */
 class RoundRobinPlacementStrategy extends BasePartitionPlacementStrategy {
-    private final Map<RegistrationID, Long> selectWorkerCount;
-
-    private long selectCounter;
 
     RoundRobinPlacementStrategy(long reservedSpaceBytes) {
         super(reservedSpaceBytes);
-        this.selectWorkerCount = new HashMap<>();
-        this.selectCounter = 0;
     }
 
     @Override
-    public WorkerStatus[] selectNextWorker(
-            Map<RegistrationID, WorkerStatus> workers,
-            PartitionPlacementContext partitionPlacementContext)
+    public WorkerStatus[] selectNextWorker(PartitionPlacementContext partitionPlacementContext)
             throws ShuffleResourceAllocationException {
-        WorkerStatus selectedWorker = roundRobinSelectWorker(workers, partitionPlacementContext);
+        DataPartitionFactory partitionFactory = partitionPlacementContext.getPartitionFactory();
+        int counter = 0;
+        WorkerStatus selectedWorker = null;
+        while (counter++ < workers.size()) {
+            selectedWorker = workers.pollFirst();
+            if (selectedWorker == null) {
+                break;
+            }
+            workers.addLast(selectedWorker);
+            UsableStorageSpaceInfo usableSpace =
+                    selectedWorker.getStorageUsableSpace(partitionFactory.getClass().getName());
+            if (isUsableSpaceEnough(partitionFactory, usableSpace)) {
+                break;
+            }
+            selectedWorker = null;
+        }
 
         if (selectedWorker == null) {
             throwNoAvailableWorkerException(workers.size());
         }
-
         return singleElementWorkerArray(selectedWorker);
-    }
-
-    private WorkerStatus roundRobinSelectWorker(
-            Map<RegistrationID, WorkerStatus> workers,
-            PartitionPlacementContext partitionPlacementContext) {
-        WorkerStatus selectedWorker = null;
-
-        RegistrationID chosenWorkerID = null;
-        long numSelectCount = Long.MAX_VALUE;
-        for (Map.Entry<RegistrationID, WorkerStatus> workerEntry : workers.entrySet()) {
-            RegistrationID registrationID = workerEntry.getKey();
-            WorkerStatus currentWorker = workerEntry.getValue();
-            if (!selectWorkerCount.containsKey(registrationID)) {
-                selectWorkerCount.put(registrationID, 0L);
-            }
-
-            long usableSpaceBytes =
-                    PlacementUtils.getUsableSpaceBytes(
-                            partitionPlacementContext.getDataPartitionFactoryName(),
-                            workers.get(registrationID));
-
-            if (selectWorkerCount.get(registrationID) < numSelectCount
-                    && isUsableSpaceEnoughOrNotInit(usableSpaceBytes)) {
-                chosenWorkerID = registrationID;
-                numSelectCount = selectWorkerCount.get(registrationID);
-                selectedWorker = currentWorker;
-                if (selectWorkerCount.get(registrationID) == 0) {
-                    break;
-                }
-            }
-        }
-
-        if (selectedWorker != null) {
-            selectCounter++;
-            selectWorkerCount.put(chosenWorkerID, selectCounter);
-        }
-
-        removeNonExistWorker(workers);
-        return selectedWorker;
-    }
-
-    private void removeNonExistWorker(Map<RegistrationID, WorkerStatus> workers) {
-        Set<RegistrationID> toRemoveWorkerIDs = new HashSet<>();
-        for (RegistrationID registrationID : selectWorkerCount.keySet()) {
-            if (!workers.containsKey(registrationID)) {
-                toRemoveWorkerIDs.add(registrationID);
-            }
-        }
-        toRemoveWorkerIDs.forEach(selectWorkerCount::remove);
     }
 }

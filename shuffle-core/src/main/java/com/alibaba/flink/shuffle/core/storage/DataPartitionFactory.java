@@ -24,7 +24,6 @@ import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 
 import java.io.DataInput;
-import java.util.List;
 
 /**
  * Factory to create new {@link DataPartition}s. Different type of {@link DataPartition}s need
@@ -75,15 +74,18 @@ public interface DataPartitionFactory {
     /** Returns the data partition type this partition factory is going to create. */
     DataPartition.DataPartitionType getDataPartitionType();
 
-    /** Returns the HDD storage metas of this partition factory. */
-    List<StorageMeta> getHddStorageMetas();
+    /** Updates the available storage space information. */
+    void updateUsableStorageSpace();
 
-    /** Returns the SSD storage metas of this partition factory. */
-    List<StorageMeta> getSsdStorageMetas();
+    /** Gets the available storage space information. */
+    UsableStorageSpaceInfo getUsableStorageSpace();
 
-    static DataPartition.DataPartitionType getDataPartitionType(String dataPartitionFactoryName)
-            throws ClassNotFoundException, InstantiationException, IllegalAccessException {
-        return ((DataPartitionFactory) Class.forName(dataPartitionFactoryName).newInstance())
-                .getDataPartitionType();
-    }
+    /** Whether the given usable storage space is enough for this data partition factory. */
+    boolean isUsableStorageSpaceEnough(UsableStorageSpaceInfo usableSpace, long reservedSpaceBytes);
+
+    /** Whether this partition factory only uses SSD as storage device. */
+    boolean useSsdOnly();
+
+    /** Whether this partition factory only uses HDD as storage device. */
+    boolean useHddOnly();
 }

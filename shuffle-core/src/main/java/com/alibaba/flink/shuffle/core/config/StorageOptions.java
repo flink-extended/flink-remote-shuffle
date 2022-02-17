@@ -30,8 +30,6 @@ public class StorageOptions {
     /** Minimum size of memory to be used for data partition writing and reading. */
     public static final MemorySize MIN_WRITING_READING_MEMORY_SIZE = MemorySize.parse("16m");
 
-    private static final MemorySize STORAGE_RESERVED_SPACE_BYTES_DEFAULT = MemorySize.parse("5g");
-
     /** Whether to enable data checksum for data integrity verification or not. */
     public static final ConfigOption<Boolean> STORAGE_ENABLE_DATA_CHECKSUM =
             new ConfigOption<Boolean>("remote-shuffle.storage.enable-data-checksum")
@@ -157,21 +155,35 @@ public class StorageOptions {
                                     MIN_WRITING_READING_MEMORY_SIZE.toHumanReadableString(),
                                     MIN_WRITING_READING_MEMORY_SIZE.toHumanReadableString()));
 
+    /**
+     * The update interval of the worker check thread which will periodically get the status like
+     * disk space at this time interval.
+     */
     public static final ConfigOption<Duration> STORAGE_CHECK_UPDATE_PERIOD =
             new ConfigOption<Duration>("remote-shuffle.storage.check-update-period")
                     .defaultValue(Duration.ofSeconds(10))
                     .description(
-                            "The update interval of the worker check thread. The"
-                                    + " thread will periodically get the status at this time interval.");
+                            "The update interval of the worker check thread which will periodically"
+                                    + " get the status like disk space at this time interval.");
 
+    /**
+     * Minimum reserved space size per disk for shuffle workers. This option is used to filter out
+     * the workers with small remaining storage space to ensure that the storage space will not be
+     * exhausted to avoid the 'No space left on device' exception. The default value 5g is pretty
+     * small to avoid wasting too large storage resources and for production usage, we suggest
+     * setting this to a larger value, for example, 50g.
+     */
     public static final ConfigOption<MemorySize> STORAGE_RESERVED_SPACE_BYTES =
             new ConfigOption<MemorySize>("remote-shuffle.storage.min-reserved-space-bytes")
-                    .defaultValue(STORAGE_RESERVED_SPACE_BYTES_DEFAULT)
+                    .defaultValue(MemorySize.parse("5g"))
                     .description(
-                            "Minimum reserved space size for shuffle workers. This option"
-                                    + " is used to filter out the worker with small remaining storage space"
-                                    + " to ensure that the storage space will not be exhausted during use."
-                                    + " However, setting the value too large will waste storage resources.");
+                            "Minimum reserved space size per disk for shuffle workers. This option"
+                                    + " is used to filter out the workers with small remaining "
+                                    + "storage space to ensure that the storage space will not be "
+                                    + "exhausted to avoid the 'No space left on device' exception."
+                                    + " The default value 5g is pretty small to avoid wasting too "
+                                    + "large storage resources and for production usage, we suggest"
+                                    + " setting this to a larger value, for example, 50g.");
 
     // ------------------------------------------------------------------------
 

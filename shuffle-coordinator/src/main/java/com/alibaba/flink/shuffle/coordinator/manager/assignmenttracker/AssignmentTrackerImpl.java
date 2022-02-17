@@ -19,6 +19,7 @@
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
 import com.alibaba.flink.shuffle.common.config.Configuration;
+import com.alibaba.flink.shuffle.common.utils.CommonUtils;
 import com.alibaba.flink.shuffle.coordinator.manager.DataPartitionCoordinate;
 import com.alibaba.flink.shuffle.coordinator.manager.DataPartitionStatus;
 import com.alibaba.flink.shuffle.coordinator.manager.DefaultShuffleResource;
@@ -32,8 +33,8 @@ import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
-import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +48,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -71,7 +73,11 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
 
     private static final Logger LOG = LoggerFactory.getLogger(AssignmentTrackerImpl.class);
 
+    /** {@link PartitionPlacementStrategy} used to select the proper shuffle worker. */
     private final PartitionPlacementStrategy partitionPlacementStrategy;
+
+    /** All available {@link DataPartitionFactory}s in the classpath. */
+    private final Map<String, DataPartitionFactory> partitionFactories = new HashMap<>();
 
     /** The currently registered jobs. */
     private final Map<JobID, JobStatus> jobs = new HashMap<>();
@@ -83,6 +89,13 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
         this.partitionPlacementStrategy =
                 PartitionPlacementStrategyLoader.loadPlacementStrategyFactory(configuration);
         registerMetrics();
+
+        ServiceLoader<DataPartitionFactory> serviceLoader =
+                ServiceLoader.load(DataPartitionFactory.class);
+        for (DataPartitionFactory partitionFactory : serviceLoader) {
+            partitionFactories.put(partitionFactory.getClass().getName(), partitionFactory);
+        }
+        CommonUtils.checkState(!partitionFactories.isEmpty(), "No valid partition factory found.");
     }
 
     private void registerMetrics() {
@@ -107,9 +120,10 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
                 !workers.containsKey(registrationID),
                 String.format("The worker %s has been registered", registrationID));
 
-        workers.put(
-                registrationID,
-                new WorkerStatus(workerID, registrationID, gateway, externalAddress, dataPort));
+        WorkerStatus worker =
+                new WorkerStatus(workerID, registrationID, gateway, externalAddress, dataPort);
+        workers.put(registrationID, worker);
+        partitionPlacementStrategy.addWorker(worker);
     }
 
     @Override
@@ -202,6 +216,7 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
         if (workerStatus == null) {
             return;
         }
+        partitionPlacementStrategy.removeWorker(workerStatus);
 
         for (DataPartitionStatus status : workerStatus.getDataPartitions().values()) {
             JobStatus jobStatus = jobs.get(status.getJobId());
@@ -273,6 +288,11 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
                     "Job is not registered before requesting resources.");
         }
 
+        DataPartitionFactory partitionFactory = partitionFactories.get(dataPartitionFactoryName);
+        if (partitionFactory == null) {
+            throw new ShuffleResourceAllocationException(
+                    "Unknown data partition factory: " + dataPartitionFactoryName);
+        }
         WorkerStatus oldStatus =
                 jobStatus
                         .getDataPartitions()
@@ -287,12 +307,12 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
                     descriptor);
             return new DefaultShuffleResource(
                     new ShuffleWorkerDescriptor[] {descriptor},
-                    getDataPartitionType(dataPartitionFactoryName));
+                    partitionFactory.getDataPartitionType());
         }
 
         WorkerStatus[] selectedWorkerStatuses =
                 partitionPlacementStrategy.selectNextWorker(
-                        workers, new PartitionPlacementContext(dataPartitionFactoryName));
+                        new PartitionPlacementContext(partitionFactory));
         checkState(
                 selectedWorkerStatuses.length == 1,
                 "Currently only one worker need to be selected");
@@ -305,23 +325,7 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
 
         return new DefaultShuffleResource(
                 new ShuffleWorkerDescriptor[] {workerStatus.createShuffleWorkerDescriptor()},
-                getDataPartitionType(dataPartitionFactoryName));
-    }
-
-    /** Public permissions are used for unit testing. */
-    public DataPartition.DataPartitionType getDataPartitionType(String dataPartitionFactoryName)
-            throws ShuffleResourceAllocationException {
-        try {
-            return DataPartitionFactory.getDataPartitionType(dataPartitionFactoryName);
-        } catch (Throwable throwable) {
-            LOG.error("Failed to get the data partition type.", throwable);
-            throw new ShuffleResourceAllocationException(
-                    String.format(
-                            "Could not find the target data partition factory class %s, please "
-                                    + "check the class name make sure the class is in the classpath.",
-                            dataPartitionFactoryName),
-                    throwable);
-        }
+                partitionFactory.getDataPartitionType());
     }
 
     @Override
@@ -405,8 +409,7 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
     public void reportWorkerStorageSpaces(
             InstanceID instanceID,
             RegistrationID workerRegistrationID,
-            long numHddUsableBytes,
-            long numSsdUsableBytes) {
+            Map<String, UsableStorageSpaceInfo> usableSpace) {
         WorkerStatus workerStatus = workers.get(workerRegistrationID);
         if (workerStatus == null) {
             LOG.warn("Received worker storage spaces from unknown worker {}", workerRegistrationID);
@@ -414,8 +417,7 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
         }
 
         checkState(instanceID.equals(workerStatus.getWorkerID()));
-        workerStatus.setNumHddUsableSpaceBytes(numHddUsableBytes);
-        workerStatus.setNumSsdUsableSpaceBytes(numSsdUsableBytes);
+        workerStatus.updateStorageUsableSpace(usableSpace);
     }
 
     public Map<JobID, JobStatus> getJobs() {

@@ -75,6 +75,24 @@ public class SSDOnlyLocalFileMapPartitionFactoryTest {
     }
 
     @Test
+    public void testUpdateUsableStorageSpace() {
+        LocalFileMapPartitionFactory partitionFactory = new SSDOnlyLocalFileMapPartitionFactory();
+        LocalFileMapPartitionFactoryTest.FakeStorageMeta[] storageMetas =
+                LocalFileMapPartitionFactoryTest.addStorageMetas(partitionFactory);
+
+        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+        assertEquals(0, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+
+        LocalFileMapPartitionFactoryTest.updateStorageMetas(storageMetas, 4, partitionFactory);
+        assertEquals(7, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+
+        LocalFileMapPartitionFactoryTest.updateStorageMetas(storageMetas, 0, partitionFactory);
+        assertEquals(3, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+    }
+
+    @Test
     public void testAllDisksWillBeUsed() {
         SSDOnlyLocalFileMapPartitionFactory partitionFactory =
                 new SSDOnlyLocalFileMapPartitionFactory();

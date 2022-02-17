@@ -18,15 +18,34 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
+import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+
+import java.util.LinkedList;
+
 /** An abstract class to implement the common methods of {@link PartitionPlacementStrategy}. */
 public abstract class BasePartitionPlacementStrategy implements PartitionPlacementStrategy {
+
     protected final long reservedSpaceBytes;
+
+    protected final LinkedList<WorkerStatus> workers = new LinkedList<>();
 
     BasePartitionPlacementStrategy(long reservedSpaceBytes) {
         this.reservedSpaceBytes = reservedSpaceBytes;
     }
 
-    boolean isUsableSpaceEnoughOrNotInit(long usableSpaceBytes) {
-        return usableSpaceBytes >= reservedSpaceBytes || usableSpaceBytes < 0;
+    boolean isUsableSpaceEnough(
+            DataPartitionFactory partitionFactory, UsableStorageSpaceInfo usableSpace) {
+        return partitionFactory.isUsableStorageSpaceEnough(usableSpace, reservedSpaceBytes);
+    }
+
+    @Override
+    public void addWorker(WorkerStatus worker) {
+        workers.addLast(worker);
+    }
+
+    @Override
+    public void removeWorker(WorkerStatus worker) {
+        workers.remove(worker);
     }
 }
