@@ -20,6 +20,7 @@ package com.alibaba.flink.shuffle.minicluster;
 
 import com.alibaba.flink.shuffle.client.ShuffleManagerClient;
 import com.alibaba.flink.shuffle.common.config.Configuration;
+import com.alibaba.flink.shuffle.common.config.MemorySize;
 import com.alibaba.flink.shuffle.coordinator.manager.ShuffleResource;
 import com.alibaba.flink.shuffle.coordinator.utils.RandomIDUtils;
 import com.alibaba.flink.shuffle.core.config.ManagerOptions;
@@ -70,6 +71,7 @@ public class ShuffleMiniClusterTest {
 
     private Configuration initConfiguration() throws IOException {
         Configuration configuration = new Configuration();
+        configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
         configuration.setString(
                 StorageOptions.STORAGE_LOCAL_DATA_DIRS.key(),
                 TEMP_FOLDER.newFolder().getAbsolutePath());

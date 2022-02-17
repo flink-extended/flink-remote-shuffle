@@ -18,9 +18,8 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
-import com.alibaba.flink.shuffle.core.ids.RegistrationID;
-
-import java.util.Map;
+import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementUtils.singleElementWorkerArray;
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementUtils.throwNoAvailableWorkerException;
@@ -37,16 +36,14 @@ class MinNumberPlacementStrategy extends BasePartitionPlacementStrategy {
     }
 
     @Override
-    public WorkerStatus[] selectNextWorker(
-            Map<RegistrationID, WorkerStatus> workers,
-            PartitionPlacementContext partitionPlacementContext)
+    public WorkerStatus[] selectNextWorker(PartitionPlacementContext partitionPlacementContext)
             throws ShuffleResourceAllocationException {
+        DataPartitionFactory partitionFactory = partitionPlacementContext.getPartitionFactory();
         WorkerStatus selectedWorker = null;
-        for (WorkerStatus workerStatus : workers.values()) {
-            long usableSpaceBytes =
-                    PlacementUtils.getUsableSpaceBytes(
-                            partitionPlacementContext.getDataPartitionFactoryName(), workerStatus);
-            if (isUsableSpaceEnoughOrNotInit(usableSpaceBytes)) {
+        for (WorkerStatus workerStatus : workers) {
+            UsableStorageSpaceInfo usableSpace =
+                    workerStatus.getStorageUsableSpace(partitionFactory.getClass().getName());
+            if (isUsableSpaceEnough(partitionFactory, usableSpace)) {
                 if (selectedWorker == null
                         || workerStatus.getDataPartitions().size()
                                 < selectedWorker.getDataPartitions().size()) {
@@ -58,7 +55,6 @@ class MinNumberPlacementStrategy extends BasePartitionPlacementStrategy {
         if (selectedWorker == null) {
             throwNoAvailableWorkerException(workers.size());
         }
-
         return singleElementWorkerArray(selectedWorker);
     }
 }

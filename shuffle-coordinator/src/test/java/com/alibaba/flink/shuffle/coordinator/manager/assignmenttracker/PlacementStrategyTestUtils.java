@@ -30,8 +30,10 @@ import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -60,12 +62,25 @@ public class PlacementStrategyTestUtils {
             InstanceID workerInstanceID,
             String workerAddr,
             int dataPort) {
+        registerWorkerToTracker(
+                assignmentTracker, workerInstanceID, new RegistrationID(), workerAddr, dataPort);
+    }
+
+    static void registerWorkerToTracker(
+            AssignmentTrackerImpl assignmentTracker,
+            InstanceID workerInstanceID,
+            RegistrationID registrationID,
+            String workerAddr,
+            int dataPort) {
         assignmentTracker.registerWorker(
                 workerInstanceID,
-                new RegistrationID(),
+                registrationID,
                 new EmptyShuffleWorkerGateway(),
                 workerAddr,
                 dataPort);
+        Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
+        usableSpace.put(PARTITION_FACTORY_CLASS, UsableStorageSpaceInfo.INFINITE_USABLE_SPACE);
+        assignmentTracker.getWorkers().get(registrationID).updateStorageUsableSpace(usableSpace);
     }
 
     static void selectWorkerWithEnoughSpace(String placementStrategyName)
@@ -88,9 +103,13 @@ public class PlacementStrategyTestUtils {
                 workerInstance2, registrationID2, new EmptyShuffleWorkerGateway(), "worker2", 1025);
 
         assertNotNull(assignmentTracker.getWorkers().get(registrationID1));
+        Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
+        usableSpace.put(PARTITION_FACTORY_CLASS, new UsableStorageSpaceInfo(1025, 0));
+        assignmentTracker.getWorkers().get(registrationID1).updateStorageUsableSpace(usableSpace);
+
         assertNotNull(assignmentTracker.getWorkers().get(registrationID2));
-        assignmentTracker.getWorkers().get(registrationID1).setNumHddUsableSpaceBytes(1024);
-        assignmentTracker.getWorkers().get(registrationID2).setNumHddUsableSpaceBytes(1023);
+        usableSpace.put(PARTITION_FACTORY_CLASS, new UsableStorageSpaceInfo(1024, 0));
+        assignmentTracker.getWorkers().get(registrationID2).updateStorageUsableSpace(usableSpace);
 
         List<ShuffleResource> shuffleResources = new ArrayList<>();
 
@@ -138,9 +157,13 @@ public class PlacementStrategyTestUtils {
                 workerInstance2, registrationID2, new EmptyShuffleWorkerGateway(), "worker2", 1025);
 
         assertNotNull(assignmentTracker.getWorkers().get(registrationID1));
+        Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
+        usableSpace.put(PARTITION_FACTORY_CLASS, new UsableStorageSpaceInfo(1023, 0));
+        assignmentTracker.getWorkers().get(registrationID1).updateStorageUsableSpace(usableSpace);
+
         assertNotNull(assignmentTracker.getWorkers().get(registrationID2));
-        assignmentTracker.getWorkers().get(registrationID1).setNumHddUsableSpaceBytes(1023);
-        assignmentTracker.getWorkers().get(registrationID2).setNumHddUsableSpaceBytes(1023);
+        usableSpace.put(PARTITION_FACTORY_CLASS, new UsableStorageSpaceInfo(1023, 0));
+        assignmentTracker.getWorkers().get(registrationID2).updateStorageUsableSpace(usableSpace);
 
         try {
             assignmentTracker.requestShuffleResource(

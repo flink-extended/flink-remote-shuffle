@@ -25,6 +25,7 @@ import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerGateway;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,9 +46,7 @@ class WorkerStatus {
 
     private final int dataPort;
 
-    private long numHddUsableSpaceBytes;
-
-    private long numSsdUsableSpaceBytes;
+    private final Map<String, UsableStorageSpaceInfo> usableStorageSpace = new HashMap<>();
 
     private final Map<DataPartitionCoordinate, DataPartitionStatus> dataPartitions =
             new HashMap<>();
@@ -66,12 +65,13 @@ class WorkerStatus {
         this.dataPort = dataPort;
     }
 
-    void setNumHddUsableSpaceBytes(long numHddUsableSpaceBytes) {
-        this.numHddUsableSpaceBytes = numHddUsableSpaceBytes;
+    public void updateStorageUsableSpace(Map<String, UsableStorageSpaceInfo> usableSpace) {
+        usableStorageSpace.putAll(usableSpace);
     }
 
-    void setNumSsdUsableSpaceBytes(long numSsdUsableSpaceBytes) {
-        this.numSsdUsableSpaceBytes = numSsdUsableSpaceBytes;
+    public UsableStorageSpaceInfo getStorageUsableSpace(String partitionFactoryName) {
+        return usableStorageSpace.getOrDefault(
+                partitionFactoryName, UsableStorageSpaceInfo.ZERO_USABLE_SPACE);
     }
 
     public InstanceID getWorkerID() {
@@ -80,14 +80,6 @@ class WorkerStatus {
 
     public RegistrationID getRegistrationID() {
         return registrationID;
-    }
-
-    public long getNumHddUsableSpaceBytes() {
-        return numHddUsableSpaceBytes;
-    }
-
-    public long getNumSsdUsableSpaceBytes() {
-        return numSsdUsableSpaceBytes;
     }
 
     public ShuffleWorkerDescriptor createShuffleWorkerDescriptor() {
@@ -133,10 +125,6 @@ class WorkerStatus {
                 + '\''
                 + ", dataPort="
                 + dataPort
-                + ", numHddUsableSpaceBytes="
-                + numHddUsableSpaceBytes
-                + ", numSsdUsableSpaceBytes="
-                + numSsdUsableSpaceBytes
                 + '}';
     }
 }

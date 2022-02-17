@@ -23,13 +23,13 @@ import com.alibaba.flink.shuffle.coordinator.utils.WorkerCheckerUtils;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorker;
 import com.alibaba.flink.shuffle.core.executor.ExecutorThreadFactory;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
-import com.alibaba.flink.shuffle.core.storage.StorageMeta;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 import com.alibaba.flink.shuffle.storage.StorageMetrics;
+import com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Paths;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -52,10 +52,10 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
     private final PartitionedDataStore dataStore;
 
     /** The max storage usable bytes of all HDD storage disks. */
-    private final AtomicLong numHddMaxUsableBytes;
+    private final AtomicLong numHddMaxUsableBytes = new AtomicLong(-1);
 
     /** The max storage usable bytes of all SSD storage disks. */
-    private final AtomicLong numSsdMaxUsableBytes;
+    private final AtomicLong numSsdMaxUsableBytes = new AtomicLong(-1);
 
     /**
      * The total bytes of all data partition in the data store, including total bytes of data files
@@ -86,11 +86,10 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
 
     public ShuffleWorkerCheckerImpl(Configuration configuration, PartitionedDataStore dataStore) {
         this.dataStore = checkNotNull(dataStore);
-        this.numHddMaxUsableBytes = new AtomicLong(-1);
-        this.numSsdMaxUsableBytes = new AtomicLong(-1);
+
         this.storageCheckerService =
                 Executors.newSingleThreadScheduledExecutor(
-                        new ExecutorThreadFactory("RSS-ShuffleWorker-Storage-Checker"));
+                        new ExecutorThreadFactory("ShuffleWorker-Checker"));
         startStorageCheckerThread(configuration);
     }
 
@@ -110,7 +109,10 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
                     this::getNumTotalPartitionFileBytes);
 
             storageCheckerService.scheduleAtFixedRate(
-                    storageCheckRunnable, 0, storageCheckerPeriod, TimeUnit.MILLISECONDS);
+                    storageCheckRunnable,
+                    storageCheckerPeriod,
+                    storageCheckerPeriod,
+                    TimeUnit.MILLISECONDS);
         } catch (Throwable t) {
             throw new RuntimeException("Failed to start storage check thread", t);
         }
@@ -128,7 +130,7 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
 
         private void updateStorageUsableSpaces() {
             long start = System.nanoTime();
-            updatePartitionFactoriesMetas();
+            updateUsableStorageSpace();
             numTotalPartitionFileBytes = dataStore.numDataPartitionTotalBytes();
             LOG.info(
                     "Update data store info in {} ms, max usable space, HDD: {}({}), SSD:{}({}), "
@@ -142,26 +144,16 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
                     numTotalPartitionFileBytes);
         }
 
-        private void updatePartitionFactoriesMetas() {
-            long maxHddUsableBytes = 0;
-            for (StorageMeta hddStorageMeta : dataStore.getHddStorageMetas()) {
-                long usableSpace = updateSingleStorageMeta(hddStorageMeta);
-                maxHddUsableBytes = Math.max(maxHddUsableBytes, usableSpace);
+        private void updateUsableStorageSpace() {
+            dataStore.updateUsableStorageSpace();
+            UsableStorageSpaceInfo usableSpace =
+                    dataStore
+                            .getUsableStorageSpace()
+                            .get(LocalFileMapPartitionFactory.class.getName());
+            if (usableSpace != null) {
+                numHddMaxUsableBytes.set(usableSpace.getHddUsableSpaceBytes());
+                numSsdMaxUsableBytes.set(usableSpace.getSsdUsableSpaceBytes());
             }
-            numHddMaxUsableBytes.set(maxHddUsableBytes);
-
-            long maxSsdUsableBytes = 0;
-            for (StorageMeta ssdStorageMeta : dataStore.getSsdStorageMetas()) {
-                long usableSpace = updateSingleStorageMeta(ssdStorageMeta);
-                maxSsdUsableBytes = Math.max(maxSsdUsableBytes, usableSpace);
-            }
-            numSsdMaxUsableBytes.set(maxSsdUsableBytes);
-        }
-
-        private long updateSingleStorageMeta(StorageMeta storageMeta) {
-            long usableSpace = Paths.get(storageMeta.getStoragePath()).toFile().getUsableSpace();
-            storageMeta.setNumUsableSpaceBytes(usableSpace);
-            return usableSpace;
         }
     }
 }

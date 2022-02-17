@@ -23,6 +23,7 @@ import com.alibaba.flink.shuffle.common.exception.ConfigurationException;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
 import com.alibaba.flink.shuffle.core.storage.StorageType;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 
@@ -41,6 +42,7 @@ public class SSDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
                             "No valid data dir of SSD storage type is configured for %s.",
                             StorageOptions.STORAGE_LOCAL_DATA_DIRS.key()));
         }
+        updateUsableStorageSpace();
     }
 
     @Override
@@ -48,6 +50,31 @@ public class SSDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
         return checkNotNull(getStorageMetaInNonEmptyQueue(ssdStorageMetas));
     }
 
+    @Override
+    public void updateUsableStorageSpace() {
+        usableSpace.setHddUsableSpaceBytes(0);
+        long maxSsdUsableSpaceBytes = 0;
+        for (StorageMeta storageMeta : ssdStorageMetas) {
+            long usableSpaceBytes = storageMeta.updateUsableStorageSpace();
+            if (usableSpaceBytes > maxSsdUsableSpaceBytes) {
+                maxSsdUsableSpaceBytes = usableSpaceBytes;
+            }
+        }
+        usableSpace.setSsdUsableSpaceBytes(maxSsdUsableSpaceBytes);
+    }
+
+    @Override
+    public boolean isUsableStorageSpaceEnough(
+            UsableStorageSpaceInfo usableSpace, long reservedSpaceBytes) {
+        return reservedSpaceBytes < usableSpace.getSsdUsableSpaceBytes();
+    }
+
+    @Override
+    public boolean useSsdOnly() {
+        return true;
+    }
+
+    @Override
     public StorageType getPreferredStorageType() {
         return StorageType.SSD;
     }

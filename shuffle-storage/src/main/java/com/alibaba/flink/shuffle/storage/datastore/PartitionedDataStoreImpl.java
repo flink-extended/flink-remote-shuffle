@@ -46,6 +46,7 @@ import com.alibaba.flink.shuffle.core.storage.DataSet;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
 import com.alibaba.flink.shuffle.core.storage.ReadingViewContext;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 import com.alibaba.flink.shuffle.core.storage.WritingViewContext;
 import com.alibaba.flink.shuffle.storage.StorageMetrics;
 import com.alibaba.flink.shuffle.storage.utils.DataPartitionUtils;
@@ -642,21 +643,23 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
     }
 
     @Override
-    public Set<StorageMeta> getHddStorageMetas() {
-        Set<StorageMeta> hddStorageMetas = new HashSet<>();
-        for (DataPartitionFactory partitionFactory : partitionFactories.values()) {
-            hddStorageMetas.addAll(partitionFactory.getHddStorageMetas());
+    public void updateUsableStorageSpace() {
+        synchronized (lock) {
+            for (DataPartitionFactory partitionFactory : partitionFactories.values()) {
+                partitionFactory.updateUsableStorageSpace();
+            }
         }
-        return hddStorageMetas;
     }
 
     @Override
-    public Set<StorageMeta> getSsdStorageMetas() {
-        Set<StorageMeta> ssdStorageMetas = new HashSet<>();
-        for (DataPartitionFactory partitionFactory : partitionFactories.values()) {
-            ssdStorageMetas.addAll(partitionFactory.getSsdStorageMetas());
+    public Map<String, UsableStorageSpaceInfo> getUsableStorageSpace() {
+        Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
+        synchronized (lock) {
+            for (Map.Entry<String, DataPartitionFactory> entry : partitionFactories.entrySet()) {
+                usableSpace.put(entry.getKey(), entry.getValue().getUsableStorageSpace());
+            }
         }
-        return ssdStorageMetas;
+        return usableSpace;
     }
 
     // ---------------------------------------------------------------------------------------------

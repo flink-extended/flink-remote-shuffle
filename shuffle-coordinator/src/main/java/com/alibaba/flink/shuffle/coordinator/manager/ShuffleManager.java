@@ -721,6 +721,10 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
                 shuffleWorkerGateway,
                 shuffleWorkerRegistration.getHostname(),
                 shuffleWorkerRegistration.getDataPort());
+        assignmentTracker.reportWorkerStorageSpaces(
+                workerID,
+                newRecord.getShuffleWorkerRegisterId(),
+                shuffleWorkerRegistration.getUsableStorageSpace());
 
         LOG.info(
                 "Stat on register worker: shuffleWorkers.size = {}, assignmentTracker has tracked {} workers",
@@ -827,8 +831,7 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
                 assignmentTracker.reportWorkerStorageSpaces(
                         instanceID,
                         shuffleWorkers.get(instanceID).getShuffleWorkerRegisterId(),
-                        payload.getNumHddUsableBytes(),
-                        payload.getNumSsdUsableBytes());
+                        payload.getUsableStorageSpace());
             } else {
                 LOG.warn(
                         "The shuffle worker with id {} is not registered before but receive the heartbeat.",

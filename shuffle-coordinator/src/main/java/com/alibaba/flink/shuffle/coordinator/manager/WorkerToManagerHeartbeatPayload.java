@@ -18,8 +18,13 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager;
 
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
+
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 
 /** Payload for heartbeats sent from the ShuffleWorker to the ShuffleManager. */
 public class WorkerToManagerHeartbeatPayload implements Serializable {
@@ -28,28 +33,20 @@ public class WorkerToManagerHeartbeatPayload implements Serializable {
 
     private final List<DataPartitionStatus> dataPartitionStatuses;
 
-    private final long numHddUsableBytes;
-
-    private final long numSsdUsableBytes;
+    private final Map<String, UsableStorageSpaceInfo> usableSpace;
 
     public WorkerToManagerHeartbeatPayload(
             List<DataPartitionStatus> dataPartitionStatuses,
-            long numHddUsableBytes,
-            long numSsdUsableBytes) {
+            Map<String, UsableStorageSpaceInfo> usableSpace) {
         this.dataPartitionStatuses = dataPartitionStatuses;
-        this.numHddUsableBytes = numHddUsableBytes;
-        this.numSsdUsableBytes = numSsdUsableBytes;
+        this.usableSpace = checkNotNull(usableSpace);
     }
 
     public List<DataPartitionStatus> getDataPartitionStatuses() {
         return dataPartitionStatuses;
     }
 
-    public long getNumHddUsableBytes() {
-        return numHddUsableBytes;
-    }
-
-    public long getNumSsdUsableBytes() {
-        return numSsdUsableBytes;
+    public Map<String, UsableStorageSpaceInfo> getUsableStorageSpace() {
+        return usableSpace;
     }
 }

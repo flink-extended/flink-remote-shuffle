@@ -18,19 +18,24 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
+import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
+
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
+
 /**
  * A context class which is used when choose the next worker to store a new data partition. This is
  * a runtime context, while the other variables are placed in the fields of each different strategy.
  */
 public class PartitionPlacementContext {
 
-    private final String dataPartitionFactoryName;
+    private final DataPartitionFactory partitionFactory;
 
-    PartitionPlacementContext(String dataPartitionFactoryName) {
-        this.dataPartitionFactoryName = dataPartitionFactoryName;
+    PartitionPlacementContext(DataPartitionFactory partitionFactory) {
+        checkArgument(partitionFactory != null, "Must be not null.");
+        this.partitionFactory = partitionFactory;
     }
 
-    String getDataPartitionFactoryName() {
-        return dataPartitionFactoryName;
+    DataPartitionFactory getPartitionFactory() {
+        return partitionFactory;
     }
 }
