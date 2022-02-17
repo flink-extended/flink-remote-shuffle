@@ -28,7 +28,7 @@ import com.alibaba.flink.shuffle.core.memory.BufferDispatcher;
 
 import javax.annotation.Nullable;
 
-import java.util.Set;
+import java.util.Map;
 
 /**
  * {@link PartitionedDataStore} is the storage of {@link DataPartition}s. Different types of {@link
@@ -136,9 +136,9 @@ public interface PartitionedDataStore {
      */
     SingleThreadExecutorPool getExecutorPool(StorageMeta storageMeta);
 
-    /** Returns all HDD {@link StorageMeta}s of this data store. */
-    Set<StorageMeta> getHddStorageMetas();
+    /** Updates the available storage space information for the target shuffle worker. */
+    void updateUsableStorageSpace();
 
-    /** Returns all SSD {@link StorageMeta}s of this data store. */
-    Set<StorageMeta> getSsdStorageMetas();
+    /** Gets the available storage space information for the target shuffle worker. */
+    Map<String, UsableStorageSpaceInfo> getUsableStorageSpace();
 }

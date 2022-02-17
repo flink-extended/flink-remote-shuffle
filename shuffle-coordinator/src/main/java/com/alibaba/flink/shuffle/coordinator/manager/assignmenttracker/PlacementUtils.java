@@ -18,44 +18,10 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
-import com.alibaba.flink.shuffle.storage.partition.HDDOnlyLocalFileMapPartitionFactory;
-import com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactory;
-import com.alibaba.flink.shuffle.storage.partition.SSDOnlyLocalFileMapPartitionFactory;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
 import static com.alibaba.flink.shuffle.core.config.StorageOptions.STORAGE_RESERVED_SPACE_BYTES;
 
 /** Utility methods to manipulate {@link PartitionPlacementStrategy}s. */
 public class PlacementUtils {
-
-    private static final Logger LOG = LoggerFactory.getLogger(PlacementUtils.class);
-
-    static long getUsableSpaceBytes(String partitionFactoryName, WorkerStatus workerStatus) {
-        checkState(partitionFactoryName != null, "Empty data partition factory name");
-
-        long hddUsableBytes = workerStatus.getNumHddUsableSpaceBytes();
-        long ssdUsableBytes = workerStatus.getNumSsdUsableSpaceBytes();
-        long usableSpaceBytes = -1;
-
-        if (partitionFactoryName.equals(LocalFileMapPartitionFactory.class.getName())) {
-            usableSpaceBytes = Math.max(hddUsableBytes, ssdUsableBytes);
-        } else if (partitionFactoryName.equals(
-                HDDOnlyLocalFileMapPartitionFactory.class.getName())) {
-            usableSpaceBytes = hddUsableBytes;
-        } else if (partitionFactoryName.equals(
-                SSDOnlyLocalFileMapPartitionFactory.class.getName())) {
-            usableSpaceBytes = ssdUsableBytes;
-        }
-        if (usableSpaceBytes < 0) {
-            LOG.warn(
-                    "The available storage space of the worker may not be reported yet. "
-                            + "The minimum available space limit is ignored.");
-        }
-        return usableSpaceBytes;
-    }
 
     static void throwNoAvailableWorkerException(int numWorkers)
             throws ShuffleResourceAllocationException {

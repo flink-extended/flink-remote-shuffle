@@ -98,7 +98,7 @@ public class ManagerOptions {
 
     public static final ConfigOption<String> PARTITION_PLACEMENT_STRATEGY =
             new ConfigOption<String>("remote-shuffle.manager.partition-placement-strategy")
-                    .defaultValue("random")
+                    .defaultValue("round-robin")
                     .description(
                             "Worker selection strategy for storing the next data partition. Different selection"
                                     + " strategies can be specified through this option."

@@ -24,6 +24,7 @@ import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
 import com.alibaba.flink.shuffle.core.storage.StorageType;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 
@@ -42,6 +43,7 @@ public class HDDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
                             "No valid data dir of HDD storage type is configured for %s.",
                             StorageOptions.STORAGE_LOCAL_DATA_DIRS.key()));
         }
+        updateUsableStorageSpace();
     }
 
     @Override
@@ -54,6 +56,32 @@ public class HDDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
         return super.getDataPartitionType();
     }
 
+    @Override
+    public void updateUsableStorageSpace() {
+        usableSpace.setSsdUsableSpaceBytes(0);
+        if (hddStorageMetas.isEmpty()) {
+            usableSpace.setHddUsableSpaceBytes(0);
+        }
+        for (StorageMeta storageMeta : hddStorageMetas) {
+            long usableSpaceBytes = storageMeta.updateUsableSpace();
+            if (usableSpaceBytes > usableSpace.getHddUsableSpaceBytes()) {
+                usableSpace.setHddUsableSpaceBytes(usableSpaceBytes);
+            }
+        }
+    }
+
+    @Override
+    public boolean isUsableStorageSpaceEnough(
+            UsableStorageSpaceInfo usableSpace, long reservedSpaceBytes) {
+        return reservedSpaceBytes < usableSpace.getHddUsableSpaceBytes();
+    }
+
+    @Override
+    public boolean useHddOnly() {
+        return true;
+    }
+
+    @Override
     public StorageType getPreferredStorageType() {
         return StorageType.HDD;
     }

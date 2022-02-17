@@ -30,11 +30,13 @@ import com.alibaba.flink.shuffle.core.storage.DataPartitionWritingView;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
 import com.alibaba.flink.shuffle.core.storage.ReadingViewContext;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 import com.alibaba.flink.shuffle.core.storage.WritingViewContext;
 
 import javax.annotation.Nullable;
 
-import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
 
 /** An empty partitioned data store used for tests. */
 public class EmptyPartitionedDataStore implements PartitionedDataStore {
@@ -104,12 +106,10 @@ public class EmptyPartitionedDataStore implements PartitionedDataStore {
     }
 
     @Override
-    public Set<StorageMeta> getHddStorageMetas() {
-        return null;
-    }
+    public void updateUsableStorageSpace() {}
 
     @Override
-    public Set<StorageMeta> getSsdStorageMetas() {
-        return null;
+    public Map<String, UsableStorageSpaceInfo> getUsableStorageSpace() {
+        return new HashMap<>();
     }
 }

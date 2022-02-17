@@ -19,8 +19,10 @@
 package com.alibaba.flink.shuffle.coordinator.manager;
 
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
+import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
 import java.io.Serializable;
+import java.util.Map;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 
@@ -44,17 +46,22 @@ public class ShuffleWorkerRegistration implements Serializable {
     /** The process id of the shuffle worker. Currently, it is only used in e2e tests. */
     private final int processID;
 
+    /** Available storage space information by partition factory. */
+    private final Map<String, UsableStorageSpaceInfo> usableSpace;
+
     public ShuffleWorkerRegistration(
             final String rpcAddress,
             final String hostname,
             final InstanceID workerID,
             final int dataPort,
-            int processID) {
+            int processID,
+            Map<String, UsableStorageSpaceInfo> usableSpace) {
         this.rpcAddress = checkNotNull(rpcAddress);
         this.hostname = checkNotNull(hostname);
         this.workerID = checkNotNull(workerID);
         this.dataPort = dataPort;
         this.processID = processID;
+        this.usableSpace = checkNotNull(usableSpace);
     }
 
     public String getRpcAddress() {
@@ -75,6 +82,10 @@ public class ShuffleWorkerRegistration implements Serializable {
 
     public int getProcessID() {
         return processID;
+    }
+
+    public Map<String, UsableStorageSpaceInfo> getUsableStorageSpace() {
+        return usableSpace;
     }
 
     @Override

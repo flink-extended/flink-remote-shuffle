@@ -21,7 +21,6 @@ package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.common.config.MemorySize;
 import com.alibaba.flink.shuffle.coordinator.manager.ShuffleResource;
-import com.alibaba.flink.shuffle.coordinator.utils.EmptyShuffleWorkerGateway;
 import com.alibaba.flink.shuffle.core.config.ManagerOptions;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
@@ -33,6 +32,7 @@ import org.junit.Test;
 
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementStrategyTestUtils.PARTITION_FACTORY_CLASS;
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementStrategyTestUtils.expectedNoAvailableWorkersException;
+import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementStrategyTestUtils.registerWorkerToTracker;
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementStrategyTestUtils.selectWorkerWithEnoughSpace;
 import static com.alibaba.flink.shuffle.coordinator.utils.RandomIDUtils.randomDataSetId;
 import static com.alibaba.flink.shuffle.coordinator.utils.RandomIDUtils.randomJobId;
@@ -52,25 +52,17 @@ public class MinNumberPlacementStrategyTest {
                 ManagerOptions.PARTITION_PLACEMENT_STRATEGY,
                 PartitionPlacementStrategyLoader.MIN_NUM_PLACEMENT_STRATEGY_NAME);
         configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
-        AssignmentTracker assignmentTracker = new AssignmentTrackerImpl(configuration);
+        AssignmentTrackerImpl assignmentTracker = new AssignmentTrackerImpl(configuration);
         assignmentTracker.registerJob(jobId);
 
         // Registers two workers
         RegistrationID worker1 = new RegistrationID();
         RegistrationID worker2 = new RegistrationID();
 
-        assignmentTracker.registerWorker(
-                new InstanceID("worker1"),
-                worker1,
-                new EmptyShuffleWorkerGateway(),
-                "worker1",
-                1024);
-        assignmentTracker.registerWorker(
-                new InstanceID("worker2"),
-                worker2,
-                new EmptyShuffleWorkerGateway(),
-                "worker2",
-                1026);
+        registerWorkerToTracker(
+                assignmentTracker, new InstanceID("worker1"), worker1, "worker1", 1024);
+        registerWorkerToTracker(
+                assignmentTracker, new InstanceID("worker2"), worker2, "worker2", 1026);
 
         MapPartitionID dataPartitionId1 = randomMapPartitionId();
         MapPartitionID dataPartitionId2 = randomMapPartitionId();
