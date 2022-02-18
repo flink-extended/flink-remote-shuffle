@@ -184,6 +184,49 @@ public class LocalFileMapPartitionFactoryTest {
     }
 
     @Test
+    public void testUpdateUsableStorageSpace() {
+        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        FakeStorageMeta[] storageMetas = addStorageMetas(partitionFactory);
+
+        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+        assertEquals(0, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+
+        updateStorageMetas(storageMetas, 4, partitionFactory);
+        assertEquals(7, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+        assertEquals(8, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+
+        updateStorageMetas(storageMetas, 0, partitionFactory);
+        assertEquals(3, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+        assertEquals(4, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+    }
+
+    static FakeStorageMeta[] addStorageMetas(LocalFileMapPartitionFactory partitionFactory) {
+        FakeStorageMeta ssdStorageMeta1 = new FakeStorageMeta("ssd1", StorageType.SSD);
+        FakeStorageMeta hddStorageMeta1 = new FakeStorageMeta("hdd1", StorageType.HDD);
+        FakeStorageMeta ssdStorageMeta2 = new FakeStorageMeta("ssd2", StorageType.SSD);
+        FakeStorageMeta hddStorageMeta2 = new FakeStorageMeta("hdd2", StorageType.HDD);
+
+        partitionFactory.addSsdStorageMeta(ssdStorageMeta1);
+        partitionFactory.addHddStorageMeta(hddStorageMeta1);
+        partitionFactory.addSsdStorageMeta(ssdStorageMeta2);
+        partitionFactory.addHddStorageMeta(hddStorageMeta2);
+
+        return new FakeStorageMeta[] {
+            ssdStorageMeta1, hddStorageMeta1, ssdStorageMeta2, hddStorageMeta2
+        };
+    }
+
+    static void updateStorageMetas(
+            FakeStorageMeta[] storageMetas,
+            long base,
+            LocalFileMapPartitionFactory partitionFactory) {
+        for (int i = 1; i <= storageMetas.length; ++i) {
+            storageMetas[i - 1].updateUsableStorageSpace(i + base);
+        }
+        partitionFactory.updateUsableStorageSpace();
+    }
+
+    @Test
     public void testAllDisksWillBeUsed() {
         LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
         Properties properties = new Properties();
@@ -218,5 +261,26 @@ public class LocalFileMapPartitionFactoryTest {
             assertEquals(expectedStorageType, storageMeta.getStorageType());
         }
         assertTrue(numHdd1 == 50 && numHdd2 == 50);
+    }
+
+    /** Fake {@link StorageMeta} implementation for test. */
+    static class FakeStorageMeta extends StorageMeta {
+
+        private static final long serialVersionUID = -6718795518833646475L;
+
+        private long numUsableSpaceBytes;
+
+        public FakeStorageMeta(String storagePath, StorageType storageType) {
+            super(storagePath, storageType);
+        }
+
+        @Override
+        public long updateUsableStorageSpace() {
+            return numUsableSpaceBytes;
+        }
+
+        public void updateUsableStorageSpace(long usableSpace) {
+            numUsableSpaceBytes = usableSpace;
+        }
     }
 }

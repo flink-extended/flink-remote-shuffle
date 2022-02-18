@@ -21,7 +21,6 @@ package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
-import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 
 /**
  * A context class which is used when choose the next worker to store a new data partition. This is
@@ -33,7 +32,7 @@ public class PartitionPlacementContext {
 
     PartitionPlacementContext(DataPartitionFactory partitionFactory) {
         checkArgument(partitionFactory != null, "Must be not null.");
-        this.partitionFactory = checkNotNull(partitionFactory);
+        this.partitionFactory = partitionFactory;
     }
 
     DataPartitionFactory getPartitionFactory() {

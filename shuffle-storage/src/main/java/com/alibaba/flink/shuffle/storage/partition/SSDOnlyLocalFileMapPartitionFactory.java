@@ -53,15 +53,14 @@ public class SSDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
     @Override
     public void updateUsableStorageSpace() {
         usableSpace.setHddUsableSpaceBytes(0);
-        if (ssdStorageMetas.isEmpty()) {
-            usableSpace.setSsdUsableSpaceBytes(0);
-        }
+        long maxSsdUsableSpaceBytes = 0;
         for (StorageMeta storageMeta : ssdStorageMetas) {
-            long usableSpaceBytes = storageMeta.updateUsableSpace();
-            if (usableSpaceBytes > usableSpace.getSsdUsableSpaceBytes()) {
-                usableSpace.setSsdUsableSpaceBytes(usableSpaceBytes);
+            long usableSpaceBytes = storageMeta.updateUsableStorageSpace();
+            if (usableSpaceBytes > maxSsdUsableSpaceBytes) {
+                maxSsdUsableSpaceBytes = usableSpaceBytes;
             }
         }
+        usableSpace.setSsdUsableSpaceBytes(maxSsdUsableSpaceBytes);
     }
 
     @Override

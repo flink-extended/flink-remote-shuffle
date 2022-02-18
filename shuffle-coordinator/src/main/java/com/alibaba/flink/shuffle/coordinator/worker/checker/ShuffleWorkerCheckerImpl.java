@@ -86,7 +86,6 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
 
     public ShuffleWorkerCheckerImpl(Configuration configuration, PartitionedDataStore dataStore) {
         this.dataStore = checkNotNull(dataStore);
-        updateUsableStorageSpace();
 
         this.storageCheckerService =
                 Executors.newSingleThreadScheduledExecutor(
@@ -119,16 +118,6 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
         }
     }
 
-    private void updateUsableStorageSpace() {
-        dataStore.updateUsableStorageSpace();
-        UsableStorageSpaceInfo usableSpace =
-                dataStore.getUsableStorageSpace().get(LocalFileMapPartitionFactory.class.getName());
-        if (usableSpace != null) {
-            numHddMaxUsableBytes.set(usableSpace.getHddUsableSpaceBytes());
-            numSsdMaxUsableBytes.set(usableSpace.getSsdUsableSpaceBytes());
-        }
-    }
-
     private class StorageCheckRunnable implements Runnable {
         @Override
         public void run() {
@@ -153,6 +142,18 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
                     numSsdMaxUsableBytes,
                     WorkerCheckerUtils.bytesToHumanReadable(numTotalPartitionFileBytes),
                     numTotalPartitionFileBytes);
+        }
+
+        private void updateUsableStorageSpace() {
+            dataStore.updateUsableStorageSpace();
+            UsableStorageSpaceInfo usableSpace =
+                    dataStore
+                            .getUsableStorageSpace()
+                            .get(LocalFileMapPartitionFactory.class.getName());
+            if (usableSpace != null) {
+                numHddMaxUsableBytes.set(usableSpace.getHddUsableSpaceBytes());
+                numSsdMaxUsableBytes.set(usableSpace.getSsdUsableSpaceBytes());
+            }
         }
     }
 }

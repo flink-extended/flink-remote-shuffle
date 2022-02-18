@@ -57,11 +57,11 @@ public class StorageMeta implements Serializable {
         return storageType;
     }
 
-    public long getNumUsableSpaceBytes() {
+    public long getUsableStorageSpace() {
         return numUsableSpaceBytes;
     }
 
-    public long updateUsableSpace() {
+    public long updateUsableStorageSpace() {
         numUsableSpaceBytes = Paths.get(storagePath).toFile().getUsableSpace();
         return numUsableSpaceBytes;
     }

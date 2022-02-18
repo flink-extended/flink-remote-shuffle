@@ -133,12 +133,12 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
                 {
                     StorageMeta ssdStorageMeta = getStorageMeta(ssdStorageMetas);
                     if (ssdStorageMeta != null
-                            && ssdStorageMeta.getNumUsableSpaceBytes() > reservedSpaceBytes) {
+                            && ssdStorageMeta.getUsableStorageSpace() > reservedSpaceBytes) {
                         return ssdStorageMeta;
                     }
                     StorageMeta hddStorageMeta = getStorageMeta(hddStorageMetas);
                     if (hddStorageMeta != null
-                            && hddStorageMeta.getNumUsableSpaceBytes() > reservedSpaceBytes) {
+                            && hddStorageMeta.getUsableStorageSpace() > reservedSpaceBytes) {
                         return hddStorageMeta;
                     }
                     return ssdStorageMeta != null ? ssdStorageMeta : hddStorageMeta;
@@ -147,12 +147,12 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
                 {
                     StorageMeta hddStorageMeta = getStorageMeta(hddStorageMetas);
                     if (hddStorageMeta != null
-                            && hddStorageMeta.getNumUsableSpaceBytes() > reservedSpaceBytes) {
+                            && hddStorageMeta.getUsableStorageSpace() > reservedSpaceBytes) {
                         return hddStorageMeta;
                     }
                     StorageMeta ssdStorageMeta = getStorageMeta(ssdStorageMetas);
                     if (ssdStorageMeta != null
-                            && ssdStorageMeta.getNumUsableSpaceBytes() > reservedSpaceBytes) {
+                            && ssdStorageMeta.getUsableStorageSpace() > reservedSpaceBytes) {
                         return ssdStorageMeta;
                     }
                     return hddStorageMeta != null ? hddStorageMeta : ssdStorageMeta;
@@ -179,8 +179,8 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
 
             if (storageMeta != null) {
                 storageMetas.add(storageMeta);
-                long usableSpace = storageMeta.getNumUsableSpaceBytes();
-                if (maxUsableMeta == null || usableSpace > maxUsableMeta.getNumUsableSpaceBytes()) {
+                long usableSpace = storageMeta.getUsableStorageSpace();
+                if (maxUsableMeta == null || usableSpace > maxUsableMeta.getUsableStorageSpace()) {
                     maxUsableMeta = storageMeta;
                 }
 
@@ -239,25 +239,23 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
 
     @Override
     public void updateUsableStorageSpace() {
-        if (ssdStorageMetas.isEmpty()) {
-            usableSpace.setSsdUsableSpaceBytes(0);
-        }
+        long maxSsdUsableSpaceBytes = 0;
         for (StorageMeta storageMeta : ssdStorageMetas) {
-            long usableSpaceBytes = storageMeta.updateUsableSpace();
-            if (usableSpaceBytes > usableSpace.getSsdUsableSpaceBytes()) {
-                usableSpace.setSsdUsableSpaceBytes(usableSpaceBytes);
+            long usableSpaceBytes = storageMeta.updateUsableStorageSpace();
+            if (usableSpaceBytes > maxSsdUsableSpaceBytes) {
+                maxSsdUsableSpaceBytes = usableSpaceBytes;
             }
         }
+        usableSpace.setSsdUsableSpaceBytes(maxSsdUsableSpaceBytes);
 
-        if (hddStorageMetas.isEmpty()) {
-            usableSpace.setHddUsableSpaceBytes(0);
-        }
+        long maxHddUsableSpaceBytes = 0;
         for (StorageMeta storageMeta : hddStorageMetas) {
-            long usableSpaceBytes = storageMeta.updateUsableSpace();
-            if (usableSpaceBytes > usableSpace.getHddUsableSpaceBytes()) {
-                usableSpace.setHddUsableSpaceBytes(usableSpaceBytes);
+            long usableSpaceBytes = storageMeta.updateUsableStorageSpace();
+            if (usableSpaceBytes > maxHddUsableSpaceBytes) {
+                maxHddUsableSpaceBytes = usableSpaceBytes;
             }
         }
+        usableSpace.setHddUsableSpaceBytes(maxHddUsableSpaceBytes);
     }
 
     @Override
@@ -297,5 +295,13 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
 
     List<StorageMeta> getHddStorageMetas() {
         return new ArrayList<>(hddStorageMetas);
+    }
+
+    void addSsdStorageMeta(StorageMeta storageMeta) {
+        ssdStorageMetas.add(storageMeta);
+    }
+
+    void addHddStorageMeta(StorageMeta storageMeta) {
+        hddStorageMetas.add(storageMeta);
     }
 }
