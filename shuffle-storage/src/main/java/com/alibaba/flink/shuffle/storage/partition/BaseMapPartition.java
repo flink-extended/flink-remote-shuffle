@@ -285,7 +285,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                     CommonUtils.checkedDownCast(
                             configuration
                                     .getMemorySize(
-                                            StorageOptions.STORAGE_MAX_PARTITION_READING_MEMORY)
+                                            StorageOptions.STORAGE_MAX_PARTITION_WRITING_MEMORY)
                                     .getBytes());
             int bufferSize =
                     CommonUtils.checkedDownCast(
