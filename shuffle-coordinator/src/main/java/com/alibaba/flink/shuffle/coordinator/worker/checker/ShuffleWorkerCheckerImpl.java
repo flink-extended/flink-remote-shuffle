@@ -121,17 +121,26 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
     private class StorageCheckRunnable implements Runnable {
         @Override
         public void run() {
+            long start = System.nanoTime();
+
+            try {
+                numTotalPartitionFileBytes = dataStore.numDataPartitionTotalBytes();
+            } catch (Throwable t) {
+                LOG.error("Failed to update the data size.", t);
+            }
+
+            try {
+                dataStore.updateStorageHealthStatus();
+            } catch (Throwable t) {
+                LOG.error("Failed to update the health status.", t);
+            }
+
             try {
                 updateStorageUsableSpaces();
             } catch (Throwable t) {
-                LOG.error("Failed to update the usable spaces,", t);
+                LOG.error("Failed to update the usable spaces.", t);
             }
-        }
 
-        private void updateStorageUsableSpaces() {
-            long start = System.nanoTime();
-            updateUsableStorageSpace();
-            numTotalPartitionFileBytes = dataStore.numDataPartitionTotalBytes();
             LOG.info(
                     "Update data store info in {} ms, max usable space, HDD: {}({}), SSD:{}({}), "
                             + "total partition file bytes: {}({}).",
@@ -144,7 +153,7 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
                     numTotalPartitionFileBytes);
         }
 
-        private void updateUsableStorageSpace() {
+        private void updateStorageUsableSpaces() {
             dataStore.updateUsableStorageSpace();
             UsableStorageSpaceInfo usableSpace =
                     dataStore

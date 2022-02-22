@@ -56,13 +56,14 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
 
     private static final Logger LOG = LoggerFactory.getLogger(LocalFileMapPartitionFactory.class);
 
-    @GuardedBy("lock in data store")
+    protected final Object lock = new Object();
+
+    @GuardedBy("lock")
     protected final Queue<StorageMeta> ssdStorageMetas = new ArrayDeque<>();
 
-    @GuardedBy("lock in data store")
+    @GuardedBy("lock")
     protected final Queue<StorageMeta> hddStorageMetas = new ArrayDeque<>();
 
-    @GuardedBy("lock in data store")
     protected final UsableStorageSpaceInfo usableSpace = new UsableStorageSpaceInfo(0, 0);
 
     protected long reservedSpaceBytes;
@@ -97,14 +98,20 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
                             StorageOptions.STORAGE_LOCAL_DATA_DIRS.key()));
         }
 
-        this.ssdStorageMetas.addAll(
-                parsedPathLists.getSsdPaths().stream()
-                        .map(storagePath -> new StorageMeta(storagePath, StorageType.SSD))
-                        .collect(Collectors.toList()));
-        this.hddStorageMetas.addAll(
-                parsedPathLists.getHddPaths().stream()
-                        .map(storagePath -> new StorageMeta(storagePath, StorageType.HDD))
-                        .collect(Collectors.toList()));
+        synchronized (lock) {
+            this.ssdStorageMetas.addAll(
+                    parsedPathLists.getSsdPaths().stream()
+                            .map(
+                                    storagePath ->
+                                            new LocalFileStorageMeta(storagePath, StorageType.SSD))
+                            .collect(Collectors.toList()));
+            this.hddStorageMetas.addAll(
+                    parsedPathLists.getHddPaths().stream()
+                            .map(
+                                    storagePath ->
+                                            new LocalFileStorageMeta(storagePath, StorageType.HDD))
+                            .collect(Collectors.toList()));
+        }
 
         if (ssdStorageMetas.isEmpty() && preferredStorageType == StorageType.SSD) {
             LOG.warn(
@@ -120,6 +127,7 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
 
         this.reservedSpaceBytes =
                 configuration.getMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES).getBytes();
+        updateStorageHealthStatus();
         updateUsableStorageSpace();
     }
 
@@ -131,12 +139,12 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
         switch (preferredStorageType) {
             case SSD:
                 {
-                    StorageMeta ssdStorageMeta = getStorageMeta(ssdStorageMetas);
+                    StorageMeta ssdStorageMeta = getNextSsdStorageMeta();
                     if (ssdStorageMeta != null
                             && ssdStorageMeta.getUsableStorageSpace() > reservedSpaceBytes) {
                         return ssdStorageMeta;
                     }
-                    StorageMeta hddStorageMeta = getStorageMeta(hddStorageMetas);
+                    StorageMeta hddStorageMeta = getNextHddStorageMeta();
                     if (hddStorageMeta != null
                             && hddStorageMeta.getUsableStorageSpace() > reservedSpaceBytes) {
                         return hddStorageMeta;
@@ -145,12 +153,12 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
                 }
             case HDD:
                 {
-                    StorageMeta hddStorageMeta = getStorageMeta(hddStorageMetas);
+                    StorageMeta hddStorageMeta = getNextHddStorageMeta();
                     if (hddStorageMeta != null
                             && hddStorageMeta.getUsableStorageSpace() > reservedSpaceBytes) {
                         return hddStorageMeta;
                     }
-                    StorageMeta ssdStorageMeta = getStorageMeta(ssdStorageMetas);
+                    StorageMeta ssdStorageMeta = getNextSsdStorageMeta();
                     if (ssdStorageMeta != null
                             && ssdStorageMeta.getUsableStorageSpace() > reservedSpaceBytes) {
                         return ssdStorageMeta;
@@ -162,32 +170,57 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
         }
     }
 
-    private StorageMeta getStorageMeta(Queue<StorageMeta> storageMetas) {
-        int numStorageMetas = storageMetas.size();
-        if (numStorageMetas == 0) {
-            return null;
+    private StorageMeta getNextSsdStorageMeta() {
+        synchronized (lock) {
+            if (ssdStorageMetas.isEmpty()) {
+                return null;
+            }
+            return getStorageMetaInNonEmptyQueue(ssdStorageMetas);
         }
-
-        return getStorageMetaInNonEmptyQueue(storageMetas);
     }
 
+    private StorageMeta getNextHddStorageMeta() {
+        synchronized (lock) {
+            if (hddStorageMetas.isEmpty()) {
+                return null;
+            }
+            return getStorageMetaInNonEmptyQueue(hddStorageMetas);
+        }
+    }
+
+    /**
+     * Returns 1) null if there is no healthy storage; 2) first storage which meets the reserved
+     * space requirement; 3) storage with maximum usable space if no storage meets the reserved
+     * space requirement.
+     */
     protected StorageMeta getStorageMetaInNonEmptyQueue(Queue<StorageMeta> storageMetas) {
+        assert Thread.holdsLock(lock);
+
         int numStorageMetas = storageMetas.size();
         StorageMeta maxUsableMeta = null;
         for (int i = 0; i < numStorageMetas; i++) {
             StorageMeta storageMeta = storageMetas.poll();
-
-            if (storageMeta != null) {
-                storageMetas.add(storageMeta);
-                long usableSpace = storageMeta.getUsableStorageSpace();
-                if (maxUsableMeta == null || usableSpace > maxUsableMeta.getUsableStorageSpace()) {
-                    maxUsableMeta = storageMeta;
-                }
-
-                if (usableSpace > reservedSpaceBytes) {
-                    return storageMeta;
-                }
+            if (storageMeta == null) {
+                continue;
             }
+
+            storageMetas.add(storageMeta);
+            if (!storageMeta.isHealthy()) {
+                continue;
+            }
+
+            long usableSpace = storageMeta.getUsableStorageSpace();
+            if (maxUsableMeta == null || usableSpace > maxUsableMeta.getUsableStorageSpace()) {
+                maxUsableMeta = storageMeta;
+            }
+
+            if (usableSpace > reservedSpaceBytes) {
+                return storageMeta;
+            }
+        }
+
+        if (maxUsableMeta == null || !maxUsableMeta.isHealthy()) {
+            return null;
         }
 
         if (storageMetas.remove(maxUsableMeta)) {
@@ -207,13 +240,12 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
         CommonUtils.checkArgument(dataPartitionID instanceof MapPartitionID, "Illegal type.");
 
         MapPartitionID mapPartitionID = (MapPartitionID) dataPartitionID;
+        StorageMeta storageMeta = getNextDataStorageMeta();
+        if (storageMeta == null) {
+            throw new RuntimeException("No available healthy storage.");
+        }
         return new LocalFileMapPartition(
-                getNextDataStorageMeta(),
-                dataStore,
-                jobID,
-                dataSetID,
-                mapPartitionID,
-                numReducePartitions);
+                storageMeta, dataStore, jobID, dataSetID, mapPartitionID, numReducePartitions);
     }
 
     @Override
@@ -240,7 +272,10 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
     @Override
     public void updateUsableStorageSpace() {
         long maxSsdUsableSpaceBytes = 0;
-        for (StorageMeta storageMeta : ssdStorageMetas) {
+        for (StorageMeta storageMeta : getSsdStorageMetas()) {
+            if (!storageMeta.isHealthy()) {
+                continue;
+            }
             long usableSpaceBytes = storageMeta.updateUsableStorageSpace();
             if (usableSpaceBytes > maxSsdUsableSpaceBytes) {
                 maxSsdUsableSpaceBytes = usableSpaceBytes;
@@ -249,7 +284,10 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
         usableSpace.setSsdUsableSpaceBytes(maxSsdUsableSpaceBytes);
 
         long maxHddUsableSpaceBytes = 0;
-        for (StorageMeta storageMeta : hddStorageMetas) {
+        for (StorageMeta storageMeta : getHddStorageMetas()) {
+            if (!storageMeta.isHealthy()) {
+                continue;
+            }
             long usableSpaceBytes = storageMeta.updateUsableStorageSpace();
             if (usableSpaceBytes > maxHddUsableSpaceBytes) {
                 maxHddUsableSpaceBytes = usableSpaceBytes;
@@ -272,6 +310,14 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
     }
 
     @Override
+    public void updateStorageHealthStatus() {
+        List<StorageMeta> storageMetas = getAllStorageMetas();
+        for (StorageMeta storageMeta : storageMetas) {
+            storageMeta.updateStorageHealthStatus();
+        }
+    }
+
+    @Override
     public boolean useSsdOnly() {
         return false;
     }
@@ -281,20 +327,33 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
         return false;
     }
 
+    protected List<StorageMeta> getSsdStorageMetas() {
+        synchronized (lock) {
+            return new ArrayList<>(ssdStorageMetas);
+        }
+    }
+
+    protected List<StorageMeta> getHddStorageMetas() {
+        synchronized (lock) {
+            return new ArrayList<>(hddStorageMetas);
+        }
+    }
+
+    private List<StorageMeta> getAllStorageMetas() {
+        List<StorageMeta> storageMetas = new ArrayList<>();
+        synchronized (lock) {
+            storageMetas.addAll(ssdStorageMetas);
+            storageMetas.addAll(hddStorageMetas);
+        }
+        return storageMetas;
+    }
+
     // ---------------------------------------------------------------------------------------------
     // For test
     // ---------------------------------------------------------------------------------------------
 
     StorageType getPreferredStorageType() {
         return preferredStorageType;
-    }
-
-    List<StorageMeta> getSsdStorageMetas() {
-        return new ArrayList<>(ssdStorageMetas);
-    }
-
-    List<StorageMeta> getHddStorageMetas() {
-        return new ArrayList<>(hddStorageMetas);
     }
 
     void addSsdStorageMeta(StorageMeta storageMeta) {

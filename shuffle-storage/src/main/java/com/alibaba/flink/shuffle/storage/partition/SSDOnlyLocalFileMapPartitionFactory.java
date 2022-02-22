@@ -25,7 +25,7 @@ import com.alibaba.flink.shuffle.core.storage.StorageMeta;
 import com.alibaba.flink.shuffle.core.storage.StorageType;
 import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
-import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
+import java.util.List;
 
 /**
  * A {@link LocalFileMapPartitionFactory} variant which only uses SSD to store data partition data.
@@ -42,19 +42,25 @@ public class SSDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
                             "No valid data dir of SSD storage type is configured for %s.",
                             StorageOptions.STORAGE_LOCAL_DATA_DIRS.key()));
         }
+        updateStorageHealthStatus();
         updateUsableStorageSpace();
     }
 
     @Override
     protected StorageMeta getNextDataStorageMeta() {
-        return checkNotNull(getStorageMetaInNonEmptyQueue(ssdStorageMetas));
+        synchronized (lock) {
+            return getStorageMetaInNonEmptyQueue(ssdStorageMetas);
+        }
     }
 
     @Override
     public void updateUsableStorageSpace() {
         usableSpace.setHddUsableSpaceBytes(0);
         long maxSsdUsableSpaceBytes = 0;
-        for (StorageMeta storageMeta : ssdStorageMetas) {
+        for (StorageMeta storageMeta : getSsdStorageMetas()) {
+            if (!storageMeta.isHealthy()) {
+                continue;
+            }
             long usableSpaceBytes = storageMeta.updateUsableStorageSpace();
             if (usableSpaceBytes > maxSsdUsableSpaceBytes) {
                 maxSsdUsableSpaceBytes = usableSpaceBytes;
@@ -67,6 +73,14 @@ public class SSDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
     public boolean isUsableStorageSpaceEnough(
             UsableStorageSpaceInfo usableSpace, long reservedSpaceBytes) {
         return reservedSpaceBytes < usableSpace.getSsdUsableSpaceBytes();
+    }
+
+    @Override
+    public void updateStorageHealthStatus() {
+        List<StorageMeta> storageMetas = getSsdStorageMetas();
+        for (StorageMeta storageMeta : storageMetas) {
+            storageMeta.updateStorageHealthStatus();
+        }
     }
 
     @Override

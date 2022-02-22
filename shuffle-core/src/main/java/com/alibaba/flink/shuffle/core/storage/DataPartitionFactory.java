@@ -83,6 +83,12 @@ public interface DataPartitionFactory {
     /** Whether the given usable storage space is enough for this data partition factory. */
     boolean isUsableStorageSpaceEnough(UsableStorageSpaceInfo usableSpace, long reservedSpaceBytes);
 
+    /**
+     * Checks the health status of the underlying storage. It will remove the unhealthy storage and
+     * add the healthy storage back.
+     */
+    void updateStorageHealthStatus();
+
     /** Whether this partition factory only uses SSD as storage device. */
     boolean useSsdOnly();
 
