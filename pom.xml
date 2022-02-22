@@ -57,6 +57,7 @@ under the License.
 		<!-- Only the curator2 TestingServer works with ZK 3.4 -->
 		<zookeeper.version>3.4.14-14.0</zookeeper.version>
 		<flink.version>1.14.0</flink.version>
+		<rpc.flink.version>1.14.0</rpc.flink.version>
 		<jetty.version>9.4.44.v20210927</jetty.version>
 		<http.client.version>4.5.13</http.client.version>
 		<commons.lang3.version>3.3.2</commons.lang3.version>

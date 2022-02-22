@@ -93,7 +93,7 @@ under the License.
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-rpc-akka</artifactId>
-			<version>${flink.version}</version>
+			<version>${rpc.flink.version}</version>
 			<scope>test</scope>
 		</dependency>
 

@@ -54,7 +54,7 @@ under the License.
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-rpc-core</artifactId>
-			<version>${flink.version}</version>
+			<version>${rpc.flink.version}</version>
 			<exclusions>
 				<exclusion>
 					<groupId>org.apache.flink</groupId>
@@ -67,7 +67,7 @@ under the License.
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-core</artifactId>
-			<version>${flink.version}</version>
+			<version>${rpc.flink.version}</version>
 			<optional>true</optional>
 			<exclusions>
 				<exclusion>
