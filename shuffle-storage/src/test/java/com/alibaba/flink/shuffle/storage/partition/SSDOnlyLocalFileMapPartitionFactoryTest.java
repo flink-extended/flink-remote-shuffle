@@ -31,7 +31,10 @@ import org.junit.rules.TemporaryFolder;
 
 import java.util.Properties;
 
+import static com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactoryTest.assertExpectedStorageMeta;
 import static com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactoryTest.expectedEvenDiskUsedCount;
+import static com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactoryTest.updateStorageHealthStatus;
+import static com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactoryTest.updateStorageUsableSpace;
 import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link SSDOnlyLocalFileMapPartitionFactory}. */
@@ -83,13 +86,52 @@ public class SSDOnlyLocalFileMapPartitionFactoryTest {
         assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
         assertEquals(0, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
 
-        LocalFileMapPartitionFactoryTest.updateStorageMetas(storageMetas, 4, partitionFactory);
+        LocalFileMapPartitionFactoryTest.updateStorageUsableSpace(
+                storageMetas, 4, partitionFactory);
         assertEquals(7, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
         assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
 
-        LocalFileMapPartitionFactoryTest.updateStorageMetas(storageMetas, 0, partitionFactory);
+        LocalFileMapPartitionFactoryTest.updateStorageUsableSpace(
+                storageMetas, 0, partitionFactory);
         assertEquals(3, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
         assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+    }
+
+    @Test
+    public void testUpdateUsableStorageSpaceWithUnhealthyStorage() {
+        LocalFileMapPartitionFactory partitionFactory = new SSDOnlyLocalFileMapPartitionFactory();
+        LocalFileMapPartitionFactoryTest.FakeStorageMeta[] storageMetas =
+                LocalFileMapPartitionFactoryTest.addStorageMetas(partitionFactory);
+        updateStorageUsableSpace(storageMetas, 0, partitionFactory);
+
+        updateStorageHealthStatus(storageMetas, 2, 4, false, partitionFactory);
+        assertEquals(1, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+
+        updateStorageHealthStatus(storageMetas, 0, 2, false, partitionFactory);
+        assertEquals(0, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+
+        updateStorageHealthStatus(storageMetas, 2, 4, true, partitionFactory);
+        assertEquals(3, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+    }
+
+    @Test
+    public void testGetNextStorageMetaWithUnhealthyStorage() {
+        LocalFileMapPartitionFactory partitionFactory = new SSDOnlyLocalFileMapPartitionFactory();
+        LocalFileMapPartitionFactoryTest.FakeStorageMeta[] storageMetas =
+                LocalFileMapPartitionFactoryTest.addStorageMetas(partitionFactory);
+        updateStorageUsableSpace(storageMetas, 0, partitionFactory);
+
+        updateStorageHealthStatus(storageMetas, 2, 4, false, partitionFactory);
+        assertExpectedStorageMeta(partitionFactory, storageMetas[0]);
+
+        updateStorageHealthStatus(storageMetas, 0, 2, false, partitionFactory);
+        assertExpectedStorageMeta(partitionFactory, null);
+
+        updateStorageHealthStatus(storageMetas, 2, 4, true, partitionFactory);
+        assertExpectedStorageMeta(partitionFactory, storageMetas[2]);
     }
 
     @Test

@@ -644,22 +644,25 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
 
     @Override
     public void updateUsableStorageSpace() {
-        synchronized (lock) {
-            for (DataPartitionFactory partitionFactory : partitionFactories.values()) {
-                partitionFactory.updateUsableStorageSpace();
-            }
+        for (DataPartitionFactory partitionFactory : partitionFactories.values()) {
+            partitionFactory.updateUsableStorageSpace();
         }
     }
 
     @Override
     public Map<String, UsableStorageSpaceInfo> getUsableStorageSpace() {
         Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
-        synchronized (lock) {
-            for (Map.Entry<String, DataPartitionFactory> entry : partitionFactories.entrySet()) {
-                usableSpace.put(entry.getKey(), entry.getValue().getUsableStorageSpace());
-            }
+        for (Map.Entry<String, DataPartitionFactory> entry : partitionFactories.entrySet()) {
+            usableSpace.put(entry.getKey(), entry.getValue().getUsableStorageSpace());
         }
         return usableSpace;
+    }
+
+    @Override
+    public void updateStorageHealthStatus() {
+        for (DataPartitionFactory partitionFactory : partitionFactories.values()) {
+            partitionFactory.updateStorageHealthStatus();
+        }
     }
 
     // ---------------------------------------------------------------------------------------------

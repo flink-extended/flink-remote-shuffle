@@ -139,6 +139,12 @@ public interface PartitionedDataStore {
     /** Updates the available storage space information for the target shuffle worker. */
     void updateUsableStorageSpace();
 
+    /**
+     * Checks the health status of the underlying storage. It will remove the unhealthy storage and
+     * add the healthy storage back.
+     */
+    void updateStorageHealthStatus();
+
     /** Gets the available storage space information for the target shuffle worker. */
     Map<String, UsableStorageSpaceInfo> getUsableStorageSpace();
 }

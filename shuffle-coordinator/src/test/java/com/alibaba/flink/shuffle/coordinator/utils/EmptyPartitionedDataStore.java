@@ -109,6 +109,9 @@ public class EmptyPartitionedDataStore implements PartitionedDataStore {
     public void updateUsableStorageSpace() {}
 
     @Override
+    public void updateStorageHealthStatus() {}
+
+    @Override
     public Map<String, UsableStorageSpaceInfo> getUsableStorageSpace() {
         return new HashMap<>();
     }
