@@ -94,9 +94,9 @@ public class LocalFileMapPartitionFactoryTest {
         String path2 = temporaryFolder2.getRoot().getAbsolutePath() + "/";
         String path3 = temporaryFolder3.getRoot().getAbsolutePath() + "/";
 
-        StorageMeta storageMeta1 = new StorageMeta(path1, StorageType.SSD);
-        StorageMeta storageMeta2 = new StorageMeta(path2, StorageType.HDD);
-        StorageMeta storageMeta3 = new StorageMeta(path3, StorageType.HDD);
+        StorageMeta storageMeta1 = new LocalFileStorageMeta(path1, StorageType.SSD);
+        StorageMeta storageMeta2 = new LocalFileStorageMeta(path2, StorageType.HDD);
+        StorageMeta storageMeta3 = new LocalFileStorageMeta(path3, StorageType.HDD);
 
         Properties properties = new Properties();
         properties.setProperty(
@@ -191,16 +191,36 @@ public class LocalFileMapPartitionFactoryTest {
         assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
         assertEquals(0, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
 
-        updateStorageMetas(storageMetas, 4, partitionFactory);
+        updateStorageUsableSpace(storageMetas, 4, partitionFactory);
         assertEquals(7, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
         assertEquals(8, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
 
-        updateStorageMetas(storageMetas, 0, partitionFactory);
+        updateStorageUsableSpace(storageMetas, 0, partitionFactory);
+        assertEquals(3, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+        assertEquals(4, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+    }
+
+    @Test
+    public void testUpdateUsableStorageSpaceWithUnhealthyStorage() {
+        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        FakeStorageMeta[] storageMetas = addStorageMetas(partitionFactory);
+        updateStorageUsableSpace(storageMetas, 0, partitionFactory);
+
+        updateStorageHealthStatus(storageMetas, 2, 4, false, partitionFactory);
+        assertEquals(1, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+        assertEquals(2, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+
+        updateStorageHealthStatus(storageMetas, 0, 2, false, partitionFactory);
+        assertEquals(0, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+
+        updateStorageHealthStatus(storageMetas, 2, 4, true, partitionFactory);
         assertEquals(3, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
         assertEquals(4, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
     }
 
     static FakeStorageMeta[] addStorageMetas(LocalFileMapPartitionFactory partitionFactory) {
+        partitionFactory.preferredStorageType = StorageType.SSD;
         FakeStorageMeta ssdStorageMeta1 = new FakeStorageMeta("ssd1", StorageType.SSD);
         FakeStorageMeta hddStorageMeta1 = new FakeStorageMeta("hdd1", StorageType.HDD);
         FakeStorageMeta ssdStorageMeta2 = new FakeStorageMeta("ssd2", StorageType.SSD);
@@ -216,7 +236,7 @@ public class LocalFileMapPartitionFactoryTest {
         };
     }
 
-    static void updateStorageMetas(
+    static void updateStorageUsableSpace(
             FakeStorageMeta[] storageMetas,
             long base,
             LocalFileMapPartitionFactory partitionFactory) {
@@ -224,6 +244,44 @@ public class LocalFileMapPartitionFactoryTest {
             storageMetas[i - 1].updateUsableStorageSpace(i + base);
         }
         partitionFactory.updateUsableStorageSpace();
+    }
+
+    static void updateStorageHealthStatus(
+            FakeStorageMeta[] storageMetas,
+            int startIndex,
+            int endIndex,
+            boolean isHealthy,
+            LocalFileMapPartitionFactory partitionFactory) {
+        for (int i = startIndex; i < endIndex; ++i) {
+            storageMetas[i].updateStorageHealthStatus(isHealthy);
+        }
+        partitionFactory.updateUsableStorageSpace();
+    }
+
+    @Test
+    public void testGetNextStorageMetaWithUnhealthyStorage() {
+        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        FakeStorageMeta[] storageMetas = addStorageMetas(partitionFactory);
+        updateStorageUsableSpace(storageMetas, 0, partitionFactory);
+
+        updateStorageHealthStatus(storageMetas, 2, 4, false, partitionFactory);
+        assertExpectedStorageMeta(partitionFactory, storageMetas[0]);
+
+        updateStorageHealthStatus(storageMetas, 0, 1, false, partitionFactory);
+        assertExpectedStorageMeta(partitionFactory, storageMetas[1]);
+
+        updateStorageHealthStatus(storageMetas, 1, 2, false, partitionFactory);
+        assertExpectedStorageMeta(partitionFactory, null);
+
+        updateStorageHealthStatus(storageMetas, 2, 4, true, partitionFactory);
+        assertExpectedStorageMeta(partitionFactory, storageMetas[2]);
+    }
+
+    static void assertExpectedStorageMeta(
+            LocalFileMapPartitionFactory partitionFactory, StorageMeta expectedStorageMeta) {
+        for (int i = 0; i < 1024; ++i) {
+            assertEquals(expectedStorageMeta, partitionFactory.getNextDataStorageMeta());
+        }
     }
 
     @Test
@@ -270,6 +328,8 @@ public class LocalFileMapPartitionFactoryTest {
 
         private long numUsableSpaceBytes;
 
+        private boolean isHealthy = true;
+
         public FakeStorageMeta(String storagePath, StorageType storageType) {
             super(storagePath, storageType);
         }
@@ -279,8 +339,17 @@ public class LocalFileMapPartitionFactoryTest {
             return numUsableSpaceBytes;
         }
 
+        @Override
+        public boolean isHealthy() {
+            return isHealthy;
+        }
+
         public void updateUsableStorageSpace(long usableSpace) {
             numUsableSpaceBytes = usableSpace;
+        }
+
+        public void updateStorageHealthStatus(boolean isHealthy) {
+            this.isHealthy = isHealthy;
         }
     }
 }

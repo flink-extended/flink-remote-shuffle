@@ -110,6 +110,9 @@ public class NoOpPartitionedDataStore implements PartitionedDataStore {
     public void updateUsableStorageSpace() {}
 
     @Override
+    public void updateStorageHealthStatus() {}
+
+    @Override
     public Map<String, UsableStorageSpaceInfo> getUsableStorageSpace() {
         return null;
     }

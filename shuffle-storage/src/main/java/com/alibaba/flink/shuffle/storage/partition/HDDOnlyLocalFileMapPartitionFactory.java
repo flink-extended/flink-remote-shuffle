@@ -26,7 +26,7 @@ import com.alibaba.flink.shuffle.core.storage.StorageMeta;
 import com.alibaba.flink.shuffle.core.storage.StorageType;
 import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
-import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
+import java.util.List;
 
 /**
  * A {@link LocalFileMapPartitionFactory} variant which only uses HDD to store data partition data.
@@ -43,12 +43,15 @@ public class HDDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
                             "No valid data dir of HDD storage type is configured for %s.",
                             StorageOptions.STORAGE_LOCAL_DATA_DIRS.key()));
         }
+        updateStorageHealthStatus();
         updateUsableStorageSpace();
     }
 
     @Override
     protected StorageMeta getNextDataStorageMeta() {
-        return checkNotNull(getStorageMetaInNonEmptyQueue(hddStorageMetas));
+        synchronized (lock) {
+            return getStorageMetaInNonEmptyQueue(hddStorageMetas);
+        }
     }
 
     @Override
@@ -60,7 +63,10 @@ public class HDDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
     public void updateUsableStorageSpace() {
         usableSpace.setSsdUsableSpaceBytes(0);
         long maxHddUsableSpaceBytes = 0;
-        for (StorageMeta storageMeta : hddStorageMetas) {
+        for (StorageMeta storageMeta : getHddStorageMetas()) {
+            if (!storageMeta.isHealthy()) {
+                continue;
+            }
             long usableSpaceBytes = storageMeta.updateUsableStorageSpace();
             if (usableSpaceBytes > maxHddUsableSpaceBytes) {
                 maxHddUsableSpaceBytes = usableSpaceBytes;
@@ -73,6 +79,14 @@ public class HDDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
     public boolean isUsableStorageSpaceEnough(
             UsableStorageSpaceInfo usableSpace, long reservedSpaceBytes) {
         return reservedSpaceBytes < usableSpace.getHddUsableSpaceBytes();
+    }
+
+    @Override
+    public void updateStorageHealthStatus() {
+        List<StorageMeta> storageMetas = getHddStorageMetas();
+        for (StorageMeta storageMeta : storageMetas) {
+            storageMeta.updateStorageHealthStatus();
+        }
     }
 
     @Override

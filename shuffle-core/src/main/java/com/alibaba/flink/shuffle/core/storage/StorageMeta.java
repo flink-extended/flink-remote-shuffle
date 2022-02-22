@@ -20,13 +20,10 @@ package com.alibaba.flink.shuffle.core.storage;
 
 import com.alibaba.flink.shuffle.common.utils.CommonUtils;
 
-import javax.annotation.concurrent.GuardedBy;
-
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.file.Paths;
 import java.util.Objects;
 
 /** Meta information of the data storage for {@link DataPartition}. */
@@ -34,12 +31,13 @@ public class StorageMeta implements Serializable {
 
     private static final long serialVersionUID = 7636731224603174535L;
 
-    private final String storagePath;
+    protected final String storagePath;
 
-    private final StorageType storageType;
+    protected final StorageType storageType;
 
-    @GuardedBy("lock in data store")
-    private long numUsableSpaceBytes;
+    protected volatile long numUsableSpaceBytes;
+
+    protected volatile boolean isHealthy = true;
 
     public StorageMeta(String storagePath, StorageType storageType) {
         CommonUtils.checkArgument(storagePath != null, "Must be not null.");
@@ -62,8 +60,16 @@ public class StorageMeta implements Serializable {
     }
 
     public long updateUsableStorageSpace() {
-        numUsableSpaceBytes = Paths.get(storagePath).toFile().getUsableSpace();
+        numUsableSpaceBytes = Long.MAX_VALUE;
         return numUsableSpaceBytes;
+    }
+
+    public void updateStorageHealthStatus() {
+        isHealthy = true;
+    }
+
+    public boolean isHealthy() {
+        return isHealthy;
     }
 
     public void writeTo(DataOutput dataOutput) throws IOException {

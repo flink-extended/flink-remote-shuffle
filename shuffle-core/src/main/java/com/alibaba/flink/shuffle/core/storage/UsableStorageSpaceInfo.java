@@ -26,16 +26,16 @@ import java.io.Serializable;
 @NotThreadSafe
 public class UsableStorageSpaceInfo implements Serializable {
 
+    private static final long serialVersionUID = 8761204897411057994L;
+
     public static final UsableStorageSpaceInfo ZERO_USABLE_SPACE = new UsableStorageSpaceInfo(0, 0);
 
     public static final UsableStorageSpaceInfo INFINITE_USABLE_SPACE =
             new UsableStorageSpaceInfo(Long.MAX_VALUE, Long.MAX_VALUE);
 
-    private static final long serialVersionUID = 8761204897411057994L;
+    private volatile long ssdUsableSpaceBytes;
 
-    private long ssdUsableSpaceBytes;
-
-    private long hddUsableSpaceBytes;
+    private volatile long hddUsableSpaceBytes;
 
     public UsableStorageSpaceInfo(long hddUsableSpaceBytes, long ssdUsableSpaceBytes) {
         this.hddUsableSpaceBytes = hddUsableSpaceBytes;
