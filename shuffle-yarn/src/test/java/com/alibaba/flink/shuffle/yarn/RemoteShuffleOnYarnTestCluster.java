@@ -111,8 +111,6 @@ public class RemoteShuffleOnYarnTestCluster extends YarnTestBase {
                         + "=128 -D "
                         + YarnConstants.MANAGER_AM_MEMORY_OVERHEAD_SIZE_KEY
                         + "=128 -D "
-                        + YarnConstants.MANAGER_APP_QUEUE_NAME_KEY
-                        + "=root.default -D "
                         + RPC_PORT.key()
                         + "=23123 -D "
                         + RPC_BIND_PORT.key()

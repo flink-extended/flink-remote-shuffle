@@ -57,8 +57,7 @@ import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
  * A {@link ResultPartition} which appends records and events to {@link SortBuffer} and after the
  * {@link SortBuffer} is full, all data in the {@link SortBuffer} will be copied and spilled to the
  * remote shuffle service in subpartition index order sequentially. Large records that can not be
- * appended to an empty {@link org.apache.flink.runtime.io.network.partition.SortBuffer} will be
- * spilled directly.
+ * appended to an empty {@link SortBuffer} will be spilled directly.
  */
 public class RemoteShuffleResultPartition extends ResultPartition {
 

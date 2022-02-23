@@ -27,7 +27,6 @@ import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcServiceImpl;
 
 import org.apache.flink.configuration.AkkaOptions;
 import org.apache.flink.configuration.ConfigurationUtils;
-import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.core.classloading.ComponentClassLoader;
 import org.apache.flink.runtime.rpc.AddressResolution;
 import org.apache.flink.runtime.rpc.RpcSystem;
@@ -328,8 +327,7 @@ public class AkkaRpcServiceUtils {
                     new ComponentClassLoader(
                             new URL[] {tempFile.toUri().toURL()},
                             flinkClassLoader,
-                            CoreOptions.parseParentFirstLoaderPatterns(
-                                    CoreOptions.PARENT_FIRST_LOGGING_PATTERNS, ""),
+                            PARENT_FIRST_LOGGING_PATTERNS,
                             new String[] {
                                 isShaded ? "org.apache.flink.shaded" : "org.apache.flink",
                                 "com.alibaba.flink.shuffle"
@@ -429,4 +427,13 @@ public class AkkaRpcServiceUtils {
             return rpcSystem.getMaximumMessageSizeInBytes(config);
         }
     }
+
+    private static final String[] PARENT_FIRST_LOGGING_PATTERNS =
+            new String[] {
+                "org.slf4j",
+                "org.apache.log4j",
+                "org.apache.logging",
+                "org.apache.commons.logging",
+                "ch.qos.logback"
+            };
 }
