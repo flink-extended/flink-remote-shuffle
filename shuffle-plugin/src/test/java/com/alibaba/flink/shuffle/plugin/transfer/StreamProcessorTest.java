@@ -33,11 +33,11 @@ import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus;
 
-import org.apache.flink.shaded.curator4.com.google.common.collect.Lists;
-
 import org.junit.Test;
 
 import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -59,13 +59,13 @@ public class StreamProcessorTest {
         AtomicBoolean emitted0 = new AtomicBoolean(false);
         Deque<DataInputStatus> statuses0 =
                 new ArrayDeque<>(
-                        Lists.newArrayList(
+                        Arrays.asList(
                                 DataInputStatus.MORE_AVAILABLE, DataInputStatus.END_OF_INPUT));
         StreamOneInputProcessor<?> processor0 = getOneInputProcessor(0, statuses0, emitted0, eofs);
 
         AtomicBoolean emitted1 = new AtomicBoolean(false);
         Deque<DataInputStatus> statuses1 =
-                new ArrayDeque<>(Lists.newArrayList(DataInputStatus.END_OF_INPUT));
+                new ArrayDeque<>(Collections.singletonList(DataInputStatus.END_OF_INPUT));
         StreamOneInputProcessor<?> processor1 = getOneInputProcessor(1, statuses1, emitted1, eofs);
 
         InputSelectable inputSelectable = getInputSelectableForTwoInputProcessor(eofs);
