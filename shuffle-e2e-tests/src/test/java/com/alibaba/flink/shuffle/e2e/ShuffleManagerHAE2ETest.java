@@ -31,7 +31,7 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.configuration.PipelineOptionsInternal;
 import org.apache.flink.configuration.WebOptions;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.CuratorFramework;
 
 import org.apache.commons.io.FileUtils;
 import org.junit.After;

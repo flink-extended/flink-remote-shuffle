@@ -23,7 +23,7 @@ import com.alibaba.flink.shuffle.e2e.flinkcluster.FlinkLocalCluster;
 import com.alibaba.flink.shuffle.e2e.shufflecluster.LocalShuffleCluster;
 import com.alibaba.flink.shuffle.e2e.zookeeper.ZooKeeperTestEnvironment;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.CuratorFramework;
 
 import org.apache.commons.io.FileUtils;
 import org.junit.After;

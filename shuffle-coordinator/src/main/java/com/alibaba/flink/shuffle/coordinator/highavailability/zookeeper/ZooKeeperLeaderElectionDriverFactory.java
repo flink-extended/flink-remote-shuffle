@@ -22,7 +22,7 @@ import com.alibaba.flink.shuffle.common.handler.FatalErrorHandler;
 import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderElectionDriverFactory;
 import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderElectionEventHandler;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.CuratorFramework;
 
 /**
  * {@link LeaderElectionDriverFactory} implementation for Zookeeper.

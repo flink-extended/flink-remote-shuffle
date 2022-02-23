@@ -21,7 +21,7 @@ package com.alibaba.flink.shuffle.yarn;
 import com.alibaba.flink.shuffle.core.utils.TestLogger;
 import com.alibaba.flink.shuffle.yarn.zk.ZookeeperTestServer;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.CuratorFramework;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.MiniDFSCluster;

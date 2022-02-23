@@ -26,6 +26,7 @@ import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.runtime.event.AbstractEvent;
 import org.apache.flink.runtime.io.network.api.EndOfData;
 import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
+import org.apache.flink.runtime.io.network.api.StopMode;
 import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.Buffer.DataType;
@@ -76,7 +77,7 @@ public class RemoteShuffleResultPartition extends ResultPartition {
     /** Utility to spill data to shuffle workers. */
     private final RemoteShuffleOutputGate outputGate;
 
-    /** Whether {@link #notifyEndOfData()} has been called or not. */
+    /** Whether {@link #notifyEndOfData} has been called or not. */
     private boolean endOfDataNotified;
 
     public RemoteShuffleResultPartition(
@@ -366,6 +367,11 @@ public class RemoteShuffleResultPartition extends ResultPartition {
     }
 
     @Override
+    public long getSizeOfQueuedBuffersUnsafe() {
+        return 0;
+    }
+
+    @Override
     public int getNumberOfQueuedBuffers(int targetSubpartition) {
         return 0;
     }
@@ -377,9 +383,9 @@ public class RemoteShuffleResultPartition extends ResultPartition {
     }
 
     @Override
-    public void notifyEndOfData() throws IOException {
+    public void notifyEndOfData(StopMode mode) throws IOException {
         if (!endOfDataNotified) {
-            broadcastEvent(EndOfData.INSTANCE, false);
+            broadcastEvent(new EndOfData(mode), false);
             endOfDataNotified = true;
         }
     }

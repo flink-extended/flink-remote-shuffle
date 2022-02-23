@@ -24,12 +24,12 @@ import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderInformation;
 import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderRetrievalDriver;
 import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderRetrievalEventHandler;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.api.UnhandledErrorListener;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.ChildData;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.PathChildrenCache;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.CuratorFramework;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.api.UnhandledErrorListener;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.recipes.cache.ChildData;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.recipes.cache.PathChildrenCache;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

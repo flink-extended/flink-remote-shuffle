@@ -89,6 +89,7 @@ public class WordCountITCaseTest extends BatchJobTestBase {
                                 RemoteShuffleOnYarnTestCluster.setup();
                                 return true;
                             } catch (Exception e) {
+                                e.printStackTrace();
                                 LOG.error("Failed to setup shuffle cluster on Yarn, ", e);
                                 return false;
                             }

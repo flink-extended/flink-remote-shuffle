@@ -55,10 +55,10 @@ import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.ChildData;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.NodeCache;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.NodeCacheListener;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.CuratorFramework;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.recipes.cache.ChildData;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.recipes.cache.NodeCache;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.recipes.cache.NodeCacheListener;
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
 import org.apache.flink.shaded.zookeeper3.org.apache.zookeeper.CreateMode;
@@ -159,6 +159,7 @@ public class JobForShuffleTesting {
 
         StreamExecutionEnvironment env = createRemoteEnvironment("localhost", 1337, config);
         env.setParallelism(parallelism);
+        env.setBufferTimeout(-1);
 
         TupleTypeInfo<Tuple2<Long, Long>> typeInfo =
                 new TupleTypeInfo<>(BasicTypeInfo.LONG_TYPE_INFO, BasicTypeInfo.LONG_TYPE_INFO);
@@ -373,7 +374,9 @@ public class JobForShuffleTesting {
             super.open();
             Configuration conf =
                     ZooKeeperTestUtils.createZooKeeperHAConfigForFlink(zkConnect, zkPath);
-            zkClient = ZooKeeperUtils.startCuratorFramework(conf, LogErrorHandler.INSTANCE);
+            zkClient =
+                    ZooKeeperUtils.startCuratorFramework(conf, LogErrorHandler.INSTANCE)
+                            .asCuratorFramework();
             taskIdx = getRuntimeContext().getIndexOfThisSubtask();
             attempt = getRuntimeContext().getAttemptNumber();
             final ResultPartitionID resultPartitionID;

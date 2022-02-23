@@ -37,6 +37,7 @@ import org.apache.flink.runtime.checkpoint.channel.ChannelStateWriter;
 import org.apache.flink.runtime.checkpoint.channel.InputChannelInfo;
 import org.apache.flink.runtime.checkpoint.channel.ResultSubpartitionInfo;
 import org.apache.flink.runtime.deployment.InputGateDeploymentDescriptor;
+import org.apache.flink.runtime.deployment.SubpartitionIndexRange;
 import org.apache.flink.runtime.event.AbstractEvent;
 import org.apache.flink.runtime.event.TaskEvent;
 import org.apache.flink.runtime.io.network.ConnectionID;
@@ -44,6 +45,7 @@ import org.apache.flink.runtime.io.network.LocalConnectionManager;
 import org.apache.flink.runtime.io.network.api.CheckpointBarrier;
 import org.apache.flink.runtime.io.network.api.EndOfData;
 import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
+import org.apache.flink.runtime.io.network.api.StopMode;
 import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.BufferDecompressor;
@@ -57,8 +59,10 @@ import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel
 import org.apache.flink.runtime.io.network.partition.consumer.SingleInputGate;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
+import org.apache.flink.runtime.throughput.ThroughputCalculator;
 import org.apache.flink.util.CloseableIterator;
 import org.apache.flink.util.FlinkRuntimeException;
+import org.apache.flink.util.clock.SystemClock;
 import org.apache.flink.util.function.SupplierWithException;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
@@ -157,6 +161,8 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
     /** Number of pending {@link EndOfData} events to be received. */
     private long pendingEndOfDataEvents;
 
+    private boolean shouldDrainOnEndOfData = true;
+
     public RemoteShuffleInputGate(
             String taskName,
             boolean shuffleChannels,
@@ -187,8 +193,8 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
     }
 
     private long initShuffleReadClients(int bufferSize, boolean shuffleChannels) {
-        int startSubIdx = gateDescriptor.getConsumedSubpartitionIndex();
-        int endSubIdx = gateDescriptor.getConsumedSubpartitionIndex();
+        int startSubIdx = gateDescriptor.getConsumedSubpartitionIndexRange().getStartIndex();
+        int endSubIdx = gateDescriptor.getConsumedSubpartitionIndexRange().getEndIndex();
         checkState(endSubIdx >= startSubIdx);
         int numSubpartitionsPerChannel = endSubIdx - startSubIdx + 1;
         long numUnconsumedSubpartitions = 0;
@@ -584,8 +590,9 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
                 }
             }
         } else if (event.getClass() == EndOfData.class) {
-            CommonUtils.checkState(!hasReceivedEndOfData());
+            CommonUtils.checkState(pendingEndOfDataEvents > 0, "Too many EndOfData event.");
             --pendingEndOfDataEvents;
+            shouldDrainOnEndOfData &= ((EndOfData) event).getStopMode() == StopMode.DRAIN;
         }
 
         return Optional.of(
@@ -628,22 +635,25 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
     }
 
     @Override
+    public void triggerDebloating() {
+        // do-nothing.
+    }
+
+    @Override
     public List<InputChannelInfo> getUnfinishedChannels() {
         return Collections.emptyList();
     }
 
     @Override
-    public int getBuffersInUseCount() {
-        return 0;
+    public EndOfDataStatus hasReceivedEndOfData() {
+        if (pendingEndOfDataEvents > 0) {
+            return EndOfDataStatus.NOT_END_OF_DATA;
+        } else if (shouldDrainOnEndOfData) {
+            return EndOfDataStatus.DRAINED;
+        } else {
+            return EndOfDataStatus.STOPPED;
+        }
     }
-
-    @Override
-    public boolean hasReceivedEndOfData() {
-        return pendingEndOfDataEvents <= 0;
-    }
-
-    @Override
-    public void announceBufferSize(int bufferSize) {}
 
     @Override
     public void finishReadRecoveredState() {
@@ -689,15 +699,18 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
                             gateIndex,
                             new IntermediateDataSetID(),
                             ResultPartitionType.BLOCKING,
-                            0,
+                            new SubpartitionIndexRange(0, 0),
                             1,
                             (a, b, c) -> {},
                             () -> null,
                             null,
                             new FakedMemorySegmentProvider(),
-                            0),
+                            0,
+                            new ThroughputCalculator(SystemClock.getInstance()),
+                            null),
                     channelIndex,
                     new ResultPartitionID(),
+                    0,
                     new ConnectionID(new InetSocketAddress("", 0), 0),
                     new LocalConnectionManager(),
                     0,
@@ -712,12 +725,12 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
     /** Accommodation for the incompleteness of Flink pluggable shuffle service. */
     private static class FakedMemorySegmentProvider implements MemorySegmentProvider {
         @Override
-        public Collection<MemorySegment> requestMemorySegments(int i) {
+        public Collection<MemorySegment> requestUnpooledMemorySegments(int i) {
             return null;
         }
 
         @Override
-        public void recycleMemorySegments(Collection<MemorySegment> collection) {}
+        public void recycleUnpooledMemorySegments(Collection<MemorySegment> collection) {}
     }
 
     /** Accommodation for the incompleteness of Flink pluggable shuffle service. */

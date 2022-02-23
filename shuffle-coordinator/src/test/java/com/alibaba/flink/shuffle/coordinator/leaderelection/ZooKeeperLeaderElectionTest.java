@@ -36,11 +36,11 @@ import com.alibaba.flink.shuffle.core.config.ClusterOptions;
 import com.alibaba.flink.shuffle.core.config.HighAvailabilityOptions;
 import com.alibaba.flink.shuffle.core.utils.TestLogger;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.api.CreateBuilder;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.ChildData;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.NodeCache;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.NodeCacheListener;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.CuratorFramework;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.api.CreateBuilder;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.recipes.cache.ChildData;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.recipes.cache.NodeCache;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.recipes.cache.NodeCacheListener;
 import org.apache.flink.shaded.zookeeper3.org.apache.zookeeper.CreateMode;
 import org.apache.flink.shaded.zookeeper3.org.apache.zookeeper.KeeperException;
 

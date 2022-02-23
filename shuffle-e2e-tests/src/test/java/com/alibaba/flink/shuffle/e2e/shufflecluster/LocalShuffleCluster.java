@@ -54,7 +54,7 @@ import com.alibaba.flink.shuffle.transfer.AbstractNettyTest;
 
 import org.apache.flink.api.common.time.Deadline;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.CuratorFramework;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

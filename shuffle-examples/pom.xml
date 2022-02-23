@@ -30,7 +30,7 @@ under the License.
 	<dependencies>
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-streaming-java_${scala.binary.version}</artifactId>
+			<artifactId>flink-streaming-java</artifactId>
 			<version>${flink.version}</version>
 			<scope>provided</scope>
 		</dependency>
@@ -60,13 +60,16 @@ under the License.
 
 							<archive>
 								<manifestEntries>
-									<program-class>com.alibaba.flink.shuffle.examples.BatchJobDemo</program-class>
+									<program-class>com.alibaba.flink.shuffle.examples.BatchJobDemo
+									</program-class>
 								</manifestEntries>
 							</archive>
 
 							<includes>
-								<include>com/alibaba/flink/shuffle/examples/BatchJobDemo.class</include>
-								<include>com/alibaba/flink/shuffle/examples/BatchJobDemo$*.class</include>
+								<include>com/alibaba/flink/shuffle/examples/BatchJobDemo.class
+								</include>
+								<include>com/alibaba/flink/shuffle/examples/BatchJobDemo$*.class
+								</include>
 							</includes>
 						</configuration>
 					</execution>
@@ -87,7 +90,9 @@ under the License.
 						</goals>
 						<configuration>
 							<target>
-								<copy file="${project.basedir}/target/shuffle-examples-${project.version}-BatchJobDemo.jar" tofile="${project.basedir}/target/BatchJobDemo.jar" />
+								<copy
+									file="${project.basedir}/target/shuffle-examples-${project.version}-BatchJobDemo.jar"
+									tofile="${project.basedir}/target/BatchJobDemo.jar"/>
 							</target>
 						</configuration>
 					</execution>

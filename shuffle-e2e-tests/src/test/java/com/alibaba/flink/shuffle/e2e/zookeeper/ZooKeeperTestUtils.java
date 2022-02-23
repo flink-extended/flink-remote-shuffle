@@ -27,8 +27,8 @@ import org.apache.flink.configuration.AkkaOptions;
 import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.runtime.jobmanager.HighAvailabilityMode;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-import org.apache.flink.shaded.curator4.org.apache.curator.utils.ZKPaths;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.CuratorFramework;
+import org.apache.flink.shaded.curator5.org.apache.curator.utils.ZKPaths;
 import org.apache.flink.shaded.zookeeper3.org.apache.zookeeper.KeeperException;
 
 import org.slf4j.Logger;
@@ -129,10 +129,11 @@ public class ZooKeeperTestUtils {
         return config;
     }
 
-    public static CuratorFramework createZKClientForFlink(
-            org.apache.flink.configuration.Configuration configuration) {
+    public static org.apache.flink.shaded.curator5.org.apache.curator.framework.CuratorFramework
+            createZKClientForFlink(org.apache.flink.configuration.Configuration configuration) {
         return org.apache.flink.runtime.util.ZooKeeperUtils.startCuratorFramework(
-                configuration, LogErrorHandler.INSTANCE);
+                        configuration, LogErrorHandler.INSTANCE)
+                .asCuratorFramework();
     }
 
     public static CuratorFramework createZKClientForRemoteShuffle(Configuration configuration) {

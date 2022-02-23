@@ -29,10 +29,10 @@ import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderRetrievalDri
 import com.alibaba.flink.shuffle.core.config.ClusterOptions;
 import com.alibaba.flink.shuffle.core.config.HighAvailabilityOptions;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.imps.DefaultACLProvider;
-import org.apache.flink.shaded.curator4.org.apache.curator.retry.ExponentialBackoffRetry;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.CuratorFramework;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.flink.shaded.curator5.org.apache.curator.framework.imps.DefaultACLProvider;
+import org.apache.flink.shaded.curator5.org.apache.curator.retry.ExponentialBackoffRetry;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
