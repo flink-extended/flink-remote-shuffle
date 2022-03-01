@@ -60,6 +60,9 @@ public class PartitionSortedBuffer implements SortBuffer {
      */
     private static final int INDEX_ENTRY_SIZE = 4 + 4 + 8;
 
+    /** A flag to indicate the read process is finished. */
+    private static final int READ_CHANNEL_FINISHED = 1;
+
     private final Object lock;
     /** A buffer pool to request memory segments from. */
     private final BufferPool bufferPool;
@@ -89,6 +92,14 @@ public class PartitionSortedBuffer implements SortBuffer {
     private long numTotalBytesRead;
     /** Whether this sort buffer is finished. One can only read a finished sort buffer. */
     private boolean isFinished;
+    /** Total number of bytes for each sub partition. */
+    private final long[] numSubpartitionBytes;
+    /** Number of bytes already read from this sort buffer for each subpartition. */
+    private final long[] numSubpartitionBytesRead;
+    /** Whether this sort buffer for each subpartition is finished. */
+    private final int[] isChannelReadFinish;
+    /** Total number of events for each sub partition. */
+    private final int[] numEvents;
 
     // ---------------------------------------------------------------------------------------------
     // For writing
@@ -106,6 +117,10 @@ public class PartitionSortedBuffer implements SortBuffer {
     private int writeSegmentOffset;
     /** Index entry address of the current record or event to be read. */
     private long readIndexEntryAddress;
+    /** Index entry address of the current record or event to be read for each subpartition. */
+    private final long[] channelReadIndexAddress;
+    /** Record bytes remaining after last copy for each subpartition. */
+    private final int[] channelRemainingBytes;
 
     /** Record bytes remaining after last copy, which must be read first in next copy. */
     private int recordRemainingBytes;
@@ -125,10 +140,22 @@ public class PartitionSortedBuffer implements SortBuffer {
         this.bufferSize = bufferSize;
         this.firstIndexEntryAddresses = new long[numSubpartitions];
         this.lastIndexEntryAddresses = new long[numSubpartitions];
+        this.numSubpartitionBytes = new long[numSubpartitions];
+        this.numSubpartitionBytesRead = new long[numSubpartitions];
+        this.channelReadIndexAddress = new long[numSubpartitions];
+        this.channelRemainingBytes = new int[numSubpartitions];
+        this.isChannelReadFinish = new int[numSubpartitions];
+        this.numEvents = new int[numSubpartitions];
 
         // initialized with -1 means the corresponding channel has no data.
         Arrays.fill(firstIndexEntryAddresses, -1L);
         Arrays.fill(lastIndexEntryAddresses, -1L);
+        Arrays.fill(numSubpartitionBytes, 0L);
+        Arrays.fill(numSubpartitionBytesRead, 0L);
+        Arrays.fill(channelReadIndexAddress, -1L);
+        Arrays.fill(channelRemainingBytes, 0);
+        Arrays.fill(isChannelReadFinish, 0);
+        Arrays.fill(numEvents, 0);
 
         this.subpartitionReadOrder = new int[numSubpartitions];
         if (customReadOrder != null) {
@@ -161,6 +188,7 @@ public class PartitionSortedBuffer implements SortBuffer {
 
         ++numTotalRecords;
         numTotalBytes += totalBytes;
+        numSubpartitionBytes[targetChannel] += totalBytes;
 
         return true;
     }
@@ -188,6 +216,9 @@ public class PartitionSortedBuffer implements SortBuffer {
 
         // move the writer position forward to write the corresponding record
         updateWriteSegmentIndexAndOffset(INDEX_ENTRY_SIZE);
+        if (!dataType.isBuffer()) {
+            numEvents[channelIndex]++;
+        }
     }
 
     private void writeRecord(ByteBuffer source) {
@@ -283,6 +314,10 @@ public class PartitionSortedBuffer implements SortBuffer {
             DataType bufferDataType = DataType.DATA_BUFFER;
             int channelIndex = subpartitionReadOrder[readOrderIndex];
 
+            checkState(
+                    numSubpartitionBytesRead[channelIndex] < numSubpartitionBytes[channelIndex],
+                    "Bug, read too much data in sort buffer");
+
             do {
                 int sourceSegmentIndex = getSegmentIndexFromPointer(readIndexEntryAddress);
                 int sourceSegmentOffset = getSegmentOffsetFromPointer(readIndexEntryAddress);
@@ -320,6 +355,10 @@ public class PartitionSortedBuffer implements SortBuffer {
                 if (recordRemainingBytes == 0) {
                     // move to next channel if the current channel has been finished
                     if (readIndexEntryAddress == lastIndexEntryAddresses[channelIndex]) {
+                        checkState(
+                                numSubpartitionBytesRead[channelIndex] + numBytesCopied
+                                        == numSubpartitionBytes[channelIndex],
+                                "Read un-completely.");
                         updateReadChannelAndIndexEntryAddress();
                         break;
                     }
@@ -328,10 +367,179 @@ public class PartitionSortedBuffer implements SortBuffer {
             } while (numBytesCopied < target.size() - offset && bufferDataType.isBuffer());
 
             numTotalBytesRead += numBytesCopied;
+            numSubpartitionBytesRead[channelIndex] += numBytesCopied;
             Buffer buffer =
                     new NetworkBuffer(target, recycler, bufferDataType, numBytesCopied + offset);
             return new BufferWithChannel(buffer, channelIndex);
         }
+    }
+
+    public int getSubpartitionReadOrderIndex(int channelIndex) {
+        return subpartitionReadOrder[channelIndex];
+    }
+
+    @Nullable
+    @Override
+    public BufferWithChannel copyChannelBuffersIntoSegment(
+            MemorySegment target, int channelIndex, BufferRecycler recycler, int offset) {
+        synchronized (lock) {
+            checkState(hasRemaining(), "No data remaining.");
+            checkState(isFinished, "Should finish the sort buffer first before coping any data.");
+            checkState(!isReleased, "Sort buffer is already released.");
+            checkState(channelIndex >= 0, "Wrong channel index.");
+            int targetChannelIndex = subpartitionReadOrder[channelIndex];
+
+            int numBytesCopied = 0;
+            DataType bufferDataType = DataType.DATA_BUFFER;
+            if (channelReadIndexAddress[channelIndex] < 0 || hasChannelReadFinish(channelIndex)) {
+                recycler.recycle(target);
+                return null;
+            }
+
+            checkState(
+                    numSubpartitionBytesRead[targetChannelIndex]
+                            < numSubpartitionBytes[targetChannelIndex],
+                    "Bug: read too much data from sort buffer.");
+
+            do {
+                int sourceSegmentIndex =
+                        getSegmentIndexFromPointer(channelReadIndexAddress[channelIndex]);
+                int sourceSegmentOffset =
+                        getSegmentOffsetFromPointer(channelReadIndexAddress[channelIndex]);
+                MemorySegment sourceSegment = buffers.get(sourceSegmentIndex);
+
+                long lengthAndDataType = sourceSegment.getLong(sourceSegmentOffset);
+                int length = getSegmentIndexFromPointer(lengthAndDataType);
+                DataType dataType =
+                        DataType.values()[getSegmentOffsetFromPointer(lengthAndDataType)];
+
+                // return the data read directly if the next to read is an event
+                if (dataType.isEvent() && numBytesCopied > 0) {
+                    break;
+                }
+                bufferDataType = dataType;
+
+                // get the next index entry address and move the read position forward
+                long nextReadIndexEntryAddress = sourceSegment.getLong(sourceSegmentOffset + 8);
+                sourceSegmentOffset += INDEX_ENTRY_SIZE;
+
+                // throws if the event is too big to be accommodated by a buffer.
+                if (bufferDataType.isEvent() && target.size() < length) {
+                    throw new FlinkRuntimeException(
+                            "Event is too big to be accommodated by a buffer");
+                }
+
+                numBytesCopied +=
+                        copyChannelRecordOrEvent(
+                                target,
+                                numBytesCopied + offset,
+                                sourceSegmentIndex,
+                                sourceSegmentOffset,
+                                length,
+                                channelIndex);
+
+                if (isChannelReadFinished(
+                        channelIndex,
+                        targetChannelIndex,
+                        numBytesCopied,
+                        nextReadIndexEntryAddress)) {
+                    break;
+                }
+            } while (numBytesCopied < target.size() - offset && bufferDataType.isBuffer());
+
+            numSubpartitionBytesRead[targetChannelIndex] += numBytesCopied;
+            numTotalBytesRead += numBytesCopied;
+            Buffer buffer =
+                    new NetworkBuffer(target, recycler, bufferDataType, numBytesCopied + offset);
+            return new BufferWithChannel(buffer, targetChannelIndex);
+        }
+    }
+
+    private boolean isChannelReadFinished(
+            int channelIndex,
+            int targetChannelIndex,
+            int numBytesCopied,
+            long nextReadIndexEntryAddress) {
+        if (channelRemainingBytes[channelIndex] == 0) {
+            if (channelReadIndexAddress[channelIndex]
+                    == lastIndexEntryAddresses[targetChannelIndex]) {
+                checkState(
+                        numSubpartitionBytesRead[targetChannelIndex] + numBytesCopied
+                                == numSubpartitionBytes[targetChannelIndex],
+                        "Read un-completely.");
+                isChannelReadFinish[channelIndex] = READ_CHANNEL_FINISHED;
+                return true;
+            }
+            channelReadIndexAddress[channelIndex] = nextReadIndexEntryAddress;
+        }
+        return false;
+    }
+
+    private boolean hasChannelReadFinish(int channelIndex) {
+        return isChannelReadFinish[channelIndex] == READ_CHANNEL_FINISHED;
+    }
+
+    private int copyChannelRecordOrEvent(
+            MemorySegment targetSegment,
+            int targetSegmentOffset,
+            int sourceSegmentIndex,
+            int sourceSegmentOffset,
+            int recordLength,
+            int channelIndex) {
+        if (channelRemainingBytes[channelIndex] > 0) {
+            // skip the data already read if there is remaining partial record after the previous
+            // copy
+            long position =
+                    (long) sourceSegmentOffset
+                            + (recordLength - channelRemainingBytes[channelIndex]);
+            sourceSegmentIndex += (position / bufferSize);
+            sourceSegmentOffset = (int) (position % bufferSize);
+        } else {
+            channelRemainingBytes[channelIndex] = recordLength;
+        }
+
+        int targetSegmentSize = targetSegment.size();
+        int numBytesToCopy =
+                Math.min(
+                        targetSegmentSize - targetSegmentOffset,
+                        channelRemainingBytes[channelIndex]);
+        do {
+            // move to next data buffer if all data of the current buffer has been copied
+            if (sourceSegmentOffset == bufferSize) {
+                ++sourceSegmentIndex;
+                sourceSegmentOffset = 0;
+            }
+
+            int numBytes =
+                    copyToTargetSegment(
+                            targetSegment,
+                            targetSegmentOffset,
+                            sourceSegmentIndex,
+                            sourceSegmentOffset,
+                            targetSegmentSize,
+                            channelRemainingBytes[channelIndex]);
+
+            channelRemainingBytes[channelIndex] -= numBytes;
+            targetSegmentOffset += numBytes;
+            sourceSegmentOffset += numBytes;
+        } while (channelRemainingBytes[channelIndex] > 0
+                && targetSegmentOffset < targetSegmentSize);
+
+        return numBytesToCopy;
+    }
+
+    private int copyToTargetSegment(
+            MemorySegment targetSegment,
+            int targetSegmentOffset,
+            int sourceSegmentIndex,
+            int sourceSegmentOffset,
+            int targetSegmentSize,
+            int numRemainingBytes) {
+        int sourceRemainingBytes = Math.min(bufferSize - sourceSegmentOffset, numRemainingBytes);
+        int numBytes = Math.min(targetSegmentSize - targetSegmentOffset, sourceRemainingBytes);
+        MemorySegment sourceSegment = buffers.get(sourceSegmentIndex);
+        sourceSegment.copyTo(sourceSegmentOffset, targetSegment, targetSegmentOffset, numBytes);
+        return numBytes;
     }
 
     private int copyRecordOrEvent(
@@ -360,11 +568,14 @@ public class PartitionSortedBuffer implements SortBuffer {
                 sourceSegmentOffset = 0;
             }
 
-            int sourceRemainingBytes =
-                    Math.min(bufferSize - sourceSegmentOffset, recordRemainingBytes);
-            int numBytes = Math.min(targetSegmentSize - targetSegmentOffset, sourceRemainingBytes);
-            MemorySegment sourceSegment = buffers.get(sourceSegmentIndex);
-            sourceSegment.copyTo(sourceSegmentOffset, targetSegment, targetSegmentOffset, numBytes);
+            int numBytes =
+                    copyToTargetSegment(
+                            targetSegment,
+                            targetSegmentOffset,
+                            sourceSegmentIndex,
+                            sourceSegmentOffset,
+                            targetSegmentSize,
+                            recordRemainingBytes);
 
             recordRemainingBytes -= numBytes;
             targetSegmentOffset += numBytes;
@@ -381,6 +592,15 @@ public class PartitionSortedBuffer implements SortBuffer {
             if ((readIndexEntryAddress = firstIndexEntryAddresses[channelIndex]) >= 0) {
                 break;
             }
+        }
+    }
+
+    private void initChannelReadIndexEntryAddresses() {
+        int channelIndex = 0;
+        while (channelIndex < firstIndexEntryAddresses.length) {
+            channelReadIndexAddress[channelIndex] =
+                    firstIndexEntryAddresses[subpartitionReadOrder[channelIndex]];
+            channelIndex++;
         }
     }
 
@@ -403,6 +623,22 @@ public class PartitionSortedBuffer implements SortBuffer {
     }
 
     @Override
+    public long numSubpartitionBytes(int targetSubpartition) {
+        return numSubpartitionBytes[subpartitionReadOrder[targetSubpartition]];
+    }
+
+    @Override
+    public int numEvents(int targetSubpartition) {
+        return numEvents[targetSubpartition];
+    }
+
+    @Override
+    public boolean hasSubpartitionReadFinish(int targetSubpartition) {
+        return numSubpartitionBytesRead[targetSubpartition]
+                == numSubpartitionBytes[targetSubpartition];
+    }
+
+    @Override
     public boolean hasRemaining() {
         return numTotalBytesRead < numTotalBytes;
     }
@@ -417,6 +653,7 @@ public class PartitionSortedBuffer implements SortBuffer {
 
         // prepare for reading
         updateReadChannelAndIndexEntryAddress();
+        initChannelReadIndexEntryAddresses();
     }
 
     @Override
@@ -441,6 +678,7 @@ public class PartitionSortedBuffer implements SortBuffer {
 
             numTotalBytes = 0;
             numTotalRecords = 0;
+            Arrays.fill(numSubpartitionBytes, 0L);
         }
     }
 
