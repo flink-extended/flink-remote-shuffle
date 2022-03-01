@@ -33,6 +33,7 @@ import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderElectionServ
 import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderInformation;
 import com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.AssignmentTracker;
 import com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.ChangedWorkerStatus;
+import com.alibaba.flink.shuffle.coordinator.metrics.ClusterMetricsUtil;
 import com.alibaba.flink.shuffle.coordinator.registration.RegistrationResponse;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerGateway;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerMetrics;
@@ -47,6 +48,7 @@ import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcService;
 import com.alibaba.flink.shuffle.rpc.message.Acknowledge;
 import com.alibaba.flink.shuffle.rpc.utils.AkkaRpcServiceUtils;
 
+import com.alibaba.metrics.Meter;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -128,6 +130,9 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
     private final Map<InstanceID, CompletableFuture<ShuffleWorkerGateway>>
             shuffleWorkerGatewayFutures;
 
+    /** Metric for shuffle resource request throughput. */
+    private final Meter resourceRequestThroughput;
+
     private long targetWorkStatusSyncTimeMillis = 0;
 
     private boolean firstLeaderShipGrant = true;
@@ -161,6 +166,7 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
 
         this.shuffleWorkers = new HashMap<>();
         this.shuffleWorkerGatewayFutures = new HashMap<>();
+        this.resourceRequestThroughput = ClusterMetricsUtil.registerResourceRequestThroughput();
     }
 
     @Override
@@ -363,6 +369,7 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
             int numberOfConsumers,
             String dataPartitionFactoryName,
             String taskLocation) {
+        resourceRequestThroughput.mark();
         try {
             checkInstanceIdConsistent(jobID, clientID, "Allocate shuffle resource");
         } catch (Exception e) {

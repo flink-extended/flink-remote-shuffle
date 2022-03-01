@@ -27,6 +27,7 @@ import com.alibaba.flink.shuffle.core.memory.BufferDispatcher;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionMeta;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionReadingView;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWritingView;
+import com.alibaba.flink.shuffle.core.storage.DataStoreStatistics;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
 import com.alibaba.flink.shuffle.core.storage.ReadingViewContext;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
@@ -73,8 +74,11 @@ public class EmptyPartitionedDataStore implements PartitionedDataStore {
     public void releaseDataByJobID(JobID jobID, @Nullable Throwable throwable) {}
 
     @Override
-    public long updateUsedStorageSpace() {
-        return 0;
+    public void updateUsedStorageSpace() {}
+
+    @Override
+    public DataStoreStatistics getDataStoreStatistics() {
+        return DataStoreStatistics.EMPTY_DATA_STORE_STATISTICS;
     }
 
     @Override

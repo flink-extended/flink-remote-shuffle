@@ -43,6 +43,7 @@ import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandler;
 import org.apache.flink.shaded.netty4.io.netty.channel.SimpleChannelInboundHandler;
 import org.apache.flink.shaded.netty4.io.netty.handler.timeout.IdleStateEvent;
 
+import com.alibaba.metrics.Counter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,6 +78,8 @@ public class WriteServerHandler extends SimpleChannelInboundHandler<TransferMess
     /** If connection closed. */
     private boolean connectionClosed;
 
+    private final Counter numWritingConnections;
+
     /**
      * @param dataStore Implementation of storage layer.
      * @param heartbeatInterval Heartbeat interval in seconds.
@@ -86,6 +89,7 @@ public class WriteServerHandler extends SimpleChannelInboundHandler<TransferMess
         this.currentChannelID = null;
         this.heartbeatInterval = heartbeatInterval;
         this.connectionClosed = false;
+        this.numWritingConnections = NetworkMetricsUtil.registerNumWritingConnections();
     }
 
     @Override
@@ -105,13 +109,13 @@ public class WriteServerHandler extends SimpleChannelInboundHandler<TransferMess
     @Override
     public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
         super.channelRegistered(ctx);
-        NetworkMetrics.numWritingConnections().inc();
+        numWritingConnections.inc();
     }
 
     @Override
     public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
         super.channelUnregistered(ctx);
-        NetworkMetrics.numWritingConnections().dec();
+        numWritingConnections.dec();
     }
 
     @Override

@@ -26,6 +26,7 @@ import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFutureListener;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelHandlerContext;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandlerAdapter;
 
+import com.alibaba.metrics.Meter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,6 +45,8 @@ public class DataSender extends ChannelInboundHandlerAdapter {
 
     private final ChannelFutureListenerImpl channelFutureListener;
 
+    private final Meter readingThroughputBytes;
+
     public DataSender(ReadingService readingService) {
         this.readingService = readingService;
         this.channelFutureListener =
@@ -54,6 +57,7 @@ public class DataSender extends ChannelInboundHandlerAdapter {
                             }
                             ChannelFutureListener.CLOSE.operationComplete(channelFuture);
                         });
+        this.readingThroughputBytes = NetworkMetricsUtil.registerReadingThroughputBytes();
     }
 
     @Override
@@ -73,7 +77,7 @@ public class DataSender extends ChannelInboundHandlerAdapter {
 
                     Buffer buffer = bufferWithBacklog.getBuffer();
                     int backlog = (int) bufferWithBacklog.getBacklog();
-                    NetworkMetrics.numBytesReadingThroughput().mark(buffer.readableBytes());
+                    readingThroughputBytes.mark(buffer.readableBytes());
                     TransferMessage.ReadData readData =
                             new TransferMessage.ReadData(
                                     currentProtocolVersion(),

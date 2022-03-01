@@ -95,11 +95,8 @@ public interface DataPartition {
     /** Returns a boolean flag indicating whether this data partition is consumable or not. */
     boolean isConsumable();
 
-    /**
-     * Returns the total length of this data partition in bytes, including data files and index
-     * files.
-     */
-    long totalBytes();
+    /** Returns the statistics information of this data partition. */
+    DataPartitionStatistics getDataPartitionStatistics();
 
     /**
      * Type definition of {@link DataPartition}. All {@link DataPartition}s must be either of type

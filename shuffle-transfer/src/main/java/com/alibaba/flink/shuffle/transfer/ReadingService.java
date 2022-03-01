@@ -28,6 +28,7 @@ import com.alibaba.flink.shuffle.core.storage.ReadingViewContext;
 
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandler;
 
+import com.alibaba.metrics.Counter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,9 +52,12 @@ public class ReadingService {
 
     private final Map<ChannelID, DataViewReader> servingChannels;
 
+    private final Counter numReadingFlows;
+
     public ReadingService(PartitionedDataStore datastore) {
         this.dataStore = datastore;
         this.servingChannels = new HashMap<>();
+        this.numReadingFlows = NetworkMetricsUtil.registerNumReadingFlows();
     }
 
     public void handshake(
@@ -93,7 +97,7 @@ public class ReadingService {
                 (System.nanoTime() - startTime) / 1000_000);
         dataViewReader.setReadingView(readingView);
         servingChannels.put(channelID, dataViewReader);
-        NetworkMetrics.numReadingFlows().inc();
+        numReadingFlows.inc();
     }
 
     public void addCredit(ChannelID channelID, int credit) {
@@ -110,7 +114,7 @@ public class ReadingService {
 
     public void readFinish(ChannelID channelID) {
         servingChannels.remove(channelID);
-        NetworkMetrics.numReadingFlows().dec();
+        numReadingFlows.dec();
     }
 
     public int getNumServingChannels() {
@@ -125,7 +129,7 @@ public class ReadingService {
                     new Exception(
                             String.format("(channel: %s) Channel closed abnormally", channelID)));
             servingChannels.remove(channelID);
-            NetworkMetrics.numReadingFlows().dec();
+            numReadingFlows.dec();
         }
     }
 
@@ -139,14 +143,14 @@ public class ReadingService {
             for (DataViewReader dataViewReader : servingChannels.values()) {
                 CommonUtils.runQuietly(() -> dataViewReader.getReadingView().onError(cause), true);
             }
-            NetworkMetrics.numReadingFlows().dec(getNumServingChannels());
+            numReadingFlows.dec(getNumServingChannels());
             servingChannels.clear();
         } else if (servingChannels.containsKey(channelID)) {
             LOG.error("Release channel -- {} on error.", channelID, cause);
             CommonUtils.runQuietly(
                     () -> servingChannels.get(channelID).getReadingView().onError(cause), true);
             servingChannels.remove(channelID);
-            NetworkMetrics.numReadingFlows().dec();
+            numReadingFlows.dec();
         }
     }
 }

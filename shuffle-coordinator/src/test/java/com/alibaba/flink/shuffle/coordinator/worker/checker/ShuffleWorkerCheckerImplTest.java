@@ -25,6 +25,7 @@ import com.alibaba.flink.shuffle.core.config.MemoryOptions;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.listener.PartitionStateListener;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionMeta;
+import com.alibaba.flink.shuffle.core.storage.DataStoreStatistics;
 import com.alibaba.flink.shuffle.core.storage.StorageType;
 import com.alibaba.flink.shuffle.storage.datastore.PartitionedDataStoreImpl;
 
@@ -66,7 +67,9 @@ public class ShuffleWorkerCheckerImplTest {
                 new ShuffleWorkerCheckerImpl(new Configuration(), new EmptyPartitionedDataStore());
         assertEquals(0, workerChecker.getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
         assertEquals(0, workerChecker.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes());
-        assertEquals(0, workerChecker.getNumTotalPartitionFileBytes());
+        assertEquals(
+                DataStoreStatistics.EMPTY_DATA_STORE_STATISTICS,
+                workerChecker.getDataStoreStatistics());
     }
 
     @Test
@@ -75,7 +78,9 @@ public class ShuffleWorkerCheckerImplTest {
                 new ShuffleWorkerCheckerImpl(new Configuration(), dataStore);
         assertTrue(workerChecker.getStorageSpaceInfo().getHddMaxFreeSpaceBytes() > 0);
         assertEquals(0, workerChecker.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes());
-        assertEquals(0, workerChecker.getNumTotalPartitionFileBytes());
+        assertEquals(
+                DataStoreStatistics.EMPTY_DATA_STORE_STATISTICS,
+                workerChecker.getDataStoreStatistics());
     }
 
     @Test
@@ -89,7 +94,9 @@ public class ShuffleWorkerCheckerImplTest {
                 new ShuffleWorkerCheckerImpl(new Configuration(), dataStore);
         assertEquals(0, workerChecker.getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
         assertTrue(workerChecker.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes() > 0);
-        assertEquals(0, workerChecker.getNumTotalPartitionFileBytes());
+        assertEquals(
+                DataStoreStatistics.EMPTY_DATA_STORE_STATISTICS,
+                workerChecker.getDataStoreStatistics());
     }
 
     @Test

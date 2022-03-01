@@ -40,18 +40,19 @@ import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionMeta;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionReader;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionReadingView;
+import com.alibaba.flink.shuffle.core.storage.DataPartitionStatistics;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWriter;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWritingView;
 import com.alibaba.flink.shuffle.core.storage.DataSet;
+import com.alibaba.flink.shuffle.core.storage.DataStoreStatistics;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
 import com.alibaba.flink.shuffle.core.storage.ReadingViewContext;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
 import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 import com.alibaba.flink.shuffle.core.storage.WritingViewContext;
-import com.alibaba.flink.shuffle.storage.StorageMetrics;
+import com.alibaba.flink.shuffle.storage.StorageMetricsUtil;
 import com.alibaba.flink.shuffle.storage.utils.DataPartitionUtils;
 
-import com.alibaba.metrics.Counter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,6 +67,7 @@ import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 
@@ -106,10 +108,8 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
      * Executor pool from where to allocate single thread executors for data partition event
      * processing.
      */
-    private final HashMap<StorageMeta, SingleThreadExecutorPool> executorPools = new HashMap<>();
-
-    /** Number of data partitions stored in the {@link PartitionedDataStore} currently. */
-    private final Counter numDataPartitions = StorageMetrics.registerCounterForNumDataPartitions();
+    private final Map<StorageMeta, SingleThreadExecutorPool> executorPools =
+            new ConcurrentHashMap<>();
 
     /** Whether this data store has been shut down or not. */
     @GuardedBy("lock")
@@ -125,8 +125,8 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
         this.dataSets = new HashMap<>();
         this.dataSetsByJob = new HashMap<>();
 
-        this.writingBufferDispatcher = createWritingBufferManager(configuration);
-        this.readingBufferDispatcher = createReadingBufferManager(configuration);
+        this.writingBufferDispatcher = createWritingBufferDispatcher(configuration);
+        this.readingBufferDispatcher = createReadingBufferDispatcher(configuration);
 
         ServiceLoader<DataPartitionFactory> serviceLoader =
                 ServiceLoader.load(DataPartitionFactory.class);
@@ -148,29 +148,42 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
             CommonUtils.checkState(
                     !partitionFactories.isEmpty(), "No valid partition factory found.");
         }
+        StorageMetricsUtil.registerTotalNumExecutors(this::numTotalExecutors);
     }
 
-    private BufferDispatcher createWritingBufferManager(Configuration configuration) {
+    private int numTotalExecutors() {
+        int numTotalExecutors = 0;
+        for (SingleThreadExecutorPool executorPool : executorPools.values()) {
+            numTotalExecutors += executorPool.getNumExecutors();
+        }
+        return numTotalExecutors;
+    }
+
+    private BufferDispatcher createWritingBufferDispatcher(Configuration configuration) {
         BufferDispatcher ret =
-                createBufferManager(
+                createBufferDispatcher(
                         configuration,
                         MemoryOptions.MEMORY_SIZE_FOR_DATA_WRITING,
                         "WRITING BUFFER POOL");
-        StorageMetrics.registerGaugeForNumAvailableWritingBuffers(ret::numAvailableBuffers);
+        StorageMetricsUtil.registerNumAvailableWritingBuffers(ret::numAvailableBuffers);
+        StorageMetricsUtil.registerTotalNumWritingBuffers(ret::numTotalBuffers);
+        StorageMetricsUtil.registerTimeWaitingWritingBuffers(ret::getLastBufferWaitingTime);
         return ret;
     }
 
-    private BufferDispatcher createReadingBufferManager(Configuration configuration) {
+    private BufferDispatcher createReadingBufferDispatcher(Configuration configuration) {
         BufferDispatcher ret =
-                createBufferManager(
+                createBufferDispatcher(
                         configuration,
                         MemoryOptions.MEMORY_SIZE_FOR_DATA_READING,
                         "READING BUFFER POOL");
-        StorageMetrics.registerGaugeForNumAvailableReadingBuffers(ret::numAvailableBuffers);
+        StorageMetricsUtil.registerNumAvailableReadingBuffers(ret::numAvailableBuffers);
+        StorageMetricsUtil.registerTotalNumReadingBuffers(ret::numTotalBuffers);
+        StorageMetricsUtil.registerTimeWaitingReadingBuffers(ret::getLastBufferWaitingTime);
         return ret;
     }
 
-    private BufferDispatcher createBufferManager(
+    private BufferDispatcher createBufferDispatcher(
             Configuration configuration,
             ConfigOption<MemorySize> memorySizeOption,
             String bufferManagerName) {
@@ -395,13 +408,8 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
             DataSetID dataSetID = partitionMeta.getDataSetID();
             DataSet dataSet = dataSets.get(dataSetID);
 
-            DataPartition dataPartition = null;
             if (dataSet != null) {
-                dataPartition = dataSet.removeDataPartition(partitionMeta.getDataPartitionID());
-            }
-
-            if (dataPartition != null) {
-                numDataPartitions.dec();
+                dataSet.removeDataPartition(partitionMeta.getDataPartitionID());
             }
 
             Set<DataSetID> dataSetIDS = null;
@@ -466,7 +474,6 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
                     dataSetsByJob.computeIfAbsent(
                             partitionMeta.getJobID(), (ignored) -> new HashSet<>());
             dataSetIDS.add(partitionMeta.getDataSetID());
-            numDataPartitions.inc();
         }
     }
 
@@ -535,24 +542,52 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
     }
 
     @Override
-    public long updateUsedStorageSpace() {
-        long numTotalBytes = 0;
+    public void updateUsedStorageSpace() {
         Map<String, Long> storageUsedBytes = new HashMap<>();
         synchronized (lock) {
             for (DataSet dataSet : dataSets.values()) {
                 for (DataPartition dataPartition : dataSet.getDataPartitions()) {
-                    long dataPartitionBytes = dataPartition.totalBytes();
-                    numTotalBytes += dataPartitionBytes;
+                    DataPartitionStatistics statistics = dataPartition.getDataPartitionStatistics();
+                    long numBytes = statistics.getDataFileBytes() + statistics.getIndexFileBytes();
                     storageUsedBytes.compute(
                             dataPartition.getPartitionMeta().getStorageMeta().getStorageName(),
-                            (k, v) -> v == null ? dataPartitionBytes : v + dataPartitionBytes);
+                            (k, v) -> v == null ? numBytes : v + numBytes);
                 }
             }
         }
         for (DataPartitionFactory factory : partitionFactories.values()) {
             factory.updateUsedStorageSpace(storageUsedBytes);
         }
-        return numTotalBytes;
+    }
+
+    @Override
+    public DataStoreStatistics getDataStoreStatistics() {
+        int numDataPartitions = 0;
+        long maxNumDataRegions = 0;
+        long maxIndexFileBytes = 0;
+        long maxDataFileBytes = 0;
+        long totalIndexFileBytes = 0;
+        long totalDataFileBytes = 0;
+        synchronized (lock) {
+            for (DataSet dataSet : dataSets.values()) {
+                for (DataPartition dataPartition : dataSet.getDataPartitions()) {
+                    ++numDataPartitions;
+                    DataPartitionStatistics statistics = dataPartition.getDataPartitionStatistics();
+                    maxNumDataRegions = Math.max(maxNumDataRegions, statistics.getNumDataRegions());
+                    totalIndexFileBytes += statistics.getIndexFileBytes();
+                    totalDataFileBytes += statistics.getDataFileBytes();
+                    maxIndexFileBytes = Math.max(maxIndexFileBytes, statistics.getIndexFileBytes());
+                    maxDataFileBytes = Math.max(maxDataFileBytes, statistics.getDataFileBytes());
+                }
+            }
+        }
+        return new DataStoreStatistics(
+                numDataPartitions,
+                maxNumDataRegions,
+                totalIndexFileBytes,
+                totalDataFileBytes,
+                maxIndexFileBytes,
+                maxDataFileBytes);
     }
 
     @Override
@@ -580,8 +615,8 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
         DataPartitionUtils.releaseDataPartitions(
                 dataPartitions, new ShuffleException("Shutting down."), partitionStateListener);
 
-        destroyBufferManager(writingBufferDispatcher);
-        destroyBufferManager(readingBufferDispatcher);
+        destroyBufferDispatcher(writingBufferDispatcher);
+        destroyBufferDispatcher(readingBufferDispatcher);
 
         destroyExecutorPools();
     }
@@ -597,7 +632,7 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
      * Destroys the target {@link BufferDispatcher} and logs the error if encountering any
      * exception.
      */
-    private void destroyBufferManager(BufferDispatcher bufferDispatcher) {
+    private void destroyBufferDispatcher(BufferDispatcher bufferDispatcher) {
         try {
             CommonUtils.checkArgument(bufferDispatcher != null, "Must be not null.");
 

@@ -25,7 +25,7 @@ import com.alibaba.flink.shuffle.coordinator.manager.DataPartitionStatus;
 import com.alibaba.flink.shuffle.coordinator.manager.DefaultShuffleResource;
 import com.alibaba.flink.shuffle.coordinator.manager.ShuffleResource;
 import com.alibaba.flink.shuffle.coordinator.manager.ShuffleWorkerDescriptor;
-import com.alibaba.flink.shuffle.coordinator.metrics.ClusterMetrics;
+import com.alibaba.flink.shuffle.coordinator.metrics.ClusterMetricsUtil;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerGateway;
 import com.alibaba.flink.shuffle.core.ids.DataPartitionID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
@@ -50,6 +50,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
@@ -83,7 +84,7 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
     private final Map<JobID, JobStatus> jobs = new HashMap<>();
 
     /** The currently registered workers. */
-    private final Map<RegistrationID, WorkerStatus> workers = new HashMap<>();
+    private final Map<RegistrationID, WorkerStatus> workers = new ConcurrentHashMap<>();
 
     public AssignmentTrackerImpl(Configuration configuration) {
         this.partitionPlacementStrategy =
@@ -98,9 +99,54 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
         CommonUtils.checkState(!partitionFactories.isEmpty(), "No valid partition factory found.");
     }
 
+    private long countDataPartitions() {
+        long numDataPartitions = 0;
+        for (WorkerStatus worker : workers.values()) {
+            numDataPartitions += worker.numDataPartitions();
+        }
+        return numDataPartitions;
+    }
+
     private void registerMetrics() {
-        ClusterMetrics.registerGaugeForNumJobsServing(jobs::size);
-        ClusterMetrics.registerGaugeForNumShuffleWorkers(workers::size);
+        ClusterMetricsUtil.registerTotalNumDataPartitions(this::countDataPartitions);
+        ClusterMetricsUtil.registerNumJobsServing(jobs::size);
+        ClusterMetricsUtil.registerNumShuffleWorkers(workers::size);
+        ClusterMetricsUtil.registerHddMaxFreeBytes(this::getHddMaxStorageFreeSpace);
+        ClusterMetricsUtil.registerSsdMaxFreeBytes(this::getSsdMaxStorageFreeSpace);
+        ClusterMetricsUtil.registerHddMaxUsedBytes(this::getHddMaxStorageFreeSpace);
+        ClusterMetricsUtil.registerSsdMaxUsedBytes(this::getSsdMaxStorageFreeSpace);
+    }
+
+    public long getHddMaxStorageFreeSpace() {
+        long hddMaxUsableSpace = 0;
+        for (WorkerStatus worker : workers.values()) {
+            hddMaxUsableSpace = Math.max(hddMaxUsableSpace, worker.getHddMaxStorageFreeSpace());
+        }
+        return hddMaxUsableSpace;
+    }
+
+    public long getSsdMaxStorageFreeSpace() {
+        long ssdMaxUsableSpace = 0;
+        for (WorkerStatus worker : workers.values()) {
+            ssdMaxUsableSpace = Math.max(ssdMaxUsableSpace, worker.getSsdMaxStorageFreeSpace());
+        }
+        return ssdMaxUsableSpace;
+    }
+
+    public long getHddMaxStorageUsedSpace() {
+        long hddMaxUsableSpace = 0;
+        for (WorkerStatus worker : workers.values()) {
+            hddMaxUsableSpace = Math.max(hddMaxUsableSpace, worker.getHddMaxStorageUsedSpace());
+        }
+        return hddMaxUsableSpace;
+    }
+
+    public long getSsdMaxStorageUsedSpace() {
+        long ssdMaxUsableSpace = 0;
+        for (WorkerStatus worker : workers.values()) {
+            ssdMaxUsableSpace = Math.max(ssdMaxUsableSpace, worker.getSsdMaxStorageUsedSpace());
+        }
+        return ssdMaxUsableSpace;
     }
 
     @Override

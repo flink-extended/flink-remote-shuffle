@@ -20,8 +20,10 @@ package com.alibaba.flink.shuffle.storage.partition;
 
 import com.alibaba.flink.shuffle.common.utils.CommonUtils;
 import com.alibaba.flink.shuffle.common.utils.ExceptionUtils;
+import com.alibaba.flink.shuffle.storage.StorageMetricsUtil;
 import com.alibaba.flink.shuffle.storage.utils.IOUtils;
 
+import com.alibaba.metrics.Meter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,7 +71,10 @@ public class LocalMapPartitionFileWriter {
     private int currentReducePartition;
 
     /** Total bytes of data have been written to the target partition file. */
-    private long totalBytes;
+    private long totalDataFileBytes;
+
+    /** Total bytes of index have been written to the target partition file. */
+    private long totalIndexFileBytes;
 
     /** Staring offset in the target data file of the current data region. */
     private long regionStartingOffset;
@@ -99,6 +104,9 @@ public class LocalMapPartitionFileWriter {
     /** Whether to enable data checksum or not. */
     private final boolean dataChecksumEnabled;
 
+    /** Metric for writing throughput, only data is included. */
+    private final Meter writingThroughputBytes;
+
     public LocalMapPartitionFileWriter(
             LocalMapPartitionFile partitionFile,
             int dataBufferCacheSize,
@@ -115,6 +123,7 @@ public class LocalMapPartitionFileWriter {
         int numReducePartitions = fileMeta.getNumReducePartitions();
         this.numReducePartitionBytes = new long[numReducePartitions];
         this.indexBuffer = IOUtils.allocateIndexBuffer(numReducePartitions);
+        this.writingThroughputBytes = StorageMetricsUtil.registerWritingThroughputBytes();
     }
 
     public void open() throws Exception {
@@ -164,7 +173,9 @@ public class LocalMapPartitionFileWriter {
 
             if (!dataBuffers.isEmpty()) {
                 ByteBuffer[] bufferWithHeaders = collectBufferWithHeaders();
-                IOUtils.writeBuffers(dataFileChannel, bufferWithHeaders);
+                long numBytes = IOUtils.writeBuffers(dataFileChannel, bufferWithHeaders);
+                partitionFile.updatePersistentFileStatistics(getFileStatistics());
+                writingThroughputBytes.mark(numBytes);
             }
         } finally {
             releaseAllDataBuffers();
@@ -192,8 +203,7 @@ public class LocalMapPartitionFileWriter {
             ByteBuffer header = IOUtils.getHeaderBuffer(data, dataChecksumEnabled);
 
             long length = data.remaining() + header.remaining();
-            totalBytes += length;
-            partitionFile.incrementTotalBytes(length);
+            totalDataFileBytes += length;
             numReducePartitionBytes[reducePartitionIndex] += length;
 
             bufferWithHeaders[index] = header;
@@ -223,7 +233,7 @@ public class LocalMapPartitionFileWriter {
         checkNotClosed();
 
         flushDataBuffers();
-        if (regionStartingOffset == totalBytes) {
+        if (regionStartingOffset == totalDataFileBytes) {
             return;
         }
 
@@ -247,7 +257,7 @@ public class LocalMapPartitionFileWriter {
         }
 
         ++numDataRegions;
-        regionStartingOffset = totalBytes;
+        regionStartingOffset = totalDataFileBytes;
         Arrays.fill(numReducePartitionBytes, 0);
     }
 
@@ -257,8 +267,9 @@ public class LocalMapPartitionFileWriter {
             for (int index = 0; index < indexBuffer.limit(); ++index) {
                 checksum.update(indexBuffer.get(index));
             }
-            partitionFile.incrementTotalBytes(indexBuffer.remaining());
+            totalIndexFileBytes += indexBuffer.remaining();
             IOUtils.writeBuffer(indexFileChannel, indexBuffer);
+            partitionFile.updatePersistentFileStatistics(getFileStatistics());
         }
         indexBuffer.clear();
     }
@@ -346,6 +357,11 @@ public class LocalMapPartitionFileWriter {
         return isOpened;
     }
 
+    private PersistentFileStatistics getFileStatistics() {
+        return new PersistentFileStatistics(
+                numDataRegions, totalIndexFileBytes, totalDataFileBytes);
+    }
+
     private void releaseAllDataBuffers() {
         for (BufferOrMarker.DataBuffer dataBuffer : dataBuffers) {
             BufferOrMarker.releaseBuffer(dataBuffer);
@@ -355,7 +371,7 @@ public class LocalMapPartitionFileWriter {
 
     private void checkRegionFinished() {
         CommonUtils.checkState(
-                regionStartingOffset == totalBytes,
+                regionStartingOffset == totalDataFileBytes,
                 "Must finish the current data region before starting a new one.");
     }
 
