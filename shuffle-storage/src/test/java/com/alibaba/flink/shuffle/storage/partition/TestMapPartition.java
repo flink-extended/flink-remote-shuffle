@@ -26,6 +26,7 @@ import com.alibaba.flink.shuffle.core.listener.DataRegionCreditListener;
 import com.alibaba.flink.shuffle.core.listener.FailureListener;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionReader;
+import com.alibaba.flink.shuffle.core.storage.DataPartitionStatistics;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWriter;
 import com.alibaba.flink.shuffle.core.storage.MapPartitionMeta;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
@@ -66,8 +67,8 @@ public class TestMapPartition extends BaseMapPartition {
     }
 
     @Override
-    public long totalBytes() {
-        return 0;
+    public DataPartitionStatistics getDataPartitionStatistics() {
+        return null;
     }
 
     @Override

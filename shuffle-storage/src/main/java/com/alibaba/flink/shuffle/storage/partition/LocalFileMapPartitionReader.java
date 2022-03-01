@@ -29,7 +29,9 @@ import com.alibaba.flink.shuffle.core.storage.BufferQueue;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionReader;
 import com.alibaba.flink.shuffle.core.utils.BufferUtils;
 import com.alibaba.flink.shuffle.core.utils.ListenerUtils;
+import com.alibaba.flink.shuffle.storage.StorageMetricsUtil;
 
+import com.alibaba.metrics.Meter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +48,9 @@ public class LocalFileMapPartitionReader extends BaseDataPartitionReader {
     /** Whether this {@link DataPartitionReader} has been opened or not. */
     private boolean isOpened;
 
+    /** Metric for reading throughput, only data is included. */
+    private final Meter readingThroughputBytes;
+
     public LocalFileMapPartitionReader(
             LocalMapPartitionFileReader fileReader,
             DataListener dataListener,
@@ -55,6 +60,7 @@ public class LocalFileMapPartitionReader extends BaseDataPartitionReader {
 
         CommonUtils.checkArgument(fileReader != null, "Must be not null.");
         this.fileReader = fileReader;
+        this.readingThroughputBytes = StorageMetricsUtil.registerReadingThroughputBytes();
     }
 
     @Override
@@ -78,7 +84,9 @@ public class LocalFileMapPartitionReader extends BaseDataPartitionReader {
 
         boolean hasReaming = fileReader.hasRemaining();
         boolean continueReading = hasReaming;
+        long numBytes = 0;
         int numDataBuffers = 0;
+
         while (continueReading) {
             ByteBuffer buffer = buffers.poll();
             if (buffer == null) {
@@ -93,6 +101,7 @@ public class LocalFileMapPartitionReader extends BaseDataPartitionReader {
             }
 
             hasReaming = fileReader.hasRemaining();
+            numBytes += buffer.remaining();
             addBuffer(new Buffer(buffer, recycler, buffer.remaining()), hasReaming);
             ++numDataBuffers;
         }
@@ -105,6 +114,9 @@ public class LocalFileMapPartitionReader extends BaseDataPartitionReader {
             closeReader();
         }
 
+        if (numBytes > 0) {
+            readingThroughputBytes.mark(numBytes);
+        }
         return hasReaming;
     }
 

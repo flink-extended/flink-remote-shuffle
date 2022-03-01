@@ -129,11 +129,15 @@ public class LocalMapPartitionFileMeta implements PersistentFileMeta {
     public LocalMapPartitionFile createPersistentFile(Configuration configuration) {
         ConfigOption<Integer> configOption = StorageOptions.STORAGE_FILE_TOLERABLE_FAILURES;
         int tolerableFailures = CommonUtils.checkNotNull(configuration.getInteger(configOption));
-        long totalBytes =
-                getDataFilePath().toFile().length() + getIndexFilePath().toFile().length();
+        long numIndexFileBytes = getIndexFilePath().toFile().length();
+        long numDataFileBytes = getDataFilePath().toFile().length();
 
         LocalMapPartitionFile partitionFile =
-                new LocalMapPartitionFile(this, tolerableFailures, false, totalBytes);
+                new LocalMapPartitionFile(
+                        this,
+                        tolerableFailures,
+                        false,
+                        new PersistentFileStatistics(0, numIndexFileBytes, numDataFileBytes));
         partitionFile.setConsumable(true);
         return partitionFile;
     }

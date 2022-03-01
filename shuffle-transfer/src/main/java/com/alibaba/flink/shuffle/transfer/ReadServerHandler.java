@@ -38,6 +38,7 @@ import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandler;
 import org.apache.flink.shaded.netty4.io.netty.channel.SimpleChannelInboundHandler;
 import org.apache.flink.shaded.netty4.io.netty.handler.timeout.IdleStateEvent;
 
+import com.alibaba.metrics.Counter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,6 +72,8 @@ public class ReadServerHandler extends SimpleChannelInboundHandler<TransferMessa
     /** If connection closed. */
     private boolean connectionClosed;
 
+    private final Counter numReadingConnections;
+
     /**
      * @param dataStore Implementation of storage layer.
      * @param heartbeatInterval Heartbeat interval in seconds.
@@ -79,6 +82,7 @@ public class ReadServerHandler extends SimpleChannelInboundHandler<TransferMessa
         this.readingService = new ReadingService(dataStore);
         this.heartbeatInterval = heartbeatInterval;
         this.connectionClosed = false;
+        this.numReadingConnections = NetworkMetricsUtil.registerNumReadingConnections();
     }
 
     @Override
@@ -107,13 +111,13 @@ public class ReadServerHandler extends SimpleChannelInboundHandler<TransferMessa
     @Override
     public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
         super.channelRegistered(ctx);
-        NetworkMetrics.numReadingConnections().inc();
+        numReadingConnections.inc();
     }
 
     @Override
     public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
         super.channelUnregistered(ctx);
-        NetworkMetrics.numReadingConnections().dec();
+        numReadingConnections.dec();
     }
 
     private void onMessage(ChannelHandlerContext ctx, TransferMessage msg) throws Throwable {

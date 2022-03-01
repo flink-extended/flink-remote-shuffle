@@ -24,50 +24,50 @@ import com.alibaba.metrics.Counter;
 import com.alibaba.metrics.Meter;
 
 /** Constants and util methods of network metrics. */
-public class NetworkMetrics {
+public class NetworkMetricsUtil {
 
-    // Group name
+    /** Metric group name. */
     public static final String NETWORK = "remote-shuffle.network";
 
-    // Current number of tcp writing connections.
+    /** Current number of tcp writing connections. */
     public static final String NUM_WRITING_CONNECTIONS = NETWORK + ".num_writing_connections";
 
-    // Current number of tcp reading connections.
+    /** Current number of tcp reading connections. */
     public static final String NUM_READING_CONNECTIONS = NETWORK + ".num_reading_connections";
 
-    // Current number of writing flows.
+    /** Current number of writing flows. */
     public static final String NUM_WRITING_FLOWS = NETWORK + ".num_writing_flows";
 
-    // Current number of reading flows.
+    /** Current number of reading flows. */
     public static final String NUM_READING_FLOWS = NETWORK + ".num_reading_flows";
 
-    // Current writing throughput in bytes.
-    public static final String NUM_BYTES_WRITING_THROUGHPUT = NETWORK + ".writing_throughput_bytes";
+    /** Current writing throughput in bytes. */
+    public static final String WRITING_THROUGHPUT_BYTES = NETWORK + ".writing_throughput_bytes";
 
-    // Current reading throughput in bytes.
-    public static final String NUM_BYTES_READING_THROUGHPUT = NETWORK + ".reading_throughput_bytes";
+    /** Current reading throughput in bytes. */
+    public static final String READING_THROUGHPUT_BYTES = NETWORK + ".reading_throughput_bytes";
 
-    public static Counter numWritingConnections() {
+    public static Counter registerNumWritingConnections() {
         return MetricUtils.getCounter(NETWORK, NUM_WRITING_CONNECTIONS);
     }
 
-    public static Counter numReadingConnections() {
+    public static Counter registerNumReadingConnections() {
         return MetricUtils.getCounter(NETWORK, NUM_READING_CONNECTIONS);
     }
 
-    public static Counter numWritingFlows() {
+    public static Counter registerNumWritingFlows() {
         return MetricUtils.getCounter(NETWORK, NUM_WRITING_FLOWS);
     }
 
-    public static Counter numReadingFlows() {
+    public static Counter registerNumReadingFlows() {
         return MetricUtils.getCounter(NETWORK, NUM_READING_FLOWS);
     }
 
-    public static Meter numBytesWritingThroughput() {
-        return MetricUtils.getMeter(NETWORK, NUM_BYTES_WRITING_THROUGHPUT);
+    public static Meter registerWritingThroughputBytes() {
+        return MetricUtils.getMeter(NETWORK, WRITING_THROUGHPUT_BYTES);
     }
 
-    public static Meter numBytesReadingThroughput() {
-        return MetricUtils.getMeter(NETWORK, NUM_BYTES_READING_THROUGHPUT);
+    public static Meter registerReadingThroughputBytes() {
+        return MetricUtils.getMeter(NETWORK, READING_THROUGHPUT_BYTES);
     }
 }

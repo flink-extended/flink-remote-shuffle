@@ -99,12 +99,11 @@ public interface PartitionedDataStore {
      */
     void releaseDataByJobID(JobID jobID, @Nullable Throwable throwable);
 
-    /**
-     * Updates the used storage space information for the target shuffle worker and returns the
-     * total bytes of all data partitions in the data store, including both data files and index
-     * files.
-     */
-    long updateUsedStorageSpace();
+    /** Updates the used storage space information for the target shuffle worker. */
+    void updateUsedStorageSpace();
+
+    /** Returns the statistics information of this data store. */
+    DataStoreStatistics getDataStoreStatistics();
 
     /**
      * Shuts down this data store and releases the resources.

@@ -32,6 +32,8 @@ import com.alibaba.flink.shuffle.core.storage.WritingViewContext;
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandler;
 
+import com.alibaba.metrics.Counter;
+import com.alibaba.metrics.Meter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,11 +57,16 @@ public class WritingService {
 
     private final PartitionedDataStore dataStore;
 
-    private final Map<ChannelID, DataViewWriter> servingChannels;
+    private final Map<ChannelID, DataViewWriter> servingChannels = new HashMap<>();
+
+    private final Meter writingThroughputBytes;
+
+    private final Counter numWritingFlows;
 
     public WritingService(PartitionedDataStore dataStore) {
         this.dataStore = dataStore;
-        this.servingChannels = new HashMap<>();
+        this.writingThroughputBytes = NetworkMetricsUtil.registerWritingThroughputBytes();
+        this.numWritingFlows = NetworkMetricsUtil.registerNumWritingFlows();
     }
 
     public void handshake(
@@ -94,7 +101,7 @@ public class WritingService {
                 channelID,
                 (System.nanoTime() - startTime) / 1000_000);
         servingChannels.put(channelID, new DataViewWriter(writingView, addressStr));
-        NetworkMetrics.numWritingFlows().inc();
+        numWritingFlows.inc();
     }
 
     public void write(ChannelID channelID, int subIdx, ByteBuf byteBuf) {
@@ -104,7 +111,7 @@ public class WritingService {
             throw new IllegalStateException("Writing channel has been released -- " + channelID);
         }
         ReducePartitionID reduceID = new ReducePartitionID(subIdx);
-        NetworkMetrics.numBytesWritingThroughput().mark(byteBuf.readableBytes());
+        writingThroughputBytes.mark(byteBuf.readableBytes());
         dataViewWriter.getWritingView().onBuffer((Buffer) byteBuf, reduceID);
     }
 
@@ -138,7 +145,7 @@ public class WritingService {
                 () -> String.format("Write-channel %s is not under serving.", channelID));
         dataViewWriter.getWritingView().finish(committedListener::run);
         servingChannels.remove(channelID);
-        NetworkMetrics.numWritingFlows().dec();
+        numWritingFlows.dec();
     }
 
     public int getNumServingChannels() {
@@ -156,7 +163,7 @@ public class WritingService {
                                             "(channel: %s) Channel closed abnormally.",
                                             channelID)));
             servingChannels.remove(channelID);
-            NetworkMetrics.numWritingFlows().dec();
+            numWritingFlows.dec();
         }
     }
 
@@ -170,14 +177,14 @@ public class WritingService {
             for (DataViewWriter dataViewWriter : servingChannels.values()) {
                 CommonUtils.runQuietly(() -> dataViewWriter.getWritingView().onError(cause), true);
             }
-            NetworkMetrics.numWritingFlows().dec(getNumServingChannels());
+            numWritingFlows.dec(getNumServingChannels());
             servingChannels.clear();
         } else if (servingChannels.containsKey(channelID)) {
             LOG.error("Release channel -- {} on error. ", channelID, cause);
             CommonUtils.runQuietly(
                     () -> servingChannels.get(channelID).getWritingView().onError(cause), true);
             servingChannels.remove(channelID);
-            NetworkMetrics.numWritingFlows().dec();
+            numWritingFlows.dec();
         }
     }
 }

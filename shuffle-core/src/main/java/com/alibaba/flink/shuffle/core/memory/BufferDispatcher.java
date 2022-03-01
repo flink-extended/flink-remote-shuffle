@@ -57,6 +57,8 @@ public class BufferDispatcher {
 
     private final Object lock;
 
+    private volatile long lastBufferWaitingTimeMs;
+
     /**
      * @param name Name of the underlying buffer pool.
      * @param numBuffers Total number of available buffers when start.
@@ -126,6 +128,7 @@ public class BufferDispatcher {
                             break;
                         }
                     }
+                    long startTime = System.nanoTime();
                     while (buffers.size() < bufferRequirement.min) {
                         ByteBuffer buffer = bufferPool.requestBlocking(REQUEST_TIMEOUT);
                         if (buffer == null) {
@@ -140,6 +143,7 @@ public class BufferDispatcher {
                         buffers.add(buffer);
                     }
                     bufferRequirement.bufferListener.notifyBuffers(buffers, null);
+                    lastBufferWaitingTimeMs = (System.nanoTime() - startTime) / 1_000_000;
                 } catch (Exception e) {
                     LOG.error("Exception when fulfilling buffer requirement.", e);
                     buffers.forEach(bufferPool::recycle);
@@ -149,6 +153,10 @@ public class BufferDispatcher {
                 }
             }
         }
+    }
+
+    public long getLastBufferWaitingTime() {
+        return lastBufferWaitingTimeMs;
     }
 
     /** Get total number of buffers. */

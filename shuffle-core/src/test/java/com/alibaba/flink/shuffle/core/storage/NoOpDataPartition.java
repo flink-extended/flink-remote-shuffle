@@ -89,7 +89,7 @@ public class NoOpDataPartition implements DataPartition {
     }
 
     @Override
-    public long totalBytes() {
-        return 0;
+    public DataPartitionStatistics getDataPartitionStatistics() {
+        return null;
     }
 }

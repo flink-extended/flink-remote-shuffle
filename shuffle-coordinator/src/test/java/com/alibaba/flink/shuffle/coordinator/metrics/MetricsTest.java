@@ -80,6 +80,16 @@ public class MetricsTest {
                 String metricsJson = EntityUtils.toString(response.getEntity());
                 assertTrue(metricsJson.contains("\"jvm\":"));
                 assertTrue(metricsJson.contains("\"system\":"));
+                assertTrue(metricsJson.contains("remote-shuffle.cluster.num_jobs_serving"));
+                assertTrue(metricsJson.contains("remote-shuffle.cluster.num_shuffle_workers"));
+                assertTrue(
+                        metricsJson.contains("remote-shuffle.cluster.total_num_data_partitions"));
+                assertTrue(
+                        metricsJson.contains("remote-shuffle.cluster.resource_request_throughput"));
+                assertTrue(metricsJson.contains("remote-shuffle.cluster.hdd_max_free_bytes"));
+                assertTrue(metricsJson.contains("remote-shuffle.cluster.ssd_max_free_bytes"));
+                assertTrue(metricsJson.contains("remote-shuffle.cluster.hdd_max_used_bytes"));
+                assertTrue(metricsJson.contains("remote-shuffle.cluster.ssd_max_used_bytes"));
             }
         }
     }
@@ -96,7 +106,37 @@ public class MetricsTest {
                 String metricsJson = EntityUtils.toString(response.getEntity());
                 assertTrue(metricsJson.contains("\"jvm\":"));
                 assertTrue(metricsJson.contains("\"system\":"));
-                assertTrue(metricsJson.contains("remote-shuffle"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.avg_data_file_bytes"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.avg_index_file_bytes"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.hdd_max_free_bytes"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.hdd_max_free_bytes"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.max_data_file_bytes"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.max_index_file_bytes"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.max_num_data_regions"));
+                assertTrue(
+                        metricsJson.contains(
+                                "remote-shuffle.storage.num_available_reading_buffers"));
+                assertTrue(
+                        metricsJson.contains(
+                                "remote-shuffle.storage.num_available_writing_buffers"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.num_data_partitions"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.total_num_executors"));
+                assertTrue(
+                        metricsJson.contains("remote-shuffle.storage.total_num_reading_buffers"));
+                assertTrue(
+                        metricsJson.contains("remote-shuffle.storage.total_num_writing_buffers"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.ssd_max_free_bytes"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.ssd_max_used_bytes"));
+                assertTrue(
+                        metricsJson.contains(
+                                "remote-shuffle.storage.time_waiting_reading_buffers"));
+                assertTrue(
+                        metricsJson.contains(
+                                "remote-shuffle.storage.time_waiting_writing_buffers"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.total_data_file_bytes"));
+                assertTrue(metricsJson.contains("remote-shuffle.storage.total_index_file_bytes"));
+                assertTrue(
+                        metricsJson.contains("remote-shuffle.storage.total_partition_file_bytes"));
             }
         }
     }

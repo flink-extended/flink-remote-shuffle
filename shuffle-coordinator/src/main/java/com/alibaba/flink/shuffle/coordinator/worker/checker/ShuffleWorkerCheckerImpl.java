@@ -19,12 +19,11 @@
 package com.alibaba.flink.shuffle.coordinator.worker.checker;
 
 import com.alibaba.flink.shuffle.common.config.Configuration;
-import com.alibaba.flink.shuffle.coordinator.utils.WorkerCheckerUtils;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorker;
 import com.alibaba.flink.shuffle.core.executor.ExecutorThreadFactory;
+import com.alibaba.flink.shuffle.core.storage.DataStoreStatistics;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
 import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
-import com.alibaba.flink.shuffle.storage.StorageMetrics;
 import com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactory;
 
 import org.slf4j.Logger;
@@ -36,7 +35,21 @@ import java.util.concurrent.TimeUnit;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
+import static com.alibaba.flink.shuffle.coordinator.utils.WorkerCheckerUtils.bytesToHumanReadable;
 import static com.alibaba.flink.shuffle.core.config.StorageOptions.STORAGE_CHECK_UPDATE_PERIOD;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerAgvDataFileBytes;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerAvgIndexFileBytes;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerHddMaxFreeBytes;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerHddMaxUsedBytes;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerMaxDataFileBytes;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerMaxIndexFileBytes;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerMaxNumDataRegions;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerNumDataPartitions;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerSsdMaxFreeBytes;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerSsdMaxUsedBytes;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerTotalDataFileBytes;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerTotalIndexFileBytes;
+import static com.alibaba.flink.shuffle.storage.StorageMetricsUtil.registerTotalPartitionFileBytes;
 
 /**
  * The implementation class of {@link ShuffleWorkerChecker} is used to obtain the status of the
@@ -53,14 +66,13 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
     /** Local storage space information of this shuffle worker. */
     private volatile StorageSpaceInfo storageSpaceInfo = StorageSpaceInfo.ZERO_STORAGE_SPACE;
 
-    /**
-     * The total bytes of all data partition in the data store, including total bytes of data files
-     * and index files.
-     */
-    private volatile long numTotalPartitionFileBytes;
+    /** Statistics information of the target {@link PartitionedDataStore}. */
+    private volatile DataStoreStatistics dataStoreStatistics =
+            DataStoreStatistics.EMPTY_DATA_STORE_STATISTICS;
 
-    public long getNumTotalPartitionFileBytes() {
-        return numTotalPartitionFileBytes;
+    @Override
+    public DataStoreStatistics getDataStoreStatistics() {
+        return dataStoreStatistics;
     }
 
     @Override
@@ -94,16 +106,19 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
             StorageCheckRunnable storageCheckRunnable = new StorageCheckRunnable();
             storageCheckRunnable.run();
 
-            StorageMetrics.registerGaugeForNumHddMaxFreeBytes(
-                    storageSpaceInfo::getHddMaxFreeSpaceBytes);
-            StorageMetrics.registerGaugeForNumSsdMaxFreeBytes(
-                    storageSpaceInfo::getSsdMaxFreeSpaceBytes);
-            StorageMetrics.registerGaugeForNumHddMaxUsedBytes(
-                    storageSpaceInfo::getHddMaxUsedSpaceBytes);
-            StorageMetrics.registerGaugeForNumSsdMaxUsedBytes(
-                    storageSpaceInfo::getSsdMaxUsedSpaceBytes);
-            StorageMetrics.registerGaugeForNumTotalPartitionFileBytes(
-                    this::getNumTotalPartitionFileBytes);
+            registerHddMaxFreeBytes(storageSpaceInfo::getHddMaxFreeSpaceBytes);
+            registerSsdMaxFreeBytes(storageSpaceInfo::getSsdMaxFreeSpaceBytes);
+            registerHddMaxUsedBytes(storageSpaceInfo::getHddMaxUsedSpaceBytes);
+            registerSsdMaxUsedBytes(storageSpaceInfo::getSsdMaxUsedSpaceBytes);
+            registerNumDataPartitions(dataStoreStatistics::getNumDataPartitions);
+            registerMaxNumDataRegions(dataStoreStatistics::getMaxNumDataRegions);
+            registerMaxIndexFileBytes(dataStoreStatistics::getMaxIndexFileBytes);
+            registerMaxDataFileBytes(dataStoreStatistics::getMaxDataFileBytes);
+            registerAvgIndexFileBytes(dataStoreStatistics::getAvgIndexFileBytes);
+            registerAgvDataFileBytes(dataStoreStatistics::getAvgDataFileBytes);
+            registerTotalIndexFileBytes(dataStoreStatistics::getTotalIndexFileBytes);
+            registerTotalDataFileBytes(dataStoreStatistics::getTotalDataFileBytes);
+            registerTotalPartitionFileBytes(dataStoreStatistics::getTotalPartitionFileBytes);
 
             storageCheckerService.scheduleAtFixedRate(
                     storageCheckRunnable,
@@ -121,7 +136,7 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
             long start = System.nanoTime();
 
             try {
-                numTotalPartitionFileBytes = dataStore.updateUsedStorageSpace();
+                dataStore.updateUsedStorageSpace();
             } catch (Throwable t) {
                 LOG.error("Failed to update the used space.", t);
             }
@@ -150,25 +165,29 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
                 LOG.error("Failed to update the storage space information.", t);
             }
 
+            try {
+                // Currently, the statistics is updated per checking period. In the future, we can
+                // switch to metric reporting period.
+                dataStoreStatistics = dataStore.getDataStoreStatistics();
+            } catch (Throwable t) {
+                LOG.error("Failed to update the data store statistics.", t);
+            }
+
             LOG.info(
                     "Update data store info in {} ms, max free space, HDD: {}({}), SSD:{}({}), "
                             + "max used space, HDD: {}({}), SSD:{}({}), "
                             + "total partition file bytes: {}({}).",
                     String.format("%.2f", (float) ((System.nanoTime() - start) / 1000000)),
-                    WorkerCheckerUtils.bytesToHumanReadable(
-                            storageSpaceInfo.getHddMaxFreeSpaceBytes()),
+                    bytesToHumanReadable(storageSpaceInfo.getHddMaxFreeSpaceBytes()),
                     storageSpaceInfo.getHddMaxFreeSpaceBytes(),
-                    WorkerCheckerUtils.bytesToHumanReadable(
-                            storageSpaceInfo.getSsdMaxFreeSpaceBytes()),
+                    bytesToHumanReadable(storageSpaceInfo.getSsdMaxFreeSpaceBytes()),
                     storageSpaceInfo.getSsdMaxFreeSpaceBytes(),
-                    WorkerCheckerUtils.bytesToHumanReadable(
-                            storageSpaceInfo.getHddMaxUsedSpaceBytes()),
+                    bytesToHumanReadable(storageSpaceInfo.getHddMaxUsedSpaceBytes()),
                     storageSpaceInfo.getHddMaxUsedSpaceBytes(),
-                    WorkerCheckerUtils.bytesToHumanReadable(
-                            storageSpaceInfo.getSsdMaxUsedSpaceBytes()),
+                    bytesToHumanReadable(storageSpaceInfo.getSsdMaxUsedSpaceBytes()),
                     storageSpaceInfo.getSsdMaxUsedSpaceBytes(),
-                    WorkerCheckerUtils.bytesToHumanReadable(numTotalPartitionFileBytes),
-                    numTotalPartitionFileBytes);
+                    bytesToHumanReadable(dataStoreStatistics.getTotalPartitionFileBytes()),
+                    dataStoreStatistics.getTotalPartitionFileBytes());
         }
     }
 }

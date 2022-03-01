@@ -89,7 +89,7 @@ public class IOUtils {
     }
 
     /** Writes a collection of {@link ByteBuffer}s to the target {@link FileChannel}. */
-    public static void writeBuffers(FileChannel fileChannel, ByteBuffer[] buffers)
+    public static long writeBuffers(FileChannel fileChannel, ByteBuffer[] buffers)
             throws IOException {
         CommonUtils.checkArgument(fileChannel != null, "Must be not null.");
         CommonUtils.checkArgument(buffers != null, "Must be not null.");
@@ -111,6 +111,7 @@ public class IOUtils {
             }
             bytesWritten += fileChannel.write(buffers, bufferOffset, buffers.length - bufferOffset);
         }
+        return expectedBytes;
     }
 
     /**
@@ -141,7 +142,7 @@ public class IOUtils {
      * Reads the target length of data from the given {@link FileChannel} to the target {@link
      * ByteBuffer}.
      */
-    public static void readBuffer(FileChannel fileChannel, ByteBuffer buffer, int length)
+    public static long readBuffer(FileChannel fileChannel, ByteBuffer buffer, int length)
             throws IOException {
         CommonUtils.checkArgument(length <= buffer.capacity(), "Too many bytes to read.");
 
@@ -161,6 +162,7 @@ public class IOUtils {
             fileChannel.read(buffer);
         }
         buffer.flip();
+        return buffer.remaining();
     }
 
     /**

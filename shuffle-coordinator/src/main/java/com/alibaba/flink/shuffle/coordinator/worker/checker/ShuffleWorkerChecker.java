@@ -18,6 +18,7 @@
 
 package com.alibaba.flink.shuffle.coordinator.worker.checker;
 
+import com.alibaba.flink.shuffle.core.storage.DataStoreStatistics;
 import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 
 /**
@@ -28,6 +29,9 @@ public interface ShuffleWorkerChecker {
 
     /** Gets the storage space information of the target shuffle worker. */
     StorageSpaceInfo getStorageSpaceInfo();
+
+    /** Gets the statistics information of the corresponding data store. */
+    DataStoreStatistics getDataStoreStatistics();
 
     /** Close the shuffle worker checker. */
     void close();

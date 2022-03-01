@@ -31,6 +31,7 @@ import java.net.InetAddress;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 
@@ -49,7 +50,7 @@ class WorkerStatus {
 
     private final int dataPort;
 
-    private final Map<String, StorageSpaceInfo> storageSpaceInfos = new HashMap<>();
+    private final Map<String, StorageSpaceInfo> storageSpaceInfos = new ConcurrentHashMap<>();
 
     private final Map<DataPartitionCoordinate, DataPartitionStatus> dataPartitions =
             new HashMap<>();
@@ -86,6 +87,42 @@ class WorkerStatus {
                 partitionFactoryName, StorageSpaceInfo.ZERO_STORAGE_SPACE);
     }
 
+    public long getHddMaxStorageFreeSpace() {
+        long hddMaxUsableSpace = 0;
+        for (StorageSpaceInfo storageSpaceInfo : storageSpaceInfos.values()) {
+            hddMaxUsableSpace =
+                    Math.max(hddMaxUsableSpace, storageSpaceInfo.getHddMaxFreeSpaceBytes());
+        }
+        return hddMaxUsableSpace;
+    }
+
+    public long getSsdMaxStorageFreeSpace() {
+        long ssdMaxUsableSpace = 0;
+        for (StorageSpaceInfo storageSpaceInfo : storageSpaceInfos.values()) {
+            ssdMaxUsableSpace =
+                    Math.max(ssdMaxUsableSpace, storageSpaceInfo.getSsdMaxFreeSpaceBytes());
+        }
+        return ssdMaxUsableSpace;
+    }
+
+    public long getHddMaxStorageUsedSpace() {
+        long hddMaxUsableSpace = 0;
+        for (StorageSpaceInfo storageSpaceInfo : storageSpaceInfos.values()) {
+            hddMaxUsableSpace =
+                    Math.max(hddMaxUsableSpace, storageSpaceInfo.getHddMaxUsedSpaceBytes());
+        }
+        return hddMaxUsableSpace;
+    }
+
+    public long getSsdMaxStorageUsedSpace() {
+        long ssdMaxUsableSpace = 0;
+        for (StorageSpaceInfo storageSpaceInfo : storageSpaceInfos.values()) {
+            ssdMaxUsableSpace =
+                    Math.max(ssdMaxUsableSpace, storageSpaceInfo.getSsdMaxUsedSpaceBytes());
+        }
+        return ssdMaxUsableSpace;
+    }
+
     public InstanceID getWorkerID() {
         return workerID;
     }
@@ -104,6 +141,10 @@ class WorkerStatus {
 
     public Map<DataPartitionCoordinate, DataPartitionStatus> getDataPartitions() {
         return Collections.unmodifiableMap(dataPartitions);
+    }
+
+    public int numDataPartitions() {
+        return dataPartitions.size();
     }
 
     public void markAsReleasing(JobID jobId, DataPartitionCoordinate coordinate) {

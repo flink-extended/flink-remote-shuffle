@@ -35,6 +35,7 @@ import com.alibaba.flink.shuffle.core.listener.FailureListener;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionMeta;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionReader;
+import com.alibaba.flink.shuffle.core.storage.DataPartitionStatistics;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWriter;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
@@ -117,8 +118,12 @@ public class LocalFileMapPartition extends BaseMapPartition {
     }
 
     @Override
-    public long totalBytes() {
-        return partitionFile.totalBytes();
+    public DataPartitionStatistics getDataPartitionStatistics() {
+        PersistentFileStatistics fileStatistics = partitionFile.getPersistentFileStatistics();
+        return new DataPartitionStatistics(
+                fileStatistics.getNumDataRegions(),
+                fileStatistics.getIndexFileBytes(),
+                fileStatistics.getDataFileBytes());
     }
 
     @Override
