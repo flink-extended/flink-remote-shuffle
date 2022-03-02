@@ -25,17 +25,22 @@ import com.alibaba.flink.shuffle.core.config.HighAvailabilityOptions;
 import org.apache.flink.configuration.AkkaOptions;
 import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.runtime.jobmanager.HighAvailabilityMode;
+import org.apache.flink.util.Preconditions;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-import org.apache.flink.shaded.curator4.org.apache.curator.utils.ZKPaths;
-import org.apache.flink.shaded.zookeeper3.org.apache.zookeeper.KeeperException;
-
+import org.apache.commons.lang3.StringUtils;
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.framework.imps.DefaultACLProvider;
+import org.apache.curator.retry.ExponentialBackoffRetry;
+import org.apache.curator.utils.ZKPaths;
+import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
+import static org.apache.flink.runtime.util.ZooKeeperUtils.generateZookeeperPath;
 
 /** ZooKeeper test utilities. */
 public class ZooKeeperTestUtils {
@@ -130,7 +135,62 @@ public class ZooKeeperTestUtils {
 
     public static CuratorFramework createZKClientForFlink(
             org.apache.flink.configuration.Configuration configuration) {
-        return org.apache.flink.runtime.util.ZooKeeperUtils.startCuratorFramework(configuration);
+        Preconditions.checkNotNull(configuration, "configuration");
+        String zkQuorum =
+                configuration.getValue(
+                        org.apache.flink.configuration.HighAvailabilityOptions.HA_ZOOKEEPER_QUORUM);
+
+        if (zkQuorum == null || StringUtils.isBlank(zkQuorum)) {
+            throw new RuntimeException(
+                    "No valid ZooKeeper quorum has been specified. "
+                            + "You can specify the quorum via the configuration key '"
+                            + org.apache.flink.configuration.HighAvailabilityOptions
+                                    .HA_ZOOKEEPER_QUORUM
+                                    .key()
+                            + "'.");
+        }
+
+        int sessionTimeout =
+                configuration.getInteger(
+                        org.apache.flink.configuration.HighAvailabilityOptions
+                                .ZOOKEEPER_SESSION_TIMEOUT);
+        int connectionTimeout =
+                configuration.getInteger(
+                        org.apache.flink.configuration.HighAvailabilityOptions
+                                .ZOOKEEPER_CONNECTION_TIMEOUT);
+        int retryWait =
+                configuration.getInteger(
+                        org.apache.flink.configuration.HighAvailabilityOptions
+                                .ZOOKEEPER_RETRY_WAIT);
+        int maxRetryAttempts =
+                configuration.getInteger(
+                        org.apache.flink.configuration.HighAvailabilityOptions
+                                .ZOOKEEPER_MAX_RETRY_ATTEMPTS);
+        String root =
+                configuration.getValue(
+                        org.apache.flink.configuration.HighAvailabilityOptions.HA_ZOOKEEPER_ROOT);
+        String namespace =
+                configuration.getValue(
+                        org.apache.flink.configuration.HighAvailabilityOptions.HA_CLUSTER_ID);
+        String rootWithNamespace = generateZookeeperPath(root, namespace);
+
+        LOG.info("Using '{}' as Zookeeper namespace.", rootWithNamespace);
+        CuratorFramework cf =
+                CuratorFrameworkFactory.builder()
+                        .connectString(zkQuorum)
+                        .sessionTimeoutMs(sessionTimeout)
+                        .connectionTimeoutMs(connectionTimeout)
+                        .retryPolicy(new ExponentialBackoffRetry(retryWait, maxRetryAttempts))
+                        // Curator prepends a '/' manually and throws an Exception if the
+                        // namespace starts with a '/'.
+                        .namespace(
+                                rootWithNamespace.startsWith("/")
+                                        ? rootWithNamespace.substring(1)
+                                        : rootWithNamespace)
+                        .aclProvider(new DefaultACLProvider())
+                        .build();
+        cf.start();
+        return cf;
     }
 
     public static CuratorFramework createZKClientForRemoteShuffle(Configuration configuration) {

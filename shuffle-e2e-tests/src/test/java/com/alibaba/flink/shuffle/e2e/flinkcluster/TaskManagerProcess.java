@@ -19,6 +19,7 @@
 package com.alibaba.flink.shuffle.e2e.flinkcluster;
 
 import com.alibaba.flink.shuffle.e2e.TestJvmProcess;
+import com.alibaba.flink.shuffle.e2e.zookeeper.ZooKeeperTestUtils;
 import com.alibaba.flink.shuffle.plugin.RemoteShuffleEnvironment;
 
 import org.apache.flink.api.java.utils.ParameterTool;
@@ -40,12 +41,11 @@ import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.runtime.taskexecutor.TaskExecutor;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorToServiceAdapter;
 import org.apache.flink.runtime.taskexecutor.TaskManagerRunner;
-import org.apache.flink.runtime.util.ZooKeeperUtils;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
 
+import org.apache.curator.framework.CuratorFramework;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -178,7 +178,7 @@ public class TaskManagerProcess extends TestJvmProcess {
             field.setAccessible(true);
             RemoteShuffleEnvironment env = (RemoteShuffleEnvironment) field.get(taskExecutor);
             NetworkBufferPool bufferPool = env.getNetworkBufferPool();
-            CuratorFramework zkClient = ZooKeeperUtils.startCuratorFramework(conf);
+            CuratorFramework zkClient = ZooKeeperTestUtils.createZKClientForFlink(conf);
             int index = conf.getInteger("taskmanager.index", -1);
             String zkPath = "/taskmanager-" + index;
             if (zkClient.checkExists().forPath(zkPath) != null) {

@@ -54,9 +54,8 @@ import org.apache.flink.runtime.rpc.akka.AkkaRpcServiceUtils;
 import org.apache.flink.runtime.shuffle.ShuffleServiceOptions;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.curator.framework.CuratorFramework;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
