@@ -24,10 +24,9 @@ import com.alibaba.flink.shuffle.coordinator.highavailability.HaServices;
 import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderElectionService;
 import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderRetrievalService;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-import org.apache.flink.shaded.curator4.org.apache.curator.utils.ZKPaths;
-import org.apache.flink.shaded.zookeeper3.org.apache.zookeeper.KeeperException;
-
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.utils.ZKPaths;
+import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

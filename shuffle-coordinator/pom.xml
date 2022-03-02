@@ -75,9 +75,74 @@ under the License.
 		</dependency>
 
 		<dependency>
-			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-shaded-zookeeper-3</artifactId>
+			<groupId>org.apache.zookeeper</groupId>
+			<artifactId>zookeeper</artifactId>
 			<version>${zookeeper.version}</version>
+			<exclusions>
+				<exclusion>
+					<!-- logging classes provided -->
+					<groupId>log4j</groupId>
+					<artifactId>log4j</artifactId>
+				</exclusion>
+				<exclusion>
+					<!-- not relevant at runtime -->
+					<groupId>org.apache.yetus</groupId>
+					<artifactId>audience-annotations</artifactId>
+				</exclusion>
+				<exclusion>
+					<!-- logging classes provided -->
+					<groupId>org.slf4j</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.curator</groupId>
+			<artifactId>curator-recipes</artifactId>
+			<version>${curator.version}</version>
+			<exclusions>
+				<exclusion>
+					<!-- not relevant at runtime -->
+					<groupId>com.google.code.findbugs</groupId>
+					<artifactId>jsr305</artifactId>
+				</exclusion>
+				<exclusion>
+					<!-- not relevant at runtime -->
+					<groupId>com.google.errorprone</groupId>
+					<artifactId>error_prone_annotations</artifactId>
+				</exclusion>
+				<exclusion>
+					<!-- supposedly not required -->
+					<groupId>com.google.guava</groupId>
+					<artifactId>failureaccess</artifactId>
+				</exclusion>
+				<exclusion>
+					<!-- supposedly not required -->
+					<groupId>com.google.guava</groupId>
+					<artifactId>listenablefuture</artifactId>
+				</exclusion>
+				<exclusion>
+					<!-- not relevant at runtime -->
+					<groupId>com.google.j2objc</groupId>
+					<artifactId>j2objc-annotations</artifactId>
+				</exclusion>
+				<exclusion>
+					<!-- not relevant at runtime -->
+					<groupId>org.checkerframework</groupId>
+					<artifactId>checker-qual</artifactId>
+				</exclusion>
+				<exclusion>
+					<!-- not relevant at runtime -->
+					<groupId>org.codehaus.mojo</groupId>
+					<artifactId>animal-sniffer-annotations</artifactId>
+				</exclusion>
+				<exclusion>
+					<!-- logging classes provided -->
+					<groupId>org.slf4j</groupId>
+					<artifactId>slf4j-api</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 
 		<dependency>
