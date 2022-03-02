@@ -25,7 +25,7 @@ import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderRetrievalDri
 import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderRetrievalDriverFactory;
 import com.alibaba.flink.shuffle.coordinator.highavailability.LeaderRetrievalEventHandler;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.CuratorFramework;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
 

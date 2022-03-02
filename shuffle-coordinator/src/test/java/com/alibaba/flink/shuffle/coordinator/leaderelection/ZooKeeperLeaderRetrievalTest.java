@@ -31,8 +31,7 @@ import com.alibaba.flink.shuffle.core.config.HighAvailabilityOptions;
 import com.alibaba.flink.shuffle.core.utils.TestLogger;
 import com.alibaba.flink.shuffle.rpc.utils.AkkaRpcServiceUtils;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-
+import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.test.TestingServer;
 import org.junit.After;
 import org.junit.Before;

@@ -19,7 +19,6 @@ package com.alibaba.flink.shuffle.e2e;
 
 import com.alibaba.flink.shuffle.common.functions.ConsumerWithException;
 import com.alibaba.flink.shuffle.e2e.flinkcluster.FlinkLocalCluster;
-import com.alibaba.flink.shuffle.e2e.utils.LogErrorHandler;
 import com.alibaba.flink.shuffle.e2e.zookeeper.ZooKeeperTestUtils;
 
 import org.apache.flink.api.common.ExecutionConfig;
@@ -43,7 +42,6 @@ import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
-import org.apache.flink.runtime.util.ZooKeeperUtils;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.graph.GlobalStreamExchangeMode;
 import org.apache.flink.streaming.api.graph.StreamConfig;
@@ -55,14 +53,14 @@ import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.ChildData;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.NodeCache;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.recipes.cache.NodeCacheListener;
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
-import org.apache.flink.shaded.zookeeper3.org.apache.zookeeper.CreateMode;
 
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.recipes.cache.ChildData;
+import org.apache.curator.framework.recipes.cache.NodeCache;
+import org.apache.curator.framework.recipes.cache.NodeCacheListener;
+import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -373,7 +371,7 @@ public class JobForShuffleTesting {
             super.open();
             Configuration conf =
                     ZooKeeperTestUtils.createZooKeeperHAConfigForFlink(zkConnect, zkPath);
-            zkClient = ZooKeeperUtils.startCuratorFramework(conf, LogErrorHandler.INSTANCE);
+            zkClient = ZooKeeperTestUtils.createZKClientForFlink(conf);
             taskIdx = getRuntimeContext().getIndexOfThisSubtask();
             attempt = getRuntimeContext().getAttemptNumber();
             final ResultPartitionID resultPartitionID;
