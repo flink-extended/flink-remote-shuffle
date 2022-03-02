@@ -31,10 +31,9 @@ import com.alibaba.flink.shuffle.coordinator.leaderelection.TestingListener;
 import com.alibaba.flink.shuffle.core.config.HighAvailabilityOptions;
 import com.alibaba.flink.shuffle.core.utils.TestLogger;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.flink.shaded.curator4.org.apache.curator.retry.RetryNTimes;
-
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.retry.RetryNTimes;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;

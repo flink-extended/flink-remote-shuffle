@@ -23,10 +23,9 @@ import com.alibaba.flink.shuffle.yarn.entry.manager.AppClient;
 import com.alibaba.flink.shuffle.yarn.entry.worker.YarnShuffleWorkerEntrypoint;
 import com.alibaba.flink.shuffle.yarn.utils.YarnConstants;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.flink.shaded.curator4.org.apache.curator.retry.RetryNTimes;
-
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.retry.RetryNTimes;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;

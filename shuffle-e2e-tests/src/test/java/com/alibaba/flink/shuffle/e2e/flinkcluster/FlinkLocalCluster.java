@@ -55,9 +55,8 @@ import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.util.concurrent.FutureUtils;
 import org.apache.flink.util.concurrent.ScheduledExecutorServiceAdapter;
 
-import org.apache.flink.shaded.curator4.org.apache.curator.framework.CuratorFramework;
-
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.curator.framework.CuratorFramework;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;

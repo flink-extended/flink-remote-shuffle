@@ -112,12 +112,6 @@ under the License.
 			<version>4.1.49.Final-${flink.shaded.version}</version>
 		</dependency>
 
-		<dependency>
-			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-shaded-zookeeper-3</artifactId>
-			<version>${zookeeper.version}</version>
-		</dependency>
-
 		<!-- Concrete logging framework - we add this only here (and not in the
 		root POM) to not tie the projects to one specific framework and make
 		it easier for users to swap logging frameworks -->
@@ -274,6 +268,42 @@ under the License.
 									<pattern>javax.ws.rs</pattern>
 									<shadedPattern>
 										com.alibaba.flink.shuffle.shaded.javax.ws.rs
+									</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>org.apache.zookeeper</pattern>
+									<shadedPattern>
+										com.alibaba.flink.shuffle.shaded.org.apache.zookeeper
+									</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>io.netty</pattern>
+									<shadedPattern>
+										com.alibaba.flink.shuffle.shaded.io.netty
+									</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>org.apache.jute</pattern>
+									<shadedPattern>
+										com.alibaba.flink.shuffle.shaded.org.apache.jute
+									</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>com.codahale.metrics</pattern>
+									<shadedPattern>
+										com.alibaba.flink.shuffle.shaded.com.codahale.metrics
+									</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>org.apache.curator</pattern>
+									<shadedPattern>
+										com.alibaba.flink.shuffle.shaded.org.apache.curator
+									</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>com.google</pattern>
+									<shadedPattern>
+										com.alibaba.flink.shuffle.shaded.com.google
 									</shadedPattern>
 								</relocation>
 							</relocations>
