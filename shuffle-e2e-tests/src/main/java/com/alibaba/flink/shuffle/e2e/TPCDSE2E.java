@@ -38,8 +38,7 @@ public class TPCDSE2E {
         int parallelism = Integer.valueOf(args[1]);
         LOG.info("Running E2E under TPCDS: {}.", tpcdsHome);
 
-        EnvironmentSettings settings =
-                EnvironmentSettings.newInstance().useBlinkPlanner().inBatchMode().build();
+        EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
         TableEnvironment stEnv = TableEnvironment.create(settings);
         Configuration configuration = stEnv.getConfig().getConfiguration();
         configuration.setInteger("table.exec.resource.default-parallelism", parallelism);

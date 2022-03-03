@@ -31,6 +31,7 @@ import org.apache.flink.runtime.blob.BlobCacheService;
 import org.apache.flink.runtime.clusterframework.TaskExecutorProcessSpec;
 import org.apache.flink.runtime.clusterframework.TaskExecutorProcessUtils;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.entrypoint.WorkingDirectory;
 import org.apache.flink.runtime.externalresource.ExternalResourceInfoProvider;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
@@ -152,6 +153,7 @@ public class TaskManagerProcess extends TestJvmProcess {
                 BlobCacheService blobCacheService,
                 boolean localCommunicationOnly,
                 ExternalResourceInfoProvider externalResourceInfoProvider,
+                WorkingDirectory workingDirectory,
                 FatalErrorHandler fatalErrorHandler)
                 throws Exception {
 
@@ -166,6 +168,7 @@ public class TaskManagerProcess extends TestJvmProcess {
                             blobCacheService,
                             localCommunicationOnly,
                             externalResourceInfoProvider,
+                            workingDirectory,
                             fatalErrorHandler);
             startMetricsReportingDaemon(configuration, taskExecutor);
             return TaskExecutorToServiceAdapter.createFor(taskExecutor);

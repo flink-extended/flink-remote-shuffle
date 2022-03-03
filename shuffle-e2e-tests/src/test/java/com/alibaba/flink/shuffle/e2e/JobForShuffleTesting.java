@@ -157,6 +157,7 @@ public class JobForShuffleTesting {
 
         StreamExecutionEnvironment env = createRemoteEnvironment("localhost", 1337, config);
         env.setParallelism(parallelism);
+        env.setBufferTimeout(-1);
 
         TupleTypeInfo<Tuple2<Long, Long>> typeInfo =
                 new TupleTypeInfo<>(BasicTypeInfo.LONG_TYPE_INFO, BasicTypeInfo.LONG_TYPE_INFO);
