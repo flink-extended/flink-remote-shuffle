@@ -39,6 +39,7 @@ public class BatchJobDemo {
         int numRecordsToSend = 1024;
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(parallelism);
+        env.setBufferTimeout(-1);
         DataStream<byte[]> source =
                 env.addSource(new ByteArraySource(numRecordsToSend, recordSize, numRecords));
         source.rebalance()

@@ -60,7 +60,7 @@ under the License.
 
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-yarn_${scala.binary.version}</artifactId>
+			<artifactId>flink-yarn</artifactId>
 			<version>${flink.version}</version>
 			<scope>test</scope>
 			<exclusions>
@@ -75,6 +75,13 @@ under the License.
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-test-utils-junit</artifactId>
 			<version>${flink.version}</version>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.curator</groupId>
+			<artifactId>curator-client</artifactId>
+			<version>${curator.version}</version>
 			<scope>test</scope>
 		</dependency>
 
@@ -185,7 +192,7 @@ under the License.
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-examples-batch_${scala.binary.version}</artifactId>
-			<version>${flink.version}</version>
+			<version>${rpc.flink.version}</version>
 			<scope>test</scope>
 		</dependency>
 

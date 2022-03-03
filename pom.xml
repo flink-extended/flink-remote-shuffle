@@ -49,7 +49,7 @@ under the License.
 	</repositories>
 
 	<properties>
-		<scala.binary.version>2.11</scala.binary.version>
+		<scala.binary.version>2.12</scala.binary.version>
 		<flink.shaded.version>13.0</flink.shaded.version>
 		<log4j.version>2.17.0</log4j.version>
 		<junit.version>4.13</junit.version>
@@ -65,11 +65,11 @@ under the License.
 		<jackson.version>2.12.1</jackson.version>
 		<snakeyaml.version>1.27</snakeyaml.version>
 		<curator.version>5.2.0</curator.version>
-		<hadoop.version>2.4.1</hadoop.version>
+		<hadoop.version>2.8.5</hadoop.version>
 		<alibaba.metrics.version>2.0.6</alibaba.metrics.version>
 		<commons.cli.version>1.3.1</commons.cli.version>
 		<zookeeper.version>3.5.9</zookeeper.version>
-		<flink.version>1.14.0</flink.version>
+		<flink.version>1.15-SNAPSHOT</flink.version>
 		<rpc.flink.version>1.14.0</rpc.flink.version>
 		<jetty.version>9.4.44.v20210927</jetty.version>
 		<http.client.version>4.5.13</http.client.version>

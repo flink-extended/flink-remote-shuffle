@@ -122,7 +122,9 @@ public abstract class BatchJobITCaseBase {
                         .build();
 
         flinkCluster =
-                new TestingMiniCluster(miniClusterConfiguration, highAvailabilityServicesSupplier);
+                TestingMiniCluster.newBuilder(miniClusterConfiguration)
+                        .setHighAvailabilityServicesSupplier(highAvailabilityServicesSupplier)
+                        .build();
         flinkCluster.start();
     }
 
