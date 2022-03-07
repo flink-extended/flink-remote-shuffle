@@ -48,7 +48,7 @@ public interface DataPartitionWriter extends BufferSupplier {
      * Adds a data {@link Buffer} of the given {@link MapPartitionID} and {@link ReducePartitionID}
      * to this partition writer.
      */
-    void addBuffer(ReducePartitionID reducePartitionID, Buffer buffer);
+    void addBuffer(ReducePartitionID reducePartitionID, int dataRegionIndex, Buffer buffer);
 
     /**
      * Starts a new data region and announces the number of credits required by the data region.
@@ -59,10 +59,19 @@ public interface DataPartitionWriter extends BufferSupplier {
     void startRegion(int dataRegionIndex, boolean isBroadcastRegion);
 
     /**
+     * Starts a new data region and announces the number of credits required by the data region.
+     *
+     * @param dataRegionIndex Index of the new data region to be written.
+     * @param numMaps The number of map partitions.
+     * @param isBroadcastRegion Whether to broadcast data to all reduce partitions in this region.
+     */
+    void startRegion(int dataRegionIndex, int numMaps, int needCredit, boolean isBroadcastRegion);
+
+    /**
      * Finishes the current data region, after which the current data region is completed and ready
      * to be processed.
      */
-    void finishRegion();
+    void finishRegion(int dataRegionIndex);
 
     /**
      * Finishes the data input, which means no data can be added to this partition writer any more.
@@ -72,11 +81,27 @@ public interface DataPartitionWriter extends BufferSupplier {
     void finishDataInput(DataCommitListener commitListener);
 
     /**
+     * Finishes the data partition input, which means no data can be added to this partition
+     * anymore.
+     */
+    void finishPartitionInput() throws Exception;
+
+    /**
      * Assigns credits to this partition writer to be used to receive data from the corresponding
      * data producer. Returns true if this partition writer still needs more credits (buffers) for
      * data receiving.
      */
-    boolean assignCredits(BufferQueue credits, BufferRecycler recycler);
+    boolean assignCredits(BufferQueue credits, BufferRecycler recycler, boolean checkMinBuffers);
+
+    boolean isCreditFulfilled();
+
+    int numPendingCredit();
+
+    int numFulfilledCredit();
+
+    boolean isInputFinished();
+
+    boolean isRegionFinished();
 
     /**
      * Notifies the failure to this partition writer when any exception occurs at the corresponding

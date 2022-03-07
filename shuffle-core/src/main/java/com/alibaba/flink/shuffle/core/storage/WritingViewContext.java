@@ -41,6 +41,15 @@ public class WritingViewContext {
     /** ID of the logic {@link MapPartition} that the written data belongs to. */
     private final MapPartitionID mapPartitionID;
 
+    /** Index of the first logic {@link ReducePartition} to be written (inclusive). */
+    private final int startPartitionIndex;
+
+    /** Index of the last logic {@link ReducePartition} to be written (inclusive). */
+    private final int endPartitionIndex;
+
+    /** The total number of partitions, which is equal to the upstream parallelism. */
+    private final int numMapPartitions;
+
     /** Number of the {@link ReducePartition}s of the whole {@link DataSet}. */
     private final int numReducePartitions;
 
@@ -62,10 +71,64 @@ public class WritingViewContext {
             String partitionFactoryClassName,
             DataRegionCreditListener dataRegionCreditListener,
             FailureListener failureListener) {
+        this(
+                jobID,
+                dataSetID,
+                dataPartitionID,
+                mapPartitionID,
+                0,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE,
+                numReducePartitions,
+                partitionFactoryClassName,
+                dataRegionCreditListener,
+                failureListener);
+    }
+
+    public WritingViewContext(
+            JobID jobID,
+            DataSetID dataSetID,
+            DataPartitionID dataPartitionID,
+            MapPartitionID mapPartitionID,
+            int numMapPartitions,
+            int startPartitionIndex,
+            int endPartitionIndex,
+            String partitionFactoryClassName,
+            DataRegionCreditListener dataRegionCreditListener,
+            FailureListener failureListener) {
+        this(
+                jobID,
+                dataSetID,
+                dataPartitionID,
+                mapPartitionID,
+                numMapPartitions,
+                startPartitionIndex,
+                endPartitionIndex,
+                1,
+                partitionFactoryClassName,
+                dataRegionCreditListener,
+                failureListener);
+    }
+
+    public WritingViewContext(
+            JobID jobID,
+            DataSetID dataSetID,
+            DataPartitionID dataPartitionID,
+            MapPartitionID mapPartitionID,
+            int numMapPartitions,
+            int startPartitionIndex,
+            int endPartitionIndex,
+            int numReducePartitions,
+            String partitionFactoryClassName,
+            DataRegionCreditListener dataRegionCreditListener,
+            FailureListener failureListener) {
         CommonUtils.checkArgument(jobID != null, "Must be not null.");
         CommonUtils.checkArgument(dataSetID != null, "Must be not null.");
         CommonUtils.checkArgument(dataPartitionID != null, "Must be not null.");
         CommonUtils.checkArgument(mapPartitionID != null, "Must be not null.");
+        CommonUtils.checkArgument(numMapPartitions >= 0, "Must be non-negative.");
+        CommonUtils.checkArgument(startPartitionIndex >= 0, "Must be non-negative.");
+        CommonUtils.checkArgument(endPartitionIndex >= startPartitionIndex, "Illegal index range.");
         CommonUtils.checkArgument(numReducePartitions > 0, "Must be positive.");
         CommonUtils.checkArgument(partitionFactoryClassName != null, "Must be not null.");
         CommonUtils.checkArgument(dataRegionCreditListener != null, "Must be not null.");
@@ -75,6 +138,9 @@ public class WritingViewContext {
         this.dataSetID = dataSetID;
         this.dataPartitionID = dataPartitionID;
         this.mapPartitionID = mapPartitionID;
+        this.numMapPartitions = numMapPartitions;
+        this.startPartitionIndex = startPartitionIndex;
+        this.endPartitionIndex = endPartitionIndex;
         this.numReducePartitions = numReducePartitions;
         this.partitionFactoryClassName = partitionFactoryClassName;
         this.dataRegionCreditListener = dataRegionCreditListener;
@@ -95,6 +161,18 @@ public class WritingViewContext {
 
     public MapPartitionID getMapPartitionID() {
         return mapPartitionID;
+    }
+
+    public int getNumMapPartitions() {
+        return numMapPartitions;
+    }
+
+    public int getStartPartitionIndex() {
+        return startPartitionIndex;
+    }
+
+    public int getEndPartitionIndex() {
+        return endPartitionIndex;
     }
 
     public int getNumReducePartitions() {

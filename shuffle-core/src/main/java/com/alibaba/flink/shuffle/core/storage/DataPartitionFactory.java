@@ -43,6 +43,7 @@ public interface DataPartitionFactory {
      * @param jobID ID of the job which is trying to write data to the {@link PartitionedDataStore}.
      * @param dataSetID ID of the dataset to witch the {@link DataPartition} belongs to.
      * @param dataPartitionID ID of the {@link DataPartition} to be created and written.
+     * @param numMapPartitions Number of logic {@link MapPartition}s of the {@link DataSet}.
      * @param numReducePartitions Number of logic {@link ReducePartition}s of the {@link DataSet}.
      * @return A new {@link DataPartition} to write data to and read data from.
      */
@@ -51,6 +52,7 @@ public interface DataPartitionFactory {
             JobID jobID,
             DataSetID dataSetID,
             DataPartitionID dataPartitionID,
+            int numMapPartitions,
             int numReducePartitions)
             throws Exception;
 
@@ -94,4 +96,10 @@ public interface DataPartitionFactory {
 
     /** Whether this partition factory only uses HDD as storage device. */
     boolean useHddOnly();
+
+    static DataPartition.DataPartitionType getDataPartitionType(String dataPartitionFactoryName)
+            throws ClassNotFoundException, InstantiationException, IllegalAccessException {
+        return ((DataPartitionFactory) Class.forName(dataPartitionFactoryName).newInstance())
+                .getDataPartitionType();
+    }
 }

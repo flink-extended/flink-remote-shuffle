@@ -21,7 +21,6 @@ package com.alibaba.flink.shuffle.core.storage;
 import com.alibaba.flink.shuffle.common.utils.CommonUtils;
 import com.alibaba.flink.shuffle.core.ids.DataPartitionID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
-import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.core.listener.BacklogListener;
 import com.alibaba.flink.shuffle.core.listener.DataListener;
 import com.alibaba.flink.shuffle.core.listener.FailureListener;
@@ -41,6 +40,9 @@ public class ReadingViewContext {
     /** Index of the last logic {@link ReducePartition} to be read (inclusive). */
     private final int endPartitionIndex;
 
+    /** Number of the {@link ReducePartition}s of the whole {@link DataSet}. */
+    private final int numReducePartitions;
+
     /** Listener to be notified when there is any data available for reading. */
     private final DataListener dataListener;
 
@@ -58,26 +60,40 @@ public class ReadingViewContext {
             DataListener dataListener,
             BacklogListener backlogListener,
             FailureListener failureListener) {
+        this(
+                dataSetID,
+                partitionID,
+                startPartitionIndex,
+                endPartitionIndex,
+                Integer.MAX_VALUE,
+                dataListener,
+                backlogListener,
+                failureListener);
+    }
+
+    public ReadingViewContext(
+            DataSetID dataSetID,
+            DataPartitionID partitionID,
+            int startPartitionIndex,
+            int endPartitionIndex,
+            int numReducePartitions,
+            DataListener dataListener,
+            BacklogListener backlogListener,
+            FailureListener failureListener) {
         CommonUtils.checkArgument(dataSetID != null, "Must be not null.");
         CommonUtils.checkArgument(partitionID != null, "Must be not null.");
         CommonUtils.checkArgument(startPartitionIndex >= 0, "Must be non-negative.");
         CommonUtils.checkArgument(endPartitionIndex >= startPartitionIndex, "Illegal index range.");
+        CommonUtils.checkArgument(numReducePartitions >= 0, "Must be non-negative.");
         CommonUtils.checkArgument(dataListener != null, "Must be not null.");
         CommonUtils.checkArgument(backlogListener != null, "Must be not null.");
         CommonUtils.checkArgument(failureListener != null, "Must be not null.");
-
-        if (partitionID.getPartitionType() == DataPartition.DataPartitionType.REDUCE_PARTITION) {
-            ReducePartitionID reducePartitionID = (ReducePartitionID) partitionID;
-            CommonUtils.checkArgument(
-                    reducePartitionID.getPartitionIndex() == endPartitionIndex
-                            && reducePartitionID.getPartitionIndex() == startPartitionIndex,
-                    "Illegal reduce partition index range.");
-        }
 
         this.partitionID = partitionID;
         this.dataSetID = dataSetID;
         this.startPartitionIndex = startPartitionIndex;
         this.endPartitionIndex = endPartitionIndex;
+        this.numReducePartitions = numReducePartitions;
         this.dataListener = dataListener;
         this.backlogListener = backlogListener;
         this.failureListener = failureListener;
@@ -97,6 +113,10 @@ public class ReadingViewContext {
 
     public int getEndPartitionIndex() {
         return endPartitionIndex;
+    }
+
+    public int getNumReducePartitions() {
+        return numReducePartitions;
     }
 
     public DataListener getDataListener() {

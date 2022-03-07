@@ -53,6 +53,11 @@ public class ReducePartitionID extends DataPartitionID {
     }
 
     /** Deserializes and creates an {@link ReducePartitionID} from the given {@link DataInput}. */
+    public static ReducePartitionID readFrom(ByteBuf byteBuf) {
+        return new ReducePartitionID(byteBuf.readInt());
+    }
+
+    /** Deserializes and creates an {@link ReducePartitionID} from the given {@link DataInput}. */
     public static ReducePartitionID readFrom(DataInput dataInput) throws IOException {
         return new ReducePartitionID(dataInput.readInt());
     }

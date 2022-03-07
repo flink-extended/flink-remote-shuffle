@@ -39,6 +39,8 @@ public class BufferUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(BufferUtils.class);
 
+    public static final byte[] EMPTY_BYTES = "0".getBytes();
+
     /** Recycles the given {@link Buffer} and logs the error if any exception occurs. */
     public static void recycleBuffer(@Nullable Buffer buffer) {
         if (buffer == null) {
