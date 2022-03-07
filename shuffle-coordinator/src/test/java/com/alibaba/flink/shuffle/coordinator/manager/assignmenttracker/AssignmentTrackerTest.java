@@ -777,6 +777,45 @@ public class AssignmentTrackerTest {
                 jobId, randomDataSetId(), randomMapPartitionId(), 2, partitionFactory, null);
     }
 
+    @Test
+    public void testChooseSortedWorkers() throws ShuffleResourceAllocationException {
+        JobID jobId = randomJobId();
+        Configuration configuration = new Configuration();
+        AssignmentTrackerImpl assignmentTracker = new AssignmentTrackerImpl(configuration);
+        assignmentTracker.registerJob(jobId);
+
+        // Registers two workers
+        RegistrationID worker1 = new RegistrationID();
+        RegistrationID worker2 = new RegistrationID();
+        RegistrationID worker3 = new RegistrationID();
+
+        assignmentTracker.registerWorker(
+                new InstanceID("worker1"),
+                worker1,
+                new EmptyShuffleWorkerGateway(),
+                "worker1",
+                1024);
+        assignmentTracker.registerWorker(
+                new InstanceID("worker2"),
+                worker2,
+                new EmptyShuffleWorkerGateway(),
+                "worker2",
+                1026);
+        assignmentTracker.registerWorker(
+                new InstanceID("worker3"),
+                worker3,
+                new EmptyShuffleWorkerGateway(),
+                "worker3",
+                1027);
+        assertEquals(3, assignmentTracker.getNumberOfWorkers());
+
+        List<WorkerStatus> chosenWorkers = assignmentTracker.chooseWorkers(2);
+        assertEquals(2, chosenWorkers.size());
+
+        chosenWorkers = assignmentTracker.chooseWorkers(7);
+        assertEquals(7, chosenWorkers.size());
+    }
+
     // ------------------------------- Utilities ----------------------------------------------
 
     private AssignmentTrackerImpl createAssignmentTracker(

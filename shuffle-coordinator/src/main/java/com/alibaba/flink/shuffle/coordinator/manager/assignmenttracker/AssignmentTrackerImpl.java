@@ -32,7 +32,9 @@ import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
+import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
 import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
@@ -48,9 +50,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Random;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
 
@@ -311,22 +315,103 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
                     partitionFactory.getDataPartitionType());
         }
 
-        WorkerStatus[] selectedWorkerStatuses =
-                partitionPlacementStrategy.selectNextWorker(
-                        new PartitionPlacementContext(partitionFactory, taskLocation));
-        checkState(
-                selectedWorkerStatuses.length == 1,
-                "Currently only one worker need to be selected");
-        WorkerStatus workerStatus = selectedWorkerStatuses[0];
+        DataPartition.DataPartitionType dataPartitionType =
+                getDataPartitionType(dataPartitionFactoryName);
+        if (dataPartitionType.equals(DataPartition.DataPartitionType.MAP_PARTITION)) {
+            WorkerStatus[] selectedWorkerStatuses =
+                    partitionPlacementStrategy.selectNextWorker(
+                            new PartitionPlacementContext(partitionFactory, taskLocation));
+            checkState(
+                    selectedWorkerStatuses.length == 1,
+                    "Currently only one worker need to be selected");
+            WorkerStatus workerStatus = selectedWorkerStatuses[0];
 
-        internalAddDataPartition(
-                workerStatus,
-                new DataPartitionStatus(
-                        jobID, new DataPartitionCoordinate(dataSetID, mapPartitionID)));
+            internalAddDataPartition(
+                    workerStatus,
+                    new DataPartitionStatus(
+                            jobID, new DataPartitionCoordinate(dataSetID, mapPartitionID)));
 
-        return new DefaultShuffleResource(
-                new ShuffleWorkerDescriptor[] {workerStatus.createShuffleWorkerDescriptor()},
-                partitionFactory.getDataPartitionType());
+            return new DefaultShuffleResource(
+                    new ShuffleWorkerDescriptor[] {workerStatus.createShuffleWorkerDescriptor()},
+                    partitionFactory.getDataPartitionType());
+        } else if (dataPartitionType.equals(DataPartition.DataPartitionType.REDUCE_PARTITION)) {
+            List<WorkerStatus> chosenWorkers = chooseWorkers(numberOfConsumers);
+            addReducePartition(jobID, dataSetID, chosenWorkers, numberOfConsumers);
+            return new DefaultShuffleResource(
+                    workerStatusToDescriptors(chosenWorkers), dataPartitionType);
+        } else {
+            throw new ShuffleResourceAllocationException(
+                    "Unknown data partition type " + dataPartitionType);
+        }
+    }
+
+    private void addReducePartition(
+            JobID jobID,
+            DataSetID dataSetID,
+            List<WorkerStatus> chosenWorkers,
+            int numberOfConsumers) {
+        for (int i = 0; i < numberOfConsumers; i++) {
+            internalAddDataPartition(
+                    chosenWorkers.get(i),
+                    new DataPartitionStatus(
+                            jobID,
+                            new DataPartitionCoordinate(dataSetID, new ReducePartitionID(i))));
+        }
+    }
+
+    List<WorkerStatus> chooseWorkers(int numberOfConsumers)
+            throws ShuffleResourceAllocationException {
+        List<WorkerStatus> allWorkers = new ArrayList<>(workers.values());
+        Random random = new Random();
+        int startIndex = random.nextInt(allWorkers.size());
+
+        if (allWorkers.isEmpty()) {
+            throw new ShuffleResourceAllocationException("No available workers");
+        }
+
+        List<WorkerStatus> chosenWorkers = new ArrayList<>(numberOfConsumers);
+        int leftNums = numberOfConsumers % allWorkers.size();
+        if (numberOfConsumers >= allWorkers.size()) {
+            int numTimes = numberOfConsumers / allWorkers.size();
+            for (WorkerStatus allWorker : allWorkers) {
+                for (int j = 0; j < numTimes; j++) {
+                    chosenWorkers.add(allWorker);
+                }
+            }
+        }
+        for (int i = startIndex; i < startIndex + leftNums; i++) {
+            chosenWorkers.add(allWorkers.get(i % allWorkers.size()));
+        }
+
+        return chosenWorkers;
+    }
+
+    private ShuffleWorkerDescriptor[] workerStatusToDescriptors(List<WorkerStatus> chosenWorkers) {
+        ShuffleWorkerDescriptor[] chosenWorkerArray =
+                new ShuffleWorkerDescriptor[chosenWorkers.size()];
+        IntStream.range(0, chosenWorkers.size())
+                .forEach(
+                        i -> {
+                            chosenWorkerArray[i] =
+                                    chosenWorkers.get(i).createShuffleWorkerDescriptor();
+                        });
+        return chosenWorkerArray;
+    }
+
+    /** Public permissions are used for unit testing. */
+    public DataPartition.DataPartitionType getDataPartitionType(String dataPartitionFactoryName)
+            throws ShuffleResourceAllocationException {
+        try {
+            return DataPartitionFactory.getDataPartitionType(dataPartitionFactoryName);
+        } catch (Throwable throwable) {
+            LOG.error("Failed to get the data partition type.", throwable);
+            throw new ShuffleResourceAllocationException(
+                    String.format(
+                            "Could not find the target data partition factory class %s, please "
+                                    + "check the class name make sure the class is in the classpath.",
+                            dataPartitionFactoryName),
+                    throwable);
+        }
     }
 
     @Override
