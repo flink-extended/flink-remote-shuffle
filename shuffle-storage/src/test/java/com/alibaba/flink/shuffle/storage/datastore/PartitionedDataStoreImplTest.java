@@ -518,10 +518,10 @@ public class PartitionedDataStoreImplTest {
                                         Buffer buffer =
                                                 writingView.getBufferSupplier().pollBuffer();
                                         buffer.writeBytes(StorageTestUtils.DATA_BYTES);
-                                        writingView.onBuffer(buffer, reducePartitionID);
+                                        writingView.onBuffer(buffer, 0, reducePartitionID);
                                     }
                                 }
-                                writingView.regionFinished();
+                                writingView.regionFinished(regionIndex);
                                 writingView.finish(StorageTestUtils.NO_OP_DATA_COMMIT_LISTENER);
                             } catch (Throwable ignored) {
                             }
@@ -756,7 +756,7 @@ public class PartitionedDataStoreImplTest {
                             creditListener.take(0, regionID);
                             Buffer buffer = writingView.getBufferSupplier().pollBuffer();
                             buffer.writeBytes(StorageTestUtils.DATA_BYTES);
-                            writingView.onBuffer(buffer, new ReducePartitionID(reduceID));
+                            writingView.onBuffer(buffer, 0, new ReducePartitionID(reduceID));
                         }
 
                         if (triggerWritingViewError) {
@@ -764,7 +764,7 @@ public class PartitionedDataStoreImplTest {
                             break;
                         }
                     }
-                    writingView.regionFinished();
+                    writingView.regionFinished(regionID);
                 }
                 writingView.finish(commitListener);
                 commitListener.waitForDataCommission();

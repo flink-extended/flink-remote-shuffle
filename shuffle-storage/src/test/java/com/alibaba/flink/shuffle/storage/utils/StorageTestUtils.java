@@ -67,6 +67,8 @@ import java.util.Set;
 /** Utility methods commonly used by tests of storage layer. */
 public class StorageTestUtils {
 
+    public static final int NUM_MAP_PARTITIONS = 8;
+
     public static final int NUM_REDUCE_PARTITIONS = 10;
 
     public static final int DATA_BUFFER_SIZE = 32 * 1024;
@@ -183,6 +185,7 @@ public class StorageTestUtils {
     public static BufferOrMarker.DataBuffer createDataBuffer(ByteBuffer data, int channelIndex) {
         return new BufferOrMarker.DataBuffer(
                 StorageTestUtils.MAP_PARTITION_ID,
+                0,
                 new ReducePartitionID(channelIndex),
                 new Buffer(data, StorageTestUtils.NO_OP_BUFFER_RECYCLER, data.remaining()));
     }

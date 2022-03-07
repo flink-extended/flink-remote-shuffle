@@ -45,20 +45,51 @@ public class NoOpDataPartitionWriter implements DataPartitionWriter {
     }
 
     @Override
-    public void addBuffer(ReducePartitionID reducePartitionID, Buffer buffer) {}
+    public void addBuffer(
+            ReducePartitionID reducePartitionID, int dataRegionIndex, Buffer buffer) {}
 
     @Override
-    public void startRegion(int dataRegionIndex, boolean isBroadcastRegion) {}
+    public void startRegion(
+            int dataRegionIndex, int numMaps, int needCredit, boolean isBroadcastRegion) {}
 
     @Override
-    public void finishRegion() {}
+    public void finishRegion(int dataRegionIndex) {}
 
     @Override
     public void finishDataInput(DataCommitListener commitListener) {}
 
     @Override
-    public boolean assignCredits(BufferQueue credits, BufferRecycler recycler) {
+    public void finishPartitionInput() {}
+
+    @Override
+    public boolean assignCredits(
+            BufferQueue credits, BufferRecycler recycler, boolean checkMinBuffers) {
         return false;
+    }
+
+    @Override
+    public boolean isCreditFulfilled() {
+        return false;
+    }
+
+    @Override
+    public boolean isInputFinished() {
+        return false;
+    }
+
+    @Override
+    public boolean isRegionFinished() {
+        return false;
+    }
+
+    @Override
+    public int numPendingCredit() {
+        return 0;
+    }
+
+    @Override
+    public int numFulfilledCredit() {
+        return 0;
     }
 
     @Override
@@ -66,4 +97,7 @@ public class NoOpDataPartitionWriter implements DataPartitionWriter {
 
     @Override
     public void release(Throwable throwable) {}
+
+    @Override
+    public void startRegion(int dataRegionIndex, boolean isBroadcastRegion) {}
 }

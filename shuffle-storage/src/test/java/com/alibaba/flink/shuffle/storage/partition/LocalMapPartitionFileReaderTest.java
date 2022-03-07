@@ -276,6 +276,67 @@ public class LocalMapPartitionFileReaderTest {
                 temporaryFolder.getRoot().getAbsolutePath());
     }
 
+    private LocalReducePartitionFile createReducePartitionFile() {
+        return createLocalReducePartitionFile("/tmp");
+    }
+
+    public static LocalReducePartitionFile createLocalReducePartitionFile(String baseDir) {
+        String basePath = baseDir + "/";
+        //        String fileName = CommonUtils.randomHexString(32);
+        String fileName = "E8A30BD6AEC74D2AEDF655A1C8E08128";
+        LocalReducePartitionFileMeta fileMeta =
+                new LocalReducePartitionFileMeta(
+                        basePath + fileName, 1, LocalReducePartitionFile.LATEST_STORAGE_VERSION);
+        return new LocalReducePartitionFile(fileMeta, 3, false);
+    }
+
+    @Test
+    public void testReadDataFile() throws Exception {
+        int numRegions = 1;
+        int numBuffers = 36;
+        LocalReducePartitionFile partitionFile = createReducePartitionFile();
+
+        int buffersRead = readData(partitionFile, 1);
+        assertEquals(numRegions * numBuffers * 1, buffersRead);
+        assertNull(partitionFile.getIndexReadingChannel());
+        assertNull(partitionFile.getDataReadingChannel());
+    }
+
+    private int readData(LocalReducePartitionFile partitionFile, int numPartitions)
+            throws Exception {
+        Queue<LocalReducePartitionFileReader> fileReaders = new ArrayDeque<>();
+        for (int partitionIndex = 0; partitionIndex < 1; ) {
+            LocalReducePartitionFileReader fileReader =
+                    new LocalReducePartitionFileReader(
+                            dataChecksumEnabled,
+                            partitionIndex,
+                            Math.min(partitionIndex + numPartitions - 1, 0),
+                            partitionFile);
+            fileReader.open();
+            fileReaders.add(fileReader);
+            partitionIndex += numPartitions;
+        }
+
+        int buffersRead = 0;
+        ByteBuffer buffer = ByteBuffer.allocate(StorageTestUtils.DATA_BUFFER_SIZE);
+        while (!fileReaders.isEmpty()) {
+            LocalReducePartitionFileReader fileReader = fileReaders.poll();
+            if (!fileReader.hasRemaining()) {
+                fileReader.finishReading();
+                continue;
+            }
+            fileReaders.add(fileReader);
+
+            buffer.clear();
+            fileReader.readBuffer(buffer);
+
+            ++buffersRead;
+            assertEquals(
+                    ByteBuffer.wrap(StorageTestUtils.DATA_BYTES).position(), buffer.position());
+        }
+        return buffersRead;
+    }
+
     private int readData(LocalMapPartitionFile partitionFile, int numPartitions) throws Exception {
         Queue<LocalMapPartitionFileReader> fileReaders = new ArrayDeque<>();
         for (int partitionIndex = 0; partitionIndex < StorageTestUtils.NUM_REDUCE_PARTITIONS; ) {
