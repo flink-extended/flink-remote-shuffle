@@ -47,6 +47,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -232,11 +233,21 @@ public abstract class BaseDataPartition implements DataPartition {
      */
     protected abstract DataPartitionWritingTask getPartitionWritingTask();
 
+    protected abstract int numWritingCounter();
+
+    protected abstract int numWritingTaskBuffers();
+
     /**
      * Returns the {@link DataPartitionReadingTask} of this data partition. Different {@link
      * DataPartition} implementations can implement different {@link DataPartitionReadingTask}.
      */
     protected abstract DataPartitionReadingTask getPartitionReadingTask();
+
+    protected abstract void decWritingCount();
+
+    protected abstract void addPendingBufferWriter(DataPartitionWriter writer);
+
+    protected abstract BlockingQueue<DataPartitionWriter> getPendingBufferWriters();
 
     /**
      * {@link DataPartitionProcessor} is responsible for processing all the pending {@link

@@ -135,17 +135,25 @@ public abstract class BufferOrMarker {
         /** Target reduce partition of the data. */
         private final ReducePartitionID reducePartitionID;
 
+        /** Region index of the data. */
+        private final int dataRegionIndex;
+
         /** Buffer containing data to be written. */
         private final Buffer buffer;
 
         public DataBuffer(
-                MapPartitionID mapPartitionID, ReducePartitionID reducePartitionID, Buffer buffer) {
+                MapPartitionID mapPartitionID,
+                int dataRegionIndex,
+                ReducePartitionID reducePartitionID,
+                Buffer buffer) {
             super(mapPartitionID);
 
             CommonUtils.checkArgument(reducePartitionID != null, "Must be not null.");
             CommonUtils.checkArgument(buffer != null, "Must be not null.");
+            CommonUtils.checkArgument(dataRegionIndex >= 0, "Must be non-negative.");
 
             this.reducePartitionID = reducePartitionID;
+            this.dataRegionIndex = dataRegionIndex;
             this.buffer = buffer;
         }
 
@@ -156,6 +164,10 @@ public abstract class BufferOrMarker {
 
         public void release() {
             buffer.release();
+        }
+
+        public int getDataRegionIndex() {
+            return dataRegionIndex;
         }
 
         public ReducePartitionID getReducePartitionID() {
@@ -173,6 +185,8 @@ public abstract class BufferOrMarker {
         /** Data region index (started from 0) of the new region. */
         private final int dataRegionIndex;
 
+        private final int requireCredit;
+
         /**
          * Whether the new data region is a broadcast region. In a broadcast region, each piece of
          * data will be written to all reduce partitions.
@@ -180,12 +194,16 @@ public abstract class BufferOrMarker {
         private final boolean isBroadcastRegion;
 
         public RegionStartedMarker(
-                MapPartitionID mapPartitionID, int dataRegionIndex, boolean isBroadcastRegion) {
+                MapPartitionID mapPartitionID,
+                int dataRegionIndex,
+                int requireCredit,
+                boolean isBroadcastRegion) {
             super(mapPartitionID);
 
             CommonUtils.checkArgument(dataRegionIndex >= 0, "Must be non-negative.");
 
             this.dataRegionIndex = dataRegionIndex;
+            this.requireCredit = requireCredit;
             this.isBroadcastRegion = isBroadcastRegion;
         }
 
@@ -198,6 +216,10 @@ public abstract class BufferOrMarker {
             return dataRegionIndex;
         }
 
+        public int getRequireCredit() {
+            return requireCredit;
+        }
+
         public boolean isBroadcastRegion() {
             return isBroadcastRegion;
         }
@@ -206,13 +228,24 @@ public abstract class BufferOrMarker {
     /** Definition of {@link Type#REGION_FINISHED_MARKER}. */
     public static class RegionFinishedMarker extends BufferOrMarker {
 
-        public RegionFinishedMarker(MapPartitionID mapPartitionID) {
+        /** Data region index (started from 0) of the new region. */
+        private final int dataRegionIndex;
+
+        public RegionFinishedMarker(MapPartitionID mapPartitionID, int dataRegionIndex) {
             super(mapPartitionID);
+
+            CommonUtils.checkArgument(dataRegionIndex >= 0, "Must be non-negative.");
+
+            this.dataRegionIndex = dataRegionIndex;
         }
 
         @Override
         public Type getType() {
             return Type.REGION_FINISHED_MARKER;
+        }
+
+        public int getDataRegionIndex() {
+            return dataRegionIndex;
         }
     }
 

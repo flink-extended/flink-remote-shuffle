@@ -18,24 +18,21 @@
 
 package com.alibaba.flink.shuffle.storage.partition;
 
-import javax.annotation.Nullable;
+import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.listener.DataRegionCreditListener;
+import com.alibaba.flink.shuffle.core.listener.FailureListener;
+import com.alibaba.flink.shuffle.core.storage.ReducePartition;
 
 /**
- * {@link DataPartitionWritingTask} encapsulates the logic of data partition writing and will be
- * triggered when there is a data writing request.
+ * {@link BaseReducePartitionWriter} implements some basic logic for data writing of {@link
+ * ReducePartition}s.
  */
-public interface DataPartitionWritingTask extends PartitionProcessingTask {
-
-    /** Allocates resources for data writing, will be called on the first data writing request. */
-    void allocateResources();
-
-    /** Triggers running of this writing task which will write data to data partition. */
-    void triggerWriting();
-
-    void recycleResources();
-
-    void finishInput() throws Exception;
-
-    /** Releases this {@link DataPartitionWritingTask} which releases all allocated resources. */
-    void release(@Nullable Throwable throwable) throws Exception;
+public abstract class BaseReducePartitionWriter extends BaseDataPartitionWriter {
+    public BaseReducePartitionWriter(
+            MapPartitionID mapPartitionID,
+            BaseDataPartition dataPartition,
+            DataRegionCreditListener dataRegionCreditListener,
+            FailureListener failureListener) {
+        super(dataPartition, mapPartitionID, dataRegionCreditListener, failureListener);
+    }
 }

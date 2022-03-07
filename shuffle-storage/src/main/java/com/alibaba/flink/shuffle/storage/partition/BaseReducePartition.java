@@ -35,8 +35,8 @@ import com.alibaba.flink.shuffle.core.memory.BufferRecycler;
 import com.alibaba.flink.shuffle.core.storage.BufferQueue;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionReader;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWriter;
-import com.alibaba.flink.shuffle.core.storage.MapPartition;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
+import com.alibaba.flink.shuffle.core.storage.ReducePartition;
 import com.alibaba.flink.shuffle.storage.exception.ConcurrentWriteException;
 import com.alibaba.flink.shuffle.storage.utils.DataPartitionUtils;
 
@@ -50,37 +50,50 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.Random;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.stream.IntStream;
+
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
 
 /**
- * Base {@link MapPartition} implementation which takes care of allocating resources and io
- * scheduling. It can be used by different subclasses and simplify the new {@link MapPartition}
+ * Base {@link ReducePartition} implementation which takes care of allocating resources and io
+ * scheduling. It can be used by different subclasses and simplify the new {@link ReducePartition}
  * implementation.
  */
-public abstract class BaseMapPartition extends BaseDataPartition implements MapPartition {
+public abstract class BaseReducePartition extends BaseDataPartition implements ReducePartition {
+    private static final Logger LOG = LoggerFactory.getLogger(BaseReducePartition.class);
 
-    private static final Logger LOG = LoggerFactory.getLogger(BaseMapPartition.class);
+    private static final Random RANDOM = new Random();
 
-    /** Task responsible for writing data to this {@link MapPartition}. */
-    private final MapPartitionWritingTask writingTask;
+    /** Task responsible for writing data to this {@link ReducePartition}. */
+    private final ReducePartitionWritingTask writingTask;
 
-    /** Task responsible for reading data from this {@link MapPartition}. */
-    private final MapPartitionReadingTask readingTask;
+    /** Task responsible for reading data from this {@link ReducePartition}. */
+    private final ReducePartitionReadingTask readingTask;
 
-    /** Whether this {@link MapPartition} has finished writing all data. */
+    /** Whether this {@link ReducePartition} has finished writing all data. */
     protected boolean isFinished;
 
-    /**
-     * Whether a {@link DataPartitionWriter} has been created for this {@link MapPartition} or not.
-     */
-    protected boolean partitionWriterCreated;
+    protected final BlockingQueue<DataPartitionWriter> pendingBufferWriters =
+            new LinkedBlockingQueue<>();
 
-    public BaseMapPartition(PartitionedDataStore dataStore, SingleThreadExecutor mainExecutor) {
+    protected volatile boolean allocatedBuffers;
+
+    protected int writingCounter;
+
+    private long lastPollWriterTimestamp = System.currentTimeMillis();
+
+    public BaseReducePartition(PartitionedDataStore dataStore, SingleThreadExecutor mainExecutor) {
         super(dataStore, mainExecutor);
 
         Configuration configuration = dataStore.getConfiguration();
-        this.readingTask = new MapPartitionReadingTask(configuration);
-        this.writingTask = new MapPartitionWritingTask(configuration);
+        this.readingTask = new ReducePartitionReadingTask(configuration);
+        this.writingTask = new ReducePartitionWritingTask(configuration);
+        this.allocatedBuffers = false;
+        this.writingCounter = 0;
     }
 
     @Override
@@ -100,13 +113,13 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                 () -> {
                     try {
                         CommonUtils.checkArgument(
-                                mapPartitionID.equals(getPartitionMeta().getDataPartitionID()),
-                                "Inconsistent partition ID for the target map partition.");
+                                mapPartitionID.equals(writer.getMapPartitionID()),
+                                "Inconsistent partition ID for the targetStorageTestUt map partition.");
 
                         final Exception exception;
                         if (isReleased) {
                             exception = new ShuffleException("Data partition has been released.");
-                        } else if (!writers.isEmpty() || partitionWriterCreated) {
+                        } else if (!writers.isEmpty() && writers.containsKey(mapPartitionID)) {
                             exception =
                                     new ConcurrentWriteException(
                                             "Trying to write an existing map partition.");
@@ -119,7 +132,6 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                             return;
                         }
 
-                        partitionWriterCreated = true;
                         writers.put(mapPartitionID, writer);
                     } catch (Throwable throwable) {
                         CommonUtils.runQuietly(() -> releaseOnInternalError(throwable));
@@ -153,7 +165,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         addPartitionProcessingTask(
                 () -> {
                     try {
-                        CommonUtils.checkState(!isReleased, "Data partition has been released.");
+                        checkState(!isReleased, "Data partition has been released.");
 
                         // allocate resources when the first reader is registered
                         boolean allocateResources = readers.isEmpty();
@@ -187,7 +199,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
             throws Exception;
 
     /**
-     * Returns the corresponding {@link DataPartitionWriter} of the target map partition. The
+     * Returns the corresponding {@link DataPartitionWriter} of the target reduce partition. The
      * implementation is responsible for closing its allocated resources if any when encountering
      * any exception.
      */
@@ -198,13 +210,13 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
             throws Exception;
 
     @Override
-    public MapPartitionWritingTask getPartitionWritingTask() {
+    public ReducePartitionWritingTask getPartitionWritingTask() {
         return writingTask;
     }
 
     @Override
     protected int numWritingCounter() {
-        return 0;
+        return writingCounter;
     }
 
     @Override
@@ -213,19 +225,13 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
     }
 
     @Override
-    public MapPartitionReadingTask getPartitionReadingTask() {
+    public ReducePartitionReadingTask getPartitionReadingTask() {
         return readingTask;
     }
 
     @Override
-    protected void decWritingCount() {}
-
-    @Override
-    protected void addPendingBufferWriter(DataPartitionWriter writer) {}
-
-    @Override
-    protected BlockingQueue<DataPartitionWriter> getPendingBufferWriters() {
-        return null;
+    protected void decWritingCount() {
+        writingCounter--;
     }
 
     @Override
@@ -258,11 +264,20 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         }
     }
 
+    @Override
+    public void addPendingBufferWriter(DataPartitionWriter writer) {
+        pendingBufferWriters.add(writer);
+    }
+
+    public BlockingQueue<DataPartitionWriter> getPendingBufferWriters() {
+        return pendingBufferWriters;
+    }
+
     /**
-     * {@link MapPartitionWritingTask} implements the basic resource allocation and data processing
-     * logics which can be reused by subclasses.
+     * {@link ReducePartitionWritingTask} implements the basic resource allocation and data
+     * processing logic which can be reused by subclasses.
      */
-    protected class MapPartitionWritingTask implements DataPartitionWritingTask, BufferListener {
+    protected class ReducePartitionWritingTask implements DataPartitionWritingTask, BufferListener {
 
         /**
          * Minimum size of memory in bytes to trigger writing of {@link DataPartitionReader}s. Use a
@@ -296,10 +311,9 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         /** Available buffers can be used for data writing of the target partition. */
         protected final BufferQueue buffers = new BufferQueue(new ArrayList<>());
 
-        /** {@link DataPartitionWriter} instance used to write data to this {@link MapPartition}. */
-        protected DataPartitionWriter writer;
+        private int numTotalBuffers;
 
-        protected MapPartitionWritingTask(Configuration configuration) {
+        protected ReducePartitionWritingTask(Configuration configuration) {
             int minWritingMemory =
                     CommonUtils.checkedDownCast(
                             StorageOptions.MIN_WRITING_READING_MEMORY_SIZE.getBytes());
@@ -324,59 +338,76 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
             try {
                 CommonUtils.checkState(inExecutorThread(), "Not in main thread.");
 
-                if (isReleased) {
+                if (isReleased || writers.isEmpty()) {
                     return;
                 }
-                CommonUtils.checkState(!isFinished, "Data partition has been finished.");
                 CommonUtils.checkState(!buffers.isReleased(), "Buffers has been released.");
 
-                if (writer == null) {
-                    CommonUtils.checkState(writers.size() == 1, "Too many partition writers.");
-                    MapPartitionID partitionID = getPartitionMeta().getDataPartitionID();
-                    writer = CommonUtils.checkNotNull(writers.get(partitionID));
+                Throwable throwable = null;
+                for (DataPartitionWriter writer : writers.values()) {
+                    try {
+                        if (writer.writeData()) {
+                            LOG.debug(
+                                    "Successfully write partition data: {}, {}.",
+                                    writer.getMapPartitionID(),
+                                    getPartitionMeta());
+                        }
+                    } catch (Throwable th) {
+                        throwable = th;
+                        LOG.error("Write data failed, ", th);
+                        break;
+                    }
                 }
 
-                if (!writer.writeData()) {
-                    dispatchBuffers();
+                if (isReleased || isFinished) {
+                    recycleResources();
                     return;
                 }
 
-                writer = null;
-                writers.clear();
-                recycleBuffers(buffers.release(), dataStore.getWritingBufferDispatcher());
-                isFinished = true;
-                LOG.info("Successfully write data partition: {}.", getPartitionMeta());
+                dispatchBuffers();
+
+                if (throwable != null) {
+                    DataPartitionUtils.releaseDataPartitionWriters(writers.values(), throwable);
+                    recycleBuffers(buffers.release(), dataStore.getWritingBufferDispatcher());
+                    LOG.error("Failed to write partition data.", throwable);
+                }
             } catch (Throwable throwable) {
+                DataPartitionUtils.releaseDataPartitionWriters(writers.values(), throwable);
+                recycleBuffers(buffers.release(), dataStore.getWritingBufferDispatcher());
                 LOG.error("Failed to write partition data.", throwable);
                 CommonUtils.runQuietly(() -> releaseOnInternalError(throwable));
             }
         }
 
         private void checkInProcessState() {
-            CommonUtils.checkState(writer != null, "No registered writer.");
-            CommonUtils.checkState(!isReleased, "Partition has been released.");
-            CommonUtils.checkState(!isFinished, "Data writing has finished.");
+            checkState(writers.size() > 0, "No registered writer.");
+            checkState(!isReleased, "Partition has been released.");
+            checkState(!isFinished, "Data writing has finished.");
         }
 
         @Override
         public void allocateResources() {
-            CommonUtils.checkState(inExecutorThread(), "Not in main thread.");
+            checkState(inExecutorThread(), "Not in main thread.");
             checkInProcessState();
 
-            allocateBuffers(
-                    dataStore.getWritingBufferDispatcher(),
-                    this,
-                    minWritingBuffers,
-                    maxWritingBuffers);
+            if (!allocatedBuffers) {
+                allocateBuffers(
+                        dataStore.getWritingBufferDispatcher(),
+                        this,
+                        minWritingBuffers,
+                        maxWritingBuffers);
+                allocatedBuffers = true;
+            }
         }
 
         @Override
         public void release(@Nullable Throwable releaseCause) throws Exception {
             try {
-                CommonUtils.checkState(inExecutorThread(), "Not in main thread.");
+                checkState(inExecutorThread(), "Not in main thread.");
 
-                writer = null;
+                DataPartitionUtils.releaseDataPartitionWriters(writers.values(), releaseCause);
                 recycleBuffers(buffers.release(), dataStore.getWritingBufferDispatcher());
+                numTotalBuffers = 0;
             } catch (Throwable throwable) {
                 LOG.error("Fatal: failed to release the data writing task.", throwable);
                 ExceptionUtils.rethrowException(throwable);
@@ -389,23 +420,133 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         }
 
         @Override
-        public void recycleResources() {}
+        public void recycleResources() {
+            List<ByteBuffer> toRelease = new ArrayList<>(buffers.size());
+            while (buffers.size() > 0) {
+                toRelease.add(buffers.poll());
+            }
+            recycleBuffers(toRelease, dataStore.getWritingBufferDispatcher());
+            allocatedBuffers = false;
+            numTotalBuffers = 0;
+            checkState(pendingBufferWriters.isEmpty(), "Non-empty pending buffer writers.");
+            checkState(buffers.size() == 0, "Bug: leaking buffers.");
+        }
 
         @Override
-        public void finishInput() {}
+        public void finishInput() throws Exception {
+            checkState(inExecutorThread(), "Not in main thread.");
+            checkInProcessState();
+            isFinished = true;
+            for (DataPartitionWriter writer : writers.values()) {
+                writer.finishPartitionInput();
+            }
+        }
 
         private void dispatchBuffers() {
-            CommonUtils.checkState(inExecutorThread(), "Not in main thread.");
+            checkState(inExecutorThread(), "Not in main thread.");
             checkInProcessState();
 
-            if (!writer.assignCredits(buffers, buffer -> recycle(buffer, buffers), false)
-                    && buffers.size() > 0) {
-                List<ByteBuffer> toRelease = new ArrayList<>(buffers.size());
-                while (buffers.size() > 0) {
-                    toRelease.add(buffers.poll());
+            while (!pendingBufferWriters.isEmpty()) {
+                DataPartitionWriter writer = pendingBufferWriters.peek();
+                if (writer.isCreditFulfilled() || writer.isRegionFinished()) {
+                    randomlyPollNextWriter();
+                    continue;
                 }
-                recycleBuffers(toRelease, dataStore.getWritingBufferDispatcher());
+                boolean isWritingCounterIncreased = false;
+                if (writer.numFulfilledCredit() == 0 && writer.numPendingCredit() != 0) {
+                    isWritingCounterIncreased = true;
+                    writingCounter++;
+                }
+
+                if (!assignBuffersToWriters(writer, isWritingCounterIncreased)) {
+                    break;
+                }
             }
+            recycleBuffersIfNeeded();
+        }
+
+        private void randomlyPollNextWriter() {
+            if (pendingBufferWriters.isEmpty()) {
+                return;
+            }
+            int numFulfilled = pendingBufferWriters.peek().numFulfilledCredit();
+            pendingBufferWriters.poll();
+            if (pendingBufferWriters.size() > 1) {
+                int numMove = RANDOM.nextInt(pendingBufferWriters.size());
+                while (numMove-- > 0) {
+                    pendingBufferWriters.add(checkNotNull(pendingBufferWriters.poll()));
+                }
+            }
+            LOG.info(
+                    "{}, fulfilled {} credits for {} ms, next need {} credits, total buffers {}",
+                    this,
+                    numFulfilled,
+                    (System.currentTimeMillis() - lastPollWriterTimestamp),
+                    pendingBufferWriters.peek() == null
+                            ? 0
+                            : pendingBufferWriters.peek().numPendingCredit(),
+                    buffers.size());
+            lastPollWriterTimestamp = System.currentTimeMillis();
+        }
+
+        /**
+         * Returning true indicates that the available buffer is sufficient to meet the buffer
+         * request of the writer in the current queue header.
+         */
+        private boolean assignBuffersToWriters(
+                DataPartitionWriter writer, boolean isWritingCounterIncreased) {
+            int requireCredit = writer.numPendingCredit();
+            if (buffers.size() < requireCredit) {
+                //                if (buffers.size() < MIN_CREDITS_TO_NOTIFY
+                //                        && requireCredit >= MIN_CREDITS_TO_NOTIFY) {
+                //                    return false;
+                //                }
+
+                //                if (numTotalBuffers == buffers.size() && writingCounter == 1) {
+                //                    assignBuffers(writer, buffers, false);
+                //                    checkState(!writer.isCreditFulfilled(), "Wrong credit state");
+                //                }
+                assignBuffers(writer, buffers, false);
+                checkState(!writer.isCreditFulfilled(), "Wrong credit state");
+                return false;
+            }
+
+            fulfillCurrentWriterCreditRequirement(writer, isWritingCounterIncreased, requireCredit);
+            return true;
+        }
+
+        private void fulfillCurrentWriterCreditRequirement(
+                DataPartitionWriter writer, boolean isWritingCounterIncreased, int requireCredit) {
+            BufferQueue assignBuffers = new BufferQueue(new ArrayList<>());
+            IntStream.range(0, requireCredit).forEach(i -> assignBuffers.add(buffers.poll()));
+            int numAssigned = assignBuffers(writer, assignBuffers, false);
+            if (numAssigned == requireCredit) {
+                randomlyPollNextWriter();
+                checkState(
+                        writer.isCreditFulfilled() || writer.isRegionFinished(),
+                        "Wrong credit state");
+            } else {
+                checkState(!writer.isCreditFulfilled(), "Wrong credit state");
+                writingCounter = isWritingCounterIncreased ? writingCounter - 1 : writingCounter;
+            }
+        }
+
+        private void recycleBuffersIfNeeded() {
+            if (pendingBufferWriters.isEmpty() && buffers.size() == numTotalBuffers) {
+                recycleResources();
+            }
+        }
+
+        private int assignBuffers(
+                DataPartitionWriter writer, BufferQueue assignBuffers, boolean checkMinBuffers) {
+            int numToAssignBuffers = assignBuffers.size();
+            writer.assignCredits(
+                    assignBuffers, buffer -> recycle(buffer, buffers), checkMinBuffers);
+            int numAssigned = numToAssignBuffers - assignBuffers.size();
+            while (assignBuffers.size() > 0) {
+                buffers.add(assignBuffers.poll());
+            }
+            return numAssigned;
         }
 
         /** Notifies the allocated writing buffers to this data writing task. */
@@ -436,6 +577,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                                 throw new ShuffleException("Buffers has been released.");
                             }
 
+                            numTotalBuffers += allocatedBuffers.size();
                             buffers.add(allocatedBuffers);
                             allocatedBuffers.clear();
                             dispatchBuffers();
@@ -454,6 +596,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                     recycleBuffers(
                             Collections.singletonList(buffer),
                             dataStore.getWritingBufferDispatcher());
+                    numTotalBuffers--;
                     return;
                 }
 
@@ -461,6 +604,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                     recycleBuffers(
                             Collections.singletonList(buffer),
                             dataStore.getWritingBufferDispatcher());
+                    numTotalBuffers--;
                     throw new ShuffleException("Buffers has been released.");
                 }
 
@@ -488,10 +632,10 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
     }
 
     /**
-     * {@link MapPartitionReadingTask} implements the basic resource allocation and data reading
-     * logics (including IO scheduling) which can be reused by subclasses.
+     * {@link ReducePartitionReadingTask} implements the basic resource allocation and data reading
+     * logic (including IO scheduling) which can be reused by subclasses.
      */
-    protected class MapPartitionReadingTask implements DataPartitionReadingTask, BufferListener {
+    protected class ReducePartitionReadingTask implements DataPartitionReadingTask, BufferListener {
 
         /**
          * Minimum size of memory in bytes to trigger reading of {@link DataPartitionReader}s. Use a
@@ -525,7 +669,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         /** All available buffers can be used by the partition readers for reading. */
         protected BufferQueue buffers = BufferQueue.RELEASED_EMPTY_BUFFER_QUEUE;
 
-        protected MapPartitionReadingTask(Configuration configuration) {
+        protected ReducePartitionReadingTask(Configuration configuration) {
             int minReadingMemory =
                     CommonUtils.checkedDownCast(
                             StorageOptions.MIN_WRITING_READING_MEMORY_SIZE.getBytes());
@@ -548,13 +692,13 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         @Override
         public void process() {
             try {
-                CommonUtils.checkState(inExecutorThread(), "Not in main thread.");
+                checkState(inExecutorThread(), "Not in main thread.");
 
                 if (isReleased) {
                     return;
                 }
-                CommonUtils.checkState(!readers.isEmpty(), "No reader registered.");
-                CommonUtils.checkState(!buffers.isReleased(), "Buffers has been released.");
+                checkState(!readers.isEmpty(), "No reader registered.");
+                checkState(!buffers.isReleased(), "Buffers has been released.");
                 BufferRecycler recycler = (buffer) -> recycle(buffer, buffers);
 
                 for (DataPartitionReader reader : readers) {
@@ -606,7 +750,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                                 recycleBuffers(
                                         Collections.singletonList(buffer),
                                         dataStore.getReadingBufferDispatcher());
-                                CommonUtils.checkState(bufferQueue != null, "Must be not null.");
+                                checkState(bufferQueue != null, "Must be not null.");
                                 return;
                             }
 
@@ -624,10 +768,10 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         }
 
         @Override
-        public void allocateResources() throws Exception {
-            CommonUtils.checkState(inExecutorThread(), "Not in main thread.");
-            CommonUtils.checkState(!readers.isEmpty(), "No reader registered.");
-            CommonUtils.checkState(!isReleased, "Partition has been released.");
+        public void allocateResources() {
+            checkState(inExecutorThread(), "Not in main thread.");
+            checkState(!readers.isEmpty(), "No reader registered.");
+            checkState(!isReleased, "Partition has been released.");
 
             allocateBuffers(
                     dataStore.getReadingBufferDispatcher(),
@@ -692,8 +836,9 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         @Override
         public void release(Throwable releaseCause) throws Exception {
             try {
-                CommonUtils.checkState(inExecutorThread(), "Not in main thread.");
+                checkState(inExecutorThread(), "Not in main thread.");
 
+                LOG.debug("Release reading buffers, buffers num={}", buffers.size());
                 recycleBuffers(buffers.release(), dataStore.getReadingBufferDispatcher());
             } catch (Throwable throwable) {
                 LOG.error("Fatal: failed to release the data reading task.", throwable);

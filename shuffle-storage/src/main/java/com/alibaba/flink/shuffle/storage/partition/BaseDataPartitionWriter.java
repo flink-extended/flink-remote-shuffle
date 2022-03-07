@@ -34,16 +34,24 @@ import com.alibaba.flink.shuffle.core.storage.DataPartitionWriter;
 import com.alibaba.flink.shuffle.core.utils.BufferUtils;
 import com.alibaba.flink.shuffle.core.utils.ListenerUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.annotation.concurrent.GuardedBy;
 
 import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Queue;
+
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
 
 /**
  * {@link BaseDataPartitionWriter} implements some basics logic of {@link DataPartitionWriter} which
  * can be reused by subclasses and simplify the implementation of new {@link DataPartitionWriter}s.
  */
 public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
+
+    private static final Logger LOG = LoggerFactory.getLogger(BaseDataPartitionWriter.class);
 
     /**
      * Minimum number of credits to notify the credit listener of new credits. Bulk notification can
@@ -84,7 +92,7 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
      * processed.
      */
     @GuardedBy("lock")
-    protected final Queue<BufferOrMarker> bufferOrMarkers = new ArrayDeque<>();
+    protected final Deque<BufferOrMarker> bufferOrMarkers = new ArrayDeque<>();
 
     /** Whether this partition writer has been released or not. */
     @GuardedBy("lock")
@@ -98,6 +106,8 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
      * Whether this {@link DataPartitionWriter} needs more credits to receive and cache data or not.
      */
     protected boolean needMoreCredits;
+
+    protected boolean isRegionFinished;
 
     /** Index number of the current data region being written. */
     protected int currentDataRegionIndex;
@@ -124,26 +134,37 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
     }
 
     @Override
-    public void addBuffer(ReducePartitionID reducePartitionID, Buffer buffer) {
-        addBufferOrMarker(new BufferOrMarker.DataBuffer(mapPartitionID, reducePartitionID, buffer));
+    public void addBuffer(ReducePartitionID reducePartitionID, int dataRegionIndex, Buffer buffer) {
+        addBufferOrMarker(
+                new BufferOrMarker.DataBuffer(
+                        mapPartitionID, dataRegionIndex, reducePartitionID, buffer));
     }
 
     @Override
     public void startRegion(int dataRegionIndex, boolean isBroadcastRegion) {
-        addBufferOrMarker(
-                new BufferOrMarker.RegionStartedMarker(
-                        mapPartitionID, dataRegionIndex, isBroadcastRegion));
+        startRegion(dataRegionIndex, 1, 0, isBroadcastRegion);
     }
 
     @Override
-    public void finishRegion() {
-        addBufferOrMarker(new BufferOrMarker.RegionFinishedMarker(mapPartitionID));
+    public void startRegion(
+            int dataRegionIndex, int numMaps, int requireCredit, boolean isBroadcastRegion) {
+        addBufferOrMarker(
+                new BufferOrMarker.RegionStartedMarker(
+                        mapPartitionID, dataRegionIndex, requireCredit, isBroadcastRegion));
+    }
+
+    @Override
+    public void finishRegion(int dataRegionIndex) {
+        addBufferOrMarker(new BufferOrMarker.RegionFinishedMarker(mapPartitionID, dataRegionIndex));
     }
 
     @Override
     public void finishDataInput(DataCommitListener commitListener) {
         addBufferOrMarker(new BufferOrMarker.InputFinishedMarker(mapPartitionID, commitListener));
     }
+
+    @Override
+    public void finishPartitionInput() throws Exception {}
 
     /** Adds a new {@link BufferOrMarker} to this partition writer to be processed. */
     protected abstract void addBufferOrMarker(BufferOrMarker bufferOrMarker);
@@ -213,8 +234,8 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
 
     protected void processInputFinishedMarker(BufferOrMarker.InputFinishedMarker marker)
             throws Exception {
-        CommonUtils.checkState(!needMoreCredits, "Must finish region before finish input.");
-        CommonUtils.checkState(availableCredits.isEmpty(), "Buffers (credits) leanKing.");
+        checkState(!needMoreCredits, "Must finish region before finish input.");
+        checkState(availableCredits.isEmpty(), "Buffers (credits) leaking.");
         ListenerUtils.notifyDataCommitted(marker.getCommitListener());
     }
 
@@ -236,7 +257,8 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
     }
 
     @Override
-    public boolean assignCredits(BufferQueue credits, BufferRecycler recycler) {
+    public boolean assignCredits(
+            BufferQueue credits, BufferRecycler recycler, boolean checkMinBuffers) {
         CommonUtils.checkArgument(credits != null, "Must be not null.");
         CommonUtils.checkArgument(recycler != null, "Must be not null.");
 
@@ -266,6 +288,31 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
     }
 
     @Override
+    public boolean isCreditFulfilled() {
+        return false;
+    }
+
+    @Override
+    public int numPendingCredit() {
+        return 0;
+    }
+
+    @Override
+    public int numFulfilledCredit() {
+        return 0;
+    }
+
+    @Override
+    public boolean isInputFinished() {
+        return false;
+    }
+
+    @Override
+    public boolean isRegionFinished() {
+        return false;
+    }
+
+    @Override
     public Buffer pollBuffer() {
         synchronized (lock) {
             if (isReleased || isError) {
@@ -290,6 +337,12 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
             isReleased = true;
             buffers = new ArrayDeque<>(availableCredits);
             availableCredits.clear();
+            LOG.debug(
+                    "Clear buffers for data partition writer, {}, {}, {} available credits {}",
+                    this.toString(),
+                    mapPartitionID,
+                    dataPartition.getPartitionMeta().getDataPartitionID(),
+                    availableCredits.size());
         }
 
         if (notifyFailure) {
@@ -304,17 +357,23 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
         releaseUnusedCredits();
     }
 
-    private void releaseUnusedCredits() {
+    protected void releaseUnusedCredits() {
         Queue<Buffer> unusedCredits;
         synchronized (lock) {
             unusedCredits = new ArrayDeque<>(availableCredits);
             availableCredits.clear();
         }
+        LOG.debug(
+                "Clear unused credits, {}, {}, {} available credits {}",
+                this.toString(),
+                mapPartitionID,
+                dataPartition.getPartitionMeta().getDataPartitionID(),
+                availableCredits.size());
 
         BufferUtils.recycleBuffers(unusedCredits);
     }
 
-    private Queue<BufferOrMarker> getPendingBufferOrMarkers() {
+    protected Queue<BufferOrMarker> getPendingBufferOrMarkers() {
         synchronized (lock) {
             if (bufferOrMarkers.isEmpty()) {
                 return null;
