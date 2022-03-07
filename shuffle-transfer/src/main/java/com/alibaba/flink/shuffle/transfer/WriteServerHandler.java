@@ -54,6 +54,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
 import static com.alibaba.flink.shuffle.common.utils.ProtocolUtils.currentProtocolVersion;
 import static com.alibaba.flink.shuffle.common.utils.ProtocolUtils.emptyExtraMessage;
 
@@ -148,7 +149,7 @@ public class WriteServerHandler extends SimpleChannelInboundHandler<TransferMess
         } else if (msgClazz == WriteData.class) {
             WriteData writeData = (WriteData) msg;
             SocketAddress address = ctx.channel().remoteAddress();
-            LOG.trace("({}) Received {}.", address, writeData);
+            LOG.debug("({}) Received {}.", address, writeData);
 
             ChannelID channelID = writeData.getChannelID();
             currentChannelID = channelID;
@@ -163,8 +164,9 @@ public class WriteServerHandler extends SimpleChannelInboundHandler<TransferMess
 
             ChannelID channelID = regionStart.getChannelID();
             currentChannelID = channelID;
+            // TODO, after implementing the reduce partition of client side, fix this line.
             writingService.regionStart(
-                    channelID, regionStart.getRegionIdx(), regionStart.isBroadcast());
+                    channelID, regionStart.getRegionIdx(), 0, 0, regionStart.isBroadcast());
 
         } else if (msgClazz == WriteRegionFinish.class) {
             WriteRegionFinish regionFinish = (WriteRegionFinish) msg;
@@ -173,7 +175,8 @@ public class WriteServerHandler extends SimpleChannelInboundHandler<TransferMess
 
             ChannelID channelID = regionFinish.getChannelID();
             currentChannelID = channelID;
-            writingService.regionFinish(channelID);
+            // TODO, after implementing the reduce partition of client side, fix this line.
+            writingService.regionFinish(channelID, 0);
 
         } else if (msgClazz == WriteFinish.class) {
             WriteFinish writeFinish = (WriteFinish) msg;
@@ -212,12 +215,13 @@ public class WriteServerHandler extends SimpleChannelInboundHandler<TransferMess
 
     private BiConsumer<Integer, Integer> getCreditListener(
             ChannelHandlerContext ctx, ChannelID channelID) {
-        return (credit, regionIdx) ->
-                ctx.pipeline()
-                        .fireUserEventTriggered(new AddCreditEvent(channelID, credit, regionIdx));
+        return (credit, regionIdx) -> {
+            ctx.pipeline().fireUserEventTriggered(new AddCreditEvent(channelID, credit, regionIdx));
+        };
     }
 
     private Runnable getFinishCommitListener(ChannelHandlerContext ctx, ChannelID channelID) {
+        checkState(!connectionClosed, "The connection has closed.");
         return () -> ctx.pipeline().fireUserEventTriggered(new WriteFinishCommitEvent(channelID));
     }
 
@@ -245,7 +249,7 @@ public class WriteServerHandler extends SimpleChannelInboundHandler<TransferMess
                             addCreditEvt.credit,
                             addCreditEvt.regionIdx,
                             emptyExtraMessage());
-            LOG.trace("({}) Send {}.", address, addCredit);
+            LOG.debug("({}) Send {}.", address, addCredit);
             writeAndFlush(ctx, addCredit);
 
         } else if (msgClazz == WriteFinishCommitEvent.class) {
@@ -255,7 +259,7 @@ public class WriteServerHandler extends SimpleChannelInboundHandler<TransferMess
             ChannelID channelID = finishCommitEvt.channelID;
             WriteFinishCommit finishCommit =
                     new WriteFinishCommit(currentProtocolVersion(), channelID, emptyExtraMessage());
-            LOG.debug("({}) Send {}.", address, finishCommit);
+            LOG.debug("({}) Send {} to {}.", address, finishCommit, channelID);
             writeAndFlush(ctx, finishCommit);
 
         } else if (msgClazz == WritingFailureEvent.class) {
@@ -347,7 +351,7 @@ public class WriteServerHandler extends SimpleChannelInboundHandler<TransferMess
         connectionClosed = true;
     }
 
-    private static class AddCreditEvent {
+    static class AddCreditEvent {
 
         ChannelID channelID;
 

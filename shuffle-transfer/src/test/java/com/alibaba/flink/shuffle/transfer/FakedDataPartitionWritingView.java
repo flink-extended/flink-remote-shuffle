@@ -64,7 +64,7 @@ public class FakedDataPartitionWritingView implements DataPartitionWritingView {
     }
 
     @Override
-    public void onBuffer(Buffer buffer, ReducePartitionID reducePartitionID) {
+    public void onBuffer(Buffer buffer, int regionIndex, ReducePartitionID reducePartitionID) {
         dataHandler.accept(buffer);
         buffer.clear();
         buffers.add(buffer);
@@ -73,12 +73,18 @@ public class FakedDataPartitionWritingView implements DataPartitionWritingView {
 
     @Override
     public void regionStarted(int dataRegionIndex, boolean isBroadcastRegion) {
+        regionStarted(dataRegionIndex, 1, 0, isBroadcastRegion);
+    }
+
+    @Override
+    public void regionStarted(
+            int dataRegionIndex, int numMaps, int needCredit, boolean isBroadcastRegion) {
         regionStartCount++;
         dataRegionCreditListener.notifyCredits(1, regionFinishCount);
     }
 
     @Override
-    public void regionFinished() {
+    public void regionFinished(int dataRegionIndex) {
         regionFinishCount++;
     }
 

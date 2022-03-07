@@ -30,6 +30,7 @@ import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
 import com.alibaba.flink.shuffle.core.storage.WritingViewContext;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
+import org.apache.flink.shaded.netty4.io.netty.channel.ChannelHandlerContext;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandler;
 
 import org.slf4j.Logger;
@@ -57,9 +58,17 @@ public class WritingService {
 
     private final Map<ChannelID, DataViewWriter> servingChannels;
 
+    private final Map<ChannelID, ChannelHandlerContext> channelContexts;
+
+    private final Map<ChannelID, Integer> channelRegionIndexes;
+
+    private int maxReducePartitionIndex = 0;
+
     public WritingService(PartitionedDataStore dataStore) {
         this.dataStore = dataStore;
         this.servingChannels = new HashMap<>();
+        this.channelContexts = new HashMap<>();
+        this.channelRegionIndexes = new HashMap<>();
     }
 
     public void handshake(
@@ -97,6 +106,50 @@ public class WritingService {
         NetworkMetrics.numWritingFlows().inc();
     }
 
+    public void reducePartitionHandshake(
+            ChannelID channelID,
+            JobID jobID,
+            DataSetID dataSetID,
+            MapPartitionID mapID,
+            ReducePartitionID reduceID,
+            int numMapPartitions,
+            int startSubIdx,
+            int endSubIdx,
+            String dataPartitionFactory,
+            BiConsumer<Integer, Integer> creditListener,
+            Consumer<Throwable> failureListener,
+            ChannelHandlerContext ctx,
+            String addressStr)
+            throws Throwable {
+
+        checkState(
+                !servingChannels.containsKey(channelID),
+                () -> "Duplicate handshake for channel: " + channelID);
+        long startTime = System.nanoTime();
+        channelContexts.put(channelID, ctx);
+        DataPartitionWritingView writingView =
+                dataStore.createDataPartitionWritingView(
+                        new WritingViewContext(
+                                jobID,
+                                dataSetID,
+                                reduceID,
+                                mapID,
+                                numMapPartitions,
+                                startSubIdx,
+                                endSubIdx,
+                                dataPartitionFactory,
+                                creditListener::accept,
+                                failureListener::accept));
+
+        maxReducePartitionIndex = Math.max(reduceID.getPartitionIndex(), maxReducePartitionIndex);
+        LOG.debug(
+                "(channel: {}) Writing handshake for reduce partition cost {} ms.",
+                channelID,
+                (System.nanoTime() - startTime) / 1000_000);
+        servingChannels.put(channelID, new DataViewWriter(writingView, addressStr));
+        NetworkMetrics.numWritingFlows().inc();
+    }
+
     public void write(ChannelID channelID, int subIdx, ByteBuf byteBuf) {
         DataViewWriter dataViewWriter = servingChannels.get(channelID);
         if (dataViewWriter == null) {
@@ -105,7 +158,9 @@ public class WritingService {
         }
         ReducePartitionID reduceID = new ReducePartitionID(subIdx);
         NetworkMetrics.numBytesWritingThroughput().mark(byteBuf.readableBytes());
-        dataViewWriter.getWritingView().onBuffer((Buffer) byteBuf, reduceID);
+        checkState(channelRegionIndexes.containsKey(channelID), "Wrong channel indexes state");
+        int regionIndex = channelRegionIndexes.get(channelID);
+        dataViewWriter.getWritingView().onBuffer((Buffer) byteBuf, regionIndex, reduceID);
     }
 
     public Supplier<ByteBuf> getBufferSupplier(ChannelID channelID) {
@@ -115,20 +170,28 @@ public class WritingService {
         };
     }
 
-    public void regionStart(ChannelID channelID, int regionIdx, boolean isBroadcast) {
+    public void regionStart(
+            ChannelID channelID,
+            int regionIdx,
+            int numMaps,
+            int requireCredit,
+            boolean isBroadcast) {
         DataViewWriter dataViewWriter = servingChannels.get(channelID);
+        channelRegionIndexes.put(channelID, regionIdx);
         checkState(
                 dataViewWriter != null,
                 () -> String.format("Write-channel %s is not under serving.", channelID));
-        dataViewWriter.getWritingView().regionStarted(regionIdx, isBroadcast);
+        dataViewWriter
+                .getWritingView()
+                .regionStarted(regionIdx, numMaps, requireCredit, isBroadcast);
     }
 
-    public void regionFinish(ChannelID channelID) {
+    public void regionFinish(ChannelID channelID, int regionIdx) {
         DataViewWriter dataViewWriter = servingChannels.get(channelID);
         checkState(
                 dataViewWriter != null,
                 () -> String.format("Write-channel %s is not under serving.", channelID));
-        dataViewWriter.getWritingView().regionFinished();
+        dataViewWriter.getWritingView().regionFinished(regionIdx);
     }
 
     public void writeFinish(ChannelID channelID, Runnable committedListener) {
@@ -141,8 +204,18 @@ public class WritingService {
         NetworkMetrics.numWritingFlows().dec();
     }
 
+    private void clearServingChannels(ChannelID channelID) {
+        servingChannels.remove(channelID);
+        channelContexts.remove(channelID);
+        channelRegionIndexes.remove(channelID);
+    }
+
     public int getNumServingChannels() {
         return servingChannels.size();
+    }
+
+    Map<ChannelID, ChannelHandlerContext> getChannelContexts() {
+        return channelContexts;
     }
 
     public void closeAbnormallyIfUnderServing(ChannelID channelID) {
@@ -155,7 +228,7 @@ public class WritingService {
                                     String.format(
                                             "(channel: %s) Channel closed abnormally.",
                                             channelID)));
-            servingChannels.remove(channelID);
+            clearServingChannels(channelID);
             NetworkMetrics.numWritingFlows().dec();
         }
     }
@@ -176,7 +249,7 @@ public class WritingService {
             LOG.error("Release channel -- {} on error. ", channelID, cause);
             CommonUtils.runQuietly(
                     () -> servingChannels.get(channelID).getWritingView().onError(cause), true);
-            servingChannels.remove(channelID);
+            clearServingChannels(channelID);
             NetworkMetrics.numWritingFlows().dec();
         }
     }

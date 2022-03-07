@@ -192,6 +192,8 @@ public class EncodingDecodingTest {
         int version = currentProtocolVersion();
         ChannelID channelID = new ChannelID();
         int regionIdx = 123;
+        int numMaps = 1;
+        int credit = 100;
         boolean isBroadcast = false;
         String extraInfo = bytesToString(CommonUtils.randomBytes(32));
         Supplier<WriteRegionStart> messageBuilder =

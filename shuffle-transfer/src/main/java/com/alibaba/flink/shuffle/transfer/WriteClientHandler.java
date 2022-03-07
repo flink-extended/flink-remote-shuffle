@@ -88,6 +88,7 @@ public class WriteClientHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        LOG.debug("({}) Connection active.", ctx.channel().remoteAddress());
         if (heartbeatInterval > 0) {
             heartbeatFuture =
                     ctx.executor()
