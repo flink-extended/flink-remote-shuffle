@@ -53,7 +53,7 @@ public class PartitionWritingViewImpl implements DataPartitionWritingView {
     }
 
     @Override
-    public void onBuffer(Buffer buffer, ReducePartitionID reducePartitionID) {
+    public void onBuffer(Buffer buffer, int dataRegionIndex, ReducePartitionID reducePartitionID) {
         CommonUtils.checkArgument(buffer != null, "Must be not null.");
 
         try {
@@ -66,11 +66,17 @@ public class PartitionWritingViewImpl implements DataPartitionWritingView {
             throw throwable;
         }
 
-        partitionWriter.addBuffer(reducePartitionID, buffer);
+        partitionWriter.addBuffer(reducePartitionID, dataRegionIndex, buffer);
     }
 
     @Override
     public void regionStarted(int dataRegionIndex, boolean isBroadcastRegion) {
+        regionStarted(dataRegionIndex, 1, 0, isBroadcastRegion);
+    }
+
+    @Override
+    public void regionStarted(
+            int dataRegionIndex, int numMaps, int requireCredit, boolean isBroadcastRegion) {
         CommonUtils.checkArgument(dataRegionIndex >= 0, "Must be non-negative.");
 
         checkNotInErrorState();
@@ -78,17 +84,17 @@ public class PartitionWritingViewImpl implements DataPartitionWritingView {
         checkRegionFinished();
 
         isRegionStarted = true;
-        partitionWriter.startRegion(dataRegionIndex, isBroadcastRegion);
+        partitionWriter.startRegion(dataRegionIndex, numMaps, requireCredit, isBroadcastRegion);
     }
 
     @Override
-    public void regionFinished() {
+    public void regionFinished(int dataRegionIndex) {
         checkNotInErrorState();
         checkInputNotFinished();
         checkRegionStarted();
 
         isRegionStarted = false;
-        partitionWriter.finishRegion();
+        partitionWriter.finishRegion(dataRegionIndex);
     }
 
     @Override

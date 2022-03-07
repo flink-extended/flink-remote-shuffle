@@ -59,6 +59,23 @@ public class DataPartitionUtils {
     }
 
     /**
+     * Helper method which releases all the given {@link DataPartitionReader}s and logs the
+     * encountered exception if any.
+     */
+    public static void releaseDataPartitionWriters(
+            @Nullable Collection<DataPartitionWriter> writers, @Nullable Throwable releaseCause) {
+        if (writers == null) {
+            return;
+        }
+
+        for (DataPartitionWriter partitionWriter : writers) {
+            releaseDataPartitionWriter(partitionWriter, releaseCause);
+        }
+        // clear method is not supported by all collections
+        CommonUtils.runQuietly(writers::clear);
+    }
+
+    /**
      * Helper method which releases the target {@link DataPartitionReader} and logs the encountered
      * exception if any.
      */

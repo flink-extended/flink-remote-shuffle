@@ -261,4 +261,17 @@ public class IOUtils {
                 throw new IllegalArgumentException("Unknown storage version: " + storageVersion);
         }
     }
+
+    /** Return the header buffer size. For different versions, this value may be different. */
+    // TODO, fix this method.
+    public static int getHeaderBufferSizeOfLocalReducePartitionFile(int storageVersion) {
+        switch (storageVersion) {
+            case 0:
+                return 8;
+            case 1:
+                return 16;
+            default:
+                throw new IllegalArgumentException("Unknown storage version: " + storageVersion);
+        }
+    }
 }
