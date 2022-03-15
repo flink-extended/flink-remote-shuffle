@@ -48,9 +48,11 @@ import java.net.SocketAddress;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.UUID;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 
 /** Tests for the ZooKeeper based leader election and retrieval. */
 @RunWith(Parameterized.class)
@@ -212,9 +214,20 @@ public class ZooKeeperLeaderRetrievalTest extends TestLogger {
         client.setData().forPath(leaderPath, newLeaderInfo.toByteArray());
         assertEquals("mew address", testingListener.waitForNewLeader(60000));
 
+        // old leader will be used even when a new leader of higher version is available
+        writeLeaderInformationToZooKeeper(
+                client,
+                "/cluster-"
+                        + numLeaders
+                        + ZooKeeperHaServices.SHUFFLE_MANAGER_LEADER_RETRIEVAL_PATH,
+                new LeaderInformation(
+                        numLeaders, 0, UUID.randomUUID(), "test address " + numLeaders));
+        assertThrows(
+                TimeoutException.class, () -> testingListener.waitForEmptyLeaderInformation(1000));
+
         // remove the leader node
         client.delete().forPath(leaderPath);
-        assertEquals("test address " + (leaderIndex - 1), testingListener.waitForNewLeader(60000));
+        assertEquals("test address " + numLeaders, testingListener.waitForNewLeader(60000));
 
         leaderRetrievalService.stop();
         client.close();
