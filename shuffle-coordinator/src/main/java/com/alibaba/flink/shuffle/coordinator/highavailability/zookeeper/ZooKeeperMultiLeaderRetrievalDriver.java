@@ -64,6 +64,8 @@ public class ZooKeeperMultiLeaderRetrievalDriver
 
     private final AtomicBoolean running = new AtomicBoolean(true);
 
+    private final AtomicBoolean hasInitialized = new AtomicBoolean(false);
+
     public ZooKeeperMultiLeaderRetrievalDriver(
             CuratorFramework client,
             String retrievalPathSuffix,
@@ -83,17 +85,17 @@ public class ZooKeeperMultiLeaderRetrievalDriver
         client.getUnhandledErrorListenable().addListener(this);
         this.pathChildrenCache = new PathChildrenCache(client, "/", true);
         pathChildrenCache.getListenable().addListener(this);
-        pathChildrenCache.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
-        mayUpdateLeader(pathChildrenCache.getCurrentData());
+        pathChildrenCache.start(PathChildrenCache.StartMode.POST_INITIALIZED_EVENT);
     }
 
     private void mayUpdateLeader(List<ChildData> childDataList) {
-        if (childDataList == null || childDataList.isEmpty() || currentLeaderPath.get() != null) {
+        if (childDataList == null || childDataList.isEmpty()) {
             return;
         }
 
         LeaderInformation selectedLeaderInfo = null;
         String selectedLeaderPath = null;
+        String leaderPath = currentLeaderPath.get();
         try {
             for (ChildData childData : childDataList) {
                 if (childData == null || !childData.getPath().endsWith(retrievalPathSuffix)) {
@@ -101,17 +103,25 @@ public class ZooKeeperMultiLeaderRetrievalDriver
                 }
 
                 LeaderInformation leaderInfo = deserializeLeaderInfo(childData);
-                if (leaderInfo != null
-                        && (selectedLeaderInfo == null
-                                || selectedLeaderInfo.getProtocolVersion()
-                                        < leaderInfo.getProtocolVersion())) {
+                if (leaderInfo == null) {
+                    continue;
+                }
+
+                if (childData.getPath().equals(leaderPath)) {
+                    // always select the old leader if exist
+                    selectedLeaderInfo = leaderInfo;
+                    selectedLeaderPath = childData.getPath();
+                    break;
+                } else if (selectedLeaderInfo == null
+                        || selectedLeaderInfo.getProtocolVersion()
+                                < leaderInfo.getProtocolVersion()) {
                     selectedLeaderInfo = leaderInfo;
                     selectedLeaderPath = childData.getPath();
                 }
             }
 
-            if (selectedLeaderInfo != null
-                    && currentLeaderPath.compareAndSet(null, selectedLeaderPath)) {
+            if (selectedLeaderInfo != null) {
+                currentLeaderPath.set(selectedLeaderPath);
                 notifyNewLeaderInfo(selectedLeaderInfo);
             }
         } catch (Throwable throwable) {
@@ -155,54 +165,81 @@ public class ZooKeeperMultiLeaderRetrievalDriver
             CuratorFramework curatorFramework, PathChildrenCacheEvent pathChildrenCacheEvent) {
         String leaderPath = currentLeaderPath.get();
         ChildData childData = pathChildrenCacheEvent.getData();
-        LeaderInformation leaderInfo;
+        boolean initialized = hasInitialized.get();
 
         switch (pathChildrenCacheEvent.getType()) {
             case INITIALIZED:
-                LOG.info("Children cache initialized, begin to retrieve leader information.");
+                List<ChildData> initialData = pathChildrenCacheEvent.getInitialData();
+                LOG.info(
+                        "Children cache initialized, "
+                                + "begin to retrieve leader information: {} - {} - {}.",
+                        initialData == null ? 0 : initialData.size(),
+                        leaderPath,
+                        initialized);
+                hasInitialized.set(true);
+                mayUpdateLeader(initialData);
                 break;
             case CHILD_ADDED:
-                LOG.info("New child node added: {}.", childData.getPath());
+                LOG.info(
+                        "New child node added: {} - {} - {}.",
+                        childData.getPath(),
+                        leaderPath,
+                        initialized);
+                if (!initialized
+                        || (leaderPath != null && !leaderPath.equals(childData.getPath()))) {
+                    return;
+                }
                 mayUpdateLeader(Collections.singletonList(childData));
                 break;
             case CHILD_REMOVED:
-                LOG.info("New child node added: {}.", childData.getPath());
-                if (leaderPath == null || !leaderPath.equals(childData.getPath())) {
+                LOG.info(
+                        "Child node removed: {} - {} - {}.",
+                        childData.getPath(),
+                        leaderPath,
+                        initialized);
+                if (!initialized || leaderPath == null || !leaderPath.equals(childData.getPath())) {
                     return;
-                }
-
-                if (currentLeaderPath.compareAndSet(leaderPath, null)) {
-                    notifyNewLeaderInfo(LeaderInformation.empty());
                 }
                 mayUpdateLeader(pathChildrenCache.getCurrentData());
                 break;
             case CHILD_UPDATED:
-                LOG.info("Child node data updated: {}.", childData.getPath());
-                if (leaderPath == null || !leaderPath.equals(childData.getPath())) {
+                LOG.info(
+                        "Child node data updated: {} - {} - {}.",
+                        childData.getPath(),
+                        leaderPath,
+                        initialized);
+                if (!initialized || leaderPath == null || !leaderPath.equals(childData.getPath())) {
                     return;
                 }
-
-                leaderInfo = deserializeLeaderInfo(childData);
-                notifyNewLeaderInfo(leaderInfo != null ? leaderInfo : LeaderInformation.empty());
+                mayUpdateLeader(Collections.singletonList(childData));
                 break;
             case CONNECTION_SUSPENDED:
-                LOG.warn("Connection to ZooKeeper suspended. Can no longer retrieve the leader.");
+                LOG.warn(
+                        "Connection to ZooKeeper suspended. "
+                                + "Can no longer retrieve the leader: {} - {}.",
+                        leaderPath,
+                        initialized);
                 leaderListener.notifyLeaderAddress(LeaderInformation.empty());
                 break;
             case CONNECTION_RECONNECTED:
-                LOG.info("Connection to ZooKeeper was reconnected. Restart leader retrieval.");
-                currentLeaderPath.compareAndSet(leaderPath, null);
+                LOG.info(
+                        "Connection to ZooKeeper was reconnected. "
+                                + "Restart leader retrieval: {} - {}.",
+                        leaderPath,
+                        initialized);
                 mayUpdateLeader(pathChildrenCache.getCurrentData());
                 break;
             case CONNECTION_LOST:
-                LOG.warn("Connection to ZooKeeper lost. Can no longer retrieve the leader.");
+                LOG.warn(
+                        "Connection to ZooKeeper lost. Can no longer retrieve the leader: {} - {}.",
+                        leaderPath,
+                        initialized);
                 leaderListener.notifyLeaderAddress(LeaderInformation.empty());
                 break;
             default:
                 // this should never happen
-                fatalErrorHandler.onFatalError(
-                        new Exception(
-                                "Unknown zookeeper event: " + pathChildrenCacheEvent.getType()));
+                unhandledError(
+                        "Unknown zookeeper event: " + pathChildrenCacheEvent.getType(), null);
         }
     }
 
