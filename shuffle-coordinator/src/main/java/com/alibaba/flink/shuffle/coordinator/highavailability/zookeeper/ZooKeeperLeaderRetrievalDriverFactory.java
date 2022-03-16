@@ -68,7 +68,11 @@ public class ZooKeeperLeaderRetrievalDriverFactory implements LeaderRetrievalDri
         switch (receptor) {
             case SHUFFLE_CLIENT:
                 return new ZooKeeperMultiLeaderRetrievalDriver(
-                        client, retrievalPathSuffix, leaderEventHandler, fatalErrorHandler);
+                        client,
+                        retrievalPathSuffix,
+                        clusterID,
+                        leaderEventHandler,
+                        fatalErrorHandler);
             case SHUFFLE_WORKER:
                 return new ZooKeeperSingleLeaderRetrievalDriver(
                         client,

@@ -107,6 +107,7 @@ public class ZooKeeperLeaderElectionConnectionHandlingTest extends TestLogger {
 
     @Test
     public void testConnectionSuspendedWhenMultipleLeaderSelection() throws Exception {
+        String retrievalPathPrefix = "/cluster-";
         int numLeaders = 10;
         int leaderIndex = 5;
         for (int i = 0; i < numLeaders; ++i) {
@@ -117,7 +118,9 @@ public class ZooKeeperLeaderElectionConnectionHandlingTest extends TestLogger {
                             UUID.randomUUID(),
                             "test address " + i);
             writeLeaderInformationToZooKeeper(
-                    "/cluster-" + i + ZooKeeperHaServices.SHUFFLE_MANAGER_LEADER_RETRIEVAL_PATH,
+                    retrievalPathPrefix
+                            + i
+                            + ZooKeeperHaServices.SHUFFLE_MANAGER_LEADER_RETRIEVAL_PATH,
                     leaderInfo);
         }
 
@@ -128,6 +131,7 @@ public class ZooKeeperLeaderElectionConnectionHandlingTest extends TestLogger {
                 createLeaderRetrievalDriver(
                         HaServices.LeaderReceptor.SHUFFLE_CLIENT,
                         ZooKeeperHaServices.SHUFFLE_MANAGER_LEADER_RETRIEVAL_PATH,
+                        retrievalPathPrefix,
                         leaderListener)) {
             assertEquals(
                     "test address " + leaderIndex, leaderListener.next().get().getLeaderAddress());
@@ -277,12 +281,17 @@ public class ZooKeeperLeaderElectionConnectionHandlingTest extends TestLogger {
 
     private LeaderRetrievalDriver createLeaderRetrievalDriver(
             LeaderRetrievalEventHandler leaderListener) throws Exception {
-        return createLeaderRetrievalDriver(leaderReceptor, retrievalPath, leaderListener);
+        return createLeaderRetrievalDriver(
+                leaderReceptor,
+                retrievalPath,
+                ClusterOptions.REMOTE_SHUFFLE_CLUSTER_ID.defaultValue(),
+                leaderListener);
     }
 
     private LeaderRetrievalDriver createLeaderRetrievalDriver(
             HaServices.LeaderReceptor leaderReceptor,
             String retrievalPath,
+            String retrievalPathPrefix,
             LeaderRetrievalEventHandler leaderListener)
             throws Exception {
         switch (leaderReceptor) {
@@ -291,7 +300,11 @@ public class ZooKeeperLeaderElectionConnectionHandlingTest extends TestLogger {
                         zooKeeperClient, retrievalPath, leaderListener, fatalErrorHandler);
             case SHUFFLE_CLIENT:
                 return new ZooKeeperMultiLeaderRetrievalDriver(
-                        zooKeeperClient, retrievalPath, leaderListener, fatalErrorHandler);
+                        zooKeeperClient,
+                        retrievalPath,
+                        retrievalPathPrefix,
+                        leaderListener,
+                        fatalErrorHandler);
             default:
                 throw new Exception("Unknown leader receptor type: " + leaderReceptor);
         }
