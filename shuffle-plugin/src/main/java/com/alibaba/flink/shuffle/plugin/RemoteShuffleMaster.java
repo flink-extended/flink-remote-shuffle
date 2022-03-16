@@ -31,6 +31,7 @@ import com.alibaba.flink.shuffle.coordinator.heartbeat.HeartbeatServicesUtils;
 import com.alibaba.flink.shuffle.coordinator.highavailability.HaServiceUtils;
 import com.alibaba.flink.shuffle.coordinator.highavailability.HaServices;
 import com.alibaba.flink.shuffle.coordinator.manager.DataPartitionCoordinate;
+import com.alibaba.flink.shuffle.core.config.ClusterOptions;
 import com.alibaba.flink.shuffle.core.config.WorkerOptions;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
@@ -122,6 +123,11 @@ public class RemoteShuffleMaster implements ShuffleMaster<RemoteShuffleDescripto
 
         HaServices tmpHAService = null;
         try {
+            // replace the remote shuffle cluster id with a name prefix to enable selection from
+            // multiple remote clusters with the same name prefix
+            configuration.setString(
+                    ClusterOptions.REMOTE_SHUFFLE_CLUSTER_ID,
+                    configuration.getString(PluginOptions.TARGET_CLUSTER_ID_PREFIX));
             tmpHAService = HaServiceUtils.createHAServices(configuration);
         } catch (Throwable throwable) {
             LOG.error("Failed to create the shuffle master HA service.", throwable);

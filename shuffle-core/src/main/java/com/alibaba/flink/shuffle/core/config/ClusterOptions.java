@@ -25,12 +25,19 @@ import java.time.Duration;
 /** Options which control the cluster behaviour. */
 public class ClusterOptions {
 
-    /** The unique ID of the remote shuffle cluster used by HA. */
+    /**
+     * The unique ID of the remote shuffle cluster used by HA. It must start with '/'. Different
+     * shuffle clusters must be configured with different cluster id. This config must be consistent
+     * between the shuffle manager and workers.
+     */
     public static final ConfigOption<String> REMOTE_SHUFFLE_CLUSTER_ID =
             new ConfigOption<String>("remote-shuffle.cluster.id")
                     .defaultValue("/default-cluster")
                     .description(
-                            "The unique ID of the remote shuffle cluster used by high-availability.");
+                            "The unique ID of the remote shuffle cluster used by high-availability."
+                                    + " It must start with '/'. Different shuffle clusters must be "
+                                    + "configured with different cluster id. This config must be "
+                                    + "consistent between the shuffle manager and workers.");
 
     /**
      * Defines the timeout for the shuffle worker or client registration to the shuffle manager. If

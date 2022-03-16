@@ -54,6 +54,8 @@ public class ZooKeeperMultiLeaderRetrievalDriver
 
     private final String retrievalPathSuffix;
 
+    private final String retrievalPathPrefix;
+
     private final LeaderRetrievalEventHandler leaderListener;
 
     private final PathChildrenCache pathChildrenCache;
@@ -69,16 +71,20 @@ public class ZooKeeperMultiLeaderRetrievalDriver
     public ZooKeeperMultiLeaderRetrievalDriver(
             CuratorFramework client,
             String retrievalPathSuffix,
+            String retrievalPathPrefix,
             LeaderRetrievalEventHandler leaderListener,
             FatalErrorHandler fatalErrorHandler)
             throws Exception {
         checkArgument(client != null, "Must be not null.");
         checkArgument(retrievalPathSuffix != null, "Must be not null.");
+        checkArgument(retrievalPathPrefix != null, "Must be not null.");
+        checkArgument(retrievalPathPrefix.startsWith("/"), "Path must start with '/'.");
         checkArgument(leaderListener != null, "Must be not null.");
         checkArgument(fatalErrorHandler != null, "Must be not null.");
 
         this.client = client;
         this.retrievalPathSuffix = retrievalPathSuffix;
+        this.retrievalPathPrefix = retrievalPathPrefix;
         this.leaderListener = leaderListener;
         this.fatalErrorHandler = fatalErrorHandler;
 
@@ -98,7 +104,9 @@ public class ZooKeeperMultiLeaderRetrievalDriver
         String leaderPath = currentLeaderPath.get();
         try {
             for (ChildData childData : childDataList) {
-                if (childData == null || !childData.getPath().endsWith(retrievalPathSuffix)) {
+                if (childData == null
+                        || !childData.getPath().endsWith(retrievalPathSuffix)
+                        || !childData.getPath().startsWith(retrievalPathPrefix)) {
                     continue;
                 }
 

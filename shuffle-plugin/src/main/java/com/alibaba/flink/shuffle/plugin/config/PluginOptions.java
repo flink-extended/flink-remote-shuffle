@@ -20,6 +20,7 @@ package com.alibaba.flink.shuffle.plugin.config;
 
 import com.alibaba.flink.shuffle.common.config.ConfigOption;
 import com.alibaba.flink.shuffle.common.config.MemorySize;
+import com.alibaba.flink.shuffle.core.config.ClusterOptions;
 
 /** Config options for shuffle jobs using the remote shuffle service. */
 public class PluginOptions {
@@ -27,6 +28,25 @@ public class PluginOptions {
     public static final MemorySize MIN_MEMORY_PER_PARTITION = MemorySize.parse("8m");
 
     public static final MemorySize MIN_MEMORY_PER_GATE = MemorySize.parse("8m");
+
+    /**
+     * Identify the remote shuffle cluster to use for the job. It is treated as a name prefix, which
+     * means a job can only use the shuffle cluster whose cluster ID starts with the configured
+     * value. For example, if a shuffle cluster is configured with cluster ID 'ab', then the job
+     * configured with ID prefix 'a' or 'ab' can use it, but the job configured with ID prefix 'b'
+     * or 'ac' can't use it.
+     */
+    public static final ConfigOption<String> TARGET_CLUSTER_ID_PREFIX =
+            new ConfigOption<String>("remote-shuffle.cluster.id-prefix")
+                    .defaultValue(ClusterOptions.REMOTE_SHUFFLE_CLUSTER_ID.defaultValue())
+                    .description(
+                            "Identify the remote shuffle cluster to use for the job. It is treated "
+                                    + "as a name prefix, which means a job can only use the shuffle"
+                                    + " cluster whose cluster ID starts with the configured value. "
+                                    + "For example, if a shuffle cluster is configured with cluster"
+                                    + " ID 'ab', then the job configured with ID prefix 'a' or 'ab'"
+                                    + " can use it, but the job configured with ID prefix 'b' or "
+                                    + "'ac' can't use it.");
 
     /**
      * The maximum number of remote shuffle channels to open and read concurrently per input gate.

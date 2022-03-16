@@ -77,6 +77,7 @@ be put in the Flink configuration file.
 
 | Key | Value Type | Default Value | Version | Required | Description |
 | --- | ---------- | ------------- | ------- | -------- | ----------- |
+| `remote-shuffle.cluster.id-prefix` | String | Same with `remote-shuffle.cluster.id` | 1.1.0 | false (Must be configured if `remote-shuffle.cluster.id` is configured at shuffle cluster side) | Identify the remote shuffle cluster to use for the job. It is treated as a name prefix, which means a job can only use the shuffle cluster whose cluster ID starts with the configured value. For example, if a shuffle cluster is configured with cluster ID 'ab', then the job configured with ID prefix 'a' or 'ab' can use it, but the job configured with ID prefix 'b' or 'ac' can't use it. |
 | `remote-shuffle.job.memory-per-partition` | MemorySize | `64m` | 1.0.0 | false | The size of network buffers required per result partition. The minimum valid value is 8M. Usually, several hundreds of megabytes memory is enough for large scale batch jobs. |
 | `remote-shuffle.job.memory-per-gate` | MemorySize | `32m` | 1.0.0 | false | The size of network buffers required per input gate. The minimum valid value is 8m. Usually, several hundreds of megabytes memory is enough for large scale batch jobs. |
 | `remote-shuffle.job.enable-data-compression` | Bool | `true` | 1.0.0 | false | Whether to enable shuffle data compression. Usually, enabling data compression can save the storage space and achieve better performance. |
@@ -130,7 +131,7 @@ conf/remote-shuffle-conf.yaml file.
 
 | Key | Value Type | Default Value | Version | Required | Description |
 | --- | ---------- | ------------- | ------- | -------- | ----------- |
-| `remote-shuffle.cluster.id` | String | `/default-cluster` | 1.0.0 | false | The unique ID of the remote shuffle cluster used by high-availability. Different shuffle clusters sharing the same zookeeper instance must be configured with different cluster id. This config must be consistent between the `ShuffleManager` and `ShuffleWorker`s. |
+| `remote-shuffle.cluster.id` | String | `/default-cluster` | 1.0.0 | false | The unique ID of the remote shuffle cluster used by high-availability. It must start with '/'. Different shuffle clusters must be configured with different cluster id. This config must be consistent between the `ShuffleManager` and `ShuffleWorker`s. |
 | `remote-shuffle.high-availability.mode` | String | `NONE` | 1.0.0 | false (Must be set if you want to enable HA) | Defines high-availability mode used for the cluster execution. To enable high-availability, set this mode to `ZOOKEEPER` or specify FQN of factory class. |
 | `remote-shuffle.ha.zookeeper.quorum` | String | `null` | 1.0.0 | false (Must be set if high-availability mode is ZOOKEEPER) | The ZooKeeper quorum to use when running the remote shuffle cluster in a high-availability mode with ZooKeeper. |
 | `remote-shuffle.ha.zookeeper.root-path` | String | `flink-remote-shuffle` | 1.0.0 | false | The root path in ZooKeeper under which the remote shuffle cluster stores its entries. Different remote shuffle clusters will be distinguished by the cluster id. This config must be consistent between the Flink cluster side and the shuffle cluster side. |

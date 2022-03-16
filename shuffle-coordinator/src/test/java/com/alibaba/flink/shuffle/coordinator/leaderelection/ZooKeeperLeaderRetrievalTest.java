@@ -184,6 +184,7 @@ public class ZooKeeperLeaderRetrievalTest extends TestLogger {
     public void testMultipleLeaderSelection() throws Exception {
         int numLeaders = 10;
         int leaderIndex = 5;
+        String retrievalPathPrefix = ClusterOptions.REMOTE_SHUFFLE_CLUSTER_ID.defaultValue();
         CuratorFramework client = createZooKeeperClient(new Configuration(), "ignored");
         for (int i = 0; i < numLeaders; ++i) {
             LeaderInformation leaderInfo =
@@ -194,9 +195,17 @@ public class ZooKeeperLeaderRetrievalTest extends TestLogger {
                             "test address " + i);
             writeLeaderInformationToZooKeeper(
                     client,
-                    "/cluster-" + i + ZooKeeperHaServices.SHUFFLE_MANAGER_LEADER_RETRIEVAL_PATH,
+                    retrievalPathPrefix
+                            + i
+                            + ZooKeeperHaServices.SHUFFLE_MANAGER_LEADER_RETRIEVAL_PATH,
                     leaderInfo);
         }
+
+        // leader with wrong path prefix (cluster id) will not be selected
+        writeLeaderInformationToZooKeeper(
+                client,
+                "/wrong-cluster-id" + ZooKeeperHaServices.SHUFFLE_MANAGER_LEADER_RETRIEVAL_PATH,
+                new LeaderInformation(10240, 0, UUID.randomUUID(), "test address"));
 
         Thread.sleep(2000);
 
@@ -207,7 +216,7 @@ public class ZooKeeperLeaderRetrievalTest extends TestLogger {
         assertEquals("test address " + leaderIndex, testingListener.waitForNewLeader(60000));
 
         String leaderPath =
-                "/cluster-"
+                retrievalPathPrefix
                         + leaderIndex
                         + ZooKeeperHaServices.SHUFFLE_MANAGER_LEADER_RETRIEVAL_PATH;
         LeaderInformation newLeaderInfo = new LeaderInformation(UUID.randomUUID(), "mew address");
@@ -217,7 +226,7 @@ public class ZooKeeperLeaderRetrievalTest extends TestLogger {
         // old leader will be used even when a new leader of higher version is available
         writeLeaderInformationToZooKeeper(
                 client,
-                "/cluster-"
+                retrievalPathPrefix
                         + numLeaders
                         + ZooKeeperHaServices.SHUFFLE_MANAGER_LEADER_RETRIEVAL_PATH,
                 new LeaderInformation(
