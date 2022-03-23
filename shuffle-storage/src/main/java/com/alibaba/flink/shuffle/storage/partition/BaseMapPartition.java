@@ -31,7 +31,6 @@ import com.alibaba.flink.shuffle.core.listener.BufferListener;
 import com.alibaba.flink.shuffle.core.listener.DataListener;
 import com.alibaba.flink.shuffle.core.listener.DataRegionCreditListener;
 import com.alibaba.flink.shuffle.core.listener.FailureListener;
-import com.alibaba.flink.shuffle.core.memory.BufferRecycler;
 import com.alibaba.flink.shuffle.core.storage.BufferQueue;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionReader;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWriter;
@@ -46,8 +45,6 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.PriorityQueue;
 
@@ -272,7 +269,8 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         protected final int maxWritingBuffers;
 
         /** Available buffers can be used for data writing of the target partition. */
-        protected final BufferQueue buffers = new BufferQueue(new ArrayList<>());
+        protected final BufferQueue buffers =
+                new BufferQueue(BaseMapPartition.this, dataStore.getWritingBufferDispatcher());
 
         /** {@link DataPartitionWriter} instance used to write data to this {@link MapPartition}. */
         protected DataPartitionWriter writer;
@@ -321,7 +319,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
 
                 writer = null;
                 writers.clear();
-                recycleBuffers(buffers.release(), dataStore.getWritingBufferDispatcher());
+                buffers.release();
                 isFinished = true;
                 LOG.info("Successfully write data partition: {}.", getPartitionMeta());
             } catch (Throwable throwable) {
@@ -354,7 +352,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                 CommonUtils.checkState(inExecutorThread(), "Not in main thread.");
 
                 writer = null;
-                recycleBuffers(buffers.release(), dataStore.getWritingBufferDispatcher());
+                buffers.release();
             } catch (Throwable throwable) {
                 LOG.error("Fatal: failed to release the data writing task.", throwable);
                 ExceptionUtils.rethrowException(throwable);
@@ -370,13 +368,8 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
             CommonUtils.checkState(inExecutorThread(), "Not in main thread.");
             checkInProcessState();
 
-            if (!writer.assignCredits(buffers, buffer -> recycle(buffer, buffers))
-                    && buffers.size() > 0) {
-                List<ByteBuffer> toRelease = new ArrayList<>(buffers.size());
-                while (buffers.size() > 0) {
-                    toRelease.add(buffers.poll());
-                }
-                recycleBuffers(toRelease, dataStore.getWritingBufferDispatcher());
+            if (!writer.assignCredits(buffers, this::recycle) && buffers.size() > 0) {
+                buffers.recycleAll();
             }
         }
 
@@ -396,16 +389,10 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                                     allocatedBuffers != null && !allocatedBuffers.isEmpty(),
                                     "Fatal: empty buffer was allocated.");
 
-                            if (isReleased || isFinished) {
+                            if (isReleased || isFinished || buffers.isReleased()) {
                                 recycleBuffers(
                                         allocatedBuffers, dataStore.getWritingBufferDispatcher());
                                 return;
-                            }
-
-                            if (buffers.isReleased()) {
-                                recycleBuffers(
-                                        allocatedBuffers, dataStore.getWritingBufferDispatcher());
-                                throw new ShuffleException("Buffers has been released.");
                             }
 
                             buffers.add(allocatedBuffers);
@@ -418,22 +405,13 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                     });
         }
 
-        private void handleRecycledBuffer(ByteBuffer buffer, BufferQueue buffers) {
+        private void handleRecycledBuffer(ByteBuffer buffer) {
             try {
                 CommonUtils.checkArgument(buffer != null, "Must be not null.");
 
-                if (isReleased || isFinished) {
-                    recycleBuffers(
-                            Collections.singletonList(buffer),
-                            dataStore.getWritingBufferDispatcher());
+                if (isReleased || isFinished || buffers.isReleased()) {
+                    buffers.recycle(buffer);
                     return;
-                }
-
-                if (buffers.isReleased()) {
-                    recycleBuffers(
-                            Collections.singletonList(buffer),
-                            dataStore.getWritingBufferDispatcher());
-                    throw new ShuffleException("Buffers has been released.");
                 }
 
                 buffers.add(buffer);
@@ -449,13 +427,13 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
          * recycled buffer will be returned to the buffer manager directly and if any unexpected
          * exception occurs, the corresponding data partition will be released.
          */
-        public void recycle(ByteBuffer buffer, BufferQueue buffers) {
+        public void recycle(ByteBuffer buffer) {
             if (!inExecutorThread()) {
-                addPartitionProcessingTask(() -> handleRecycledBuffer(buffer, buffers));
+                addPartitionProcessingTask(() -> handleRecycledBuffer(buffer));
                 return;
             }
 
-            handleRecycledBuffer(buffer, buffers);
+            handleRecycledBuffer(buffer);
         }
     }
 
@@ -495,7 +473,13 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         protected final int maxReadingBuffers;
 
         /** All available buffers can be used by the partition readers for reading. */
-        protected BufferQueue buffers = BufferQueue.RELEASED_EMPTY_BUFFER_QUEUE;
+        protected final BufferQueue buffers =
+                new BufferQueue(BaseMapPartition.this, dataStore.getReadingBufferDispatcher());
+
+        /**
+         * Whether this data reading task has allocated resources and is waiting to be fulfilled.
+         */
+        protected boolean isWaitingResources;
 
         protected MapPartitionReadingTask(Configuration configuration) {
             int minReadingMemory =
@@ -527,7 +511,6 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                 }
                 CommonUtils.checkState(!readers.isEmpty(), "No reader registered.");
                 CommonUtils.checkState(!buffers.isReleased(), "Buffers has been released.");
-                BufferRecycler recycler = (buffer) -> recycle(buffer, buffers);
 
                 for (DataPartitionReader reader : readers) {
                     if (!reader.isOpened()) {
@@ -539,7 +522,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                 while (buffers.size() > 0 && !sortedReaders.isEmpty()) {
                     DataPartitionReader reader = sortedReaders.poll();
                     try {
-                        if (!reader.readData(buffers, recycler)) {
+                        if (!reader.readData(buffers, this::recycle)) {
                             removePartitionReader(reader);
                             LOG.debug("Successfully read partition data: {}.", reader);
                         }
@@ -551,7 +534,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                 }
             } catch (Throwable throwable) {
                 DataPartitionUtils.releaseDataPartitionReaders(readers, throwable);
-                recycleBuffers(buffers.release(), dataStore.getReadingBufferDispatcher());
+                buffers.recycleAll();
                 LOG.error("Fatal: failed to read partition data.", throwable);
             }
         }
@@ -559,7 +542,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         private void removePartitionReader(DataPartitionReader reader) {
             readers.remove(reader);
             if (readers.isEmpty()) {
-                recycleBuffers(buffers.release(), dataStore.getReadingBufferDispatcher());
+                buffers.recycleAll();
             }
         }
 
@@ -568,28 +551,30 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
          * recycled buffer will be returned to the buffer manager directly and if any unexpected
          * exception occurs, all registered readers will be released.
          */
-        private void recycle(ByteBuffer buffer, BufferQueue bufferQueue) {
+        private void recycle(ByteBuffer buffer) {
             addPartitionProcessingTask(
                     () -> {
                         try {
                             CommonUtils.checkArgument(buffer != null, "Must be not null.");
 
-                            if (bufferQueue == null || bufferQueue.isReleased()) {
-                                recycleBuffers(
-                                        Collections.singletonList(buffer),
-                                        dataStore.getReadingBufferDispatcher());
-                                CommonUtils.checkState(bufferQueue != null, "Must be not null.");
+                            buffers.recycle(buffer);
+                            if (isReleased || readers.isEmpty() || buffers.isReleased()) {
                                 return;
                             }
 
-                            bufferQueue.add(buffer);
-                            if (bufferQueue.size() >= minBuffersToRead) {
+                            if (buffers.size() > 0) {
                                 triggerReading();
+                            }
+
+                            if (buffers.size() < minBuffersToRead
+                                    && !readers.isEmpty()
+                                    && buffers.numBuffersOccupied() + minReadingBuffers
+                                            <= maxReadingBuffers) {
+                                allocateResources();
                             }
                         } catch (Throwable throwable) {
                             DataPartitionUtils.releaseDataPartitionReaders(readers, throwable);
-                            recycleBuffers(
-                                    buffers.release(), dataStore.getReadingBufferDispatcher());
+                            buffers.recycleAll();
                             LOG.error("Resource recycling error.", throwable);
                         }
                     });
@@ -601,11 +586,14 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
             CommonUtils.checkState(!readers.isEmpty(), "No reader registered.");
             CommonUtils.checkState(!isReleased, "Partition has been released.");
 
-            allocateBuffers(
-                    dataStore.getReadingBufferDispatcher(),
-                    this,
-                    minReadingBuffers,
-                    maxReadingBuffers);
+            if (!isWaitingResources) {
+                allocateBuffers(
+                        dataStore.getReadingBufferDispatcher(),
+                        this,
+                        minReadingBuffers,
+                        minReadingBuffers);
+                isWaitingResources = true;
+            }
         }
 
         @Override
@@ -624,6 +612,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
             addPartitionProcessingTask(
                     () -> {
                         try {
+                            isWaitingResources = false;
                             if (exception != null) {
                                 recycleBuffers(
                                         allocatedBuffers, dataStore.getReadingBufferDispatcher());
@@ -634,24 +623,17 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                                     allocatedBuffers != null && !allocatedBuffers.isEmpty(),
                                     "Fatal: empty buffer was allocated.");
 
-                            if (!buffers.isReleased()) {
-                                recycleBuffers(
-                                        buffers.release(), dataStore.getReadingBufferDispatcher());
-                                LOG.error("Fatal: the allocated data reading buffers are leaking.");
-                            }
-
-                            if (isReleased || readers.isEmpty()) {
+                            if (isReleased || readers.isEmpty() || buffers.isReleased()) {
                                 recycleBuffers(
                                         allocatedBuffers, dataStore.getReadingBufferDispatcher());
                                 return;
                             }
 
-                            buffers = new BufferQueue(allocatedBuffers);
+                            buffers.add(allocatedBuffers);
                             triggerReading();
                         } catch (Throwable throwable) {
                             DataPartitionUtils.releaseDataPartitionReaders(readers, throwable);
-                            recycleBuffers(
-                                    buffers.release(), dataStore.getReadingBufferDispatcher());
+                            buffers.release();
                             LOG.error("Resource allocation error.", throwable);
                         }
                     });
@@ -666,7 +648,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
             try {
                 CommonUtils.checkState(inExecutorThread(), "Not in main thread.");
 
-                recycleBuffers(buffers.release(), dataStore.getReadingBufferDispatcher());
+                buffers.release();
             } catch (Throwable throwable) {
                 LOG.error("Fatal: failed to release the data reading task.", throwable);
                 ExceptionUtils.rethrowException(throwable);
