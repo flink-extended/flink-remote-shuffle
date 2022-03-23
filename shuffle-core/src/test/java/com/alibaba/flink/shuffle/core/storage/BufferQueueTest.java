@@ -18,12 +18,17 @@
 
 package com.alibaba.flink.shuffle.core.storage;
 
+import com.alibaba.flink.shuffle.common.utils.CommonUtils;
+import com.alibaba.flink.shuffle.core.ids.DataSetID;
+import com.alibaba.flink.shuffle.core.ids.JobID;
+import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.memory.BufferDispatcher;
+
+import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -32,11 +37,19 @@ import static org.junit.Assert.fail;
 /** Tests for {@link BufferQueue}. */
 public class BufferQueueTest {
 
+    private BufferDispatcher dispatcher;
+
+    @Before
+    public void before() {
+        dispatcher = new BufferDispatcher("TestDispatcher", 0, 1024);
+    }
+
     @Test
     public void testPollBuffer() {
         ByteBuffer buffer1 = ByteBuffer.allocate(1024);
         ByteBuffer buffer2 = ByteBuffer.allocate(1024);
-        BufferQueue bufferQueue = new BufferQueue(Arrays.asList(buffer1, buffer2));
+        BufferQueue bufferQueue = createBufferQueue();
+        bufferQueue.add(Arrays.asList(buffer1, buffer2));
 
         assertEquals(2, bufferQueue.size());
         assertEquals(buffer1, bufferQueue.poll());
@@ -52,7 +65,7 @@ public class BufferQueueTest {
     public void testAddBuffer() {
         ByteBuffer buffer1 = ByteBuffer.allocate(1024);
         ByteBuffer buffer2 = ByteBuffer.allocate(1024);
-        BufferQueue bufferQueue = new BufferQueue(new ArrayList<>());
+        BufferQueue bufferQueue = createBufferQueue();
 
         assertEquals(0, bufferQueue.size());
         bufferQueue.add(buffer1);
@@ -66,24 +79,45 @@ public class BufferQueueTest {
     }
 
     @Test
+    public void testRecycleBuffer() {
+        BufferQueue bufferQueue = createBufferQueue();
+        assertEquals(0, dispatcher.numAvailableBuffers());
+
+        bufferQueue.recycle(ByteBuffer.allocate(1024));
+        assertEquals(1, dispatcher.numAvailableBuffers());
+
+        bufferQueue.add(Arrays.asList(ByteBuffer.allocate(1024), ByteBuffer.allocate(1024)));
+        bufferQueue.recycleAll();
+        assertEquals(3, dispatcher.numAvailableBuffers());
+    }
+
+    @Test
     public void testReleaseBufferQueue() {
-        ByteBuffer buffer1 = ByteBuffer.allocate(1024);
-        ByteBuffer buffer2 = ByteBuffer.allocate(1024);
-        BufferQueue bufferQueue = new BufferQueue(Arrays.asList(buffer1, buffer2));
+        BufferQueue bufferQueue = createBufferQueue();
+        bufferQueue.add(Arrays.asList(ByteBuffer.allocate(1024), ByteBuffer.allocate(1024)));
 
         assertEquals(2, bufferQueue.size());
-        List<ByteBuffer> buffers = bufferQueue.release();
-        assertEquals(buffer1, buffers.get(0));
-        assertEquals(buffer2, buffers.get(1));
+        bufferQueue.release();
 
         assertEquals(0, bufferQueue.size());
+        assertEquals(2, dispatcher.numAvailableBuffers());
+
         try {
-            bufferQueue.add(buffer1);
+            bufferQueue.add(ByteBuffer.allocate(1024));
         } catch (IllegalStateException exception) {
             assertNull(bufferQueue.poll());
             return;
         }
 
         fail("IllegalStateException expected.");
+    }
+
+    private BufferQueue createBufferQueue() {
+        DataPartition partition =
+                new NoOpDataPartition(
+                        new JobID(CommonUtils.randomBytes(16)),
+                        new DataSetID(CommonUtils.randomBytes(16)),
+                        new MapPartitionID(CommonUtils.randomBytes(16)));
+        return new BufferQueue(partition, dispatcher);
     }
 }

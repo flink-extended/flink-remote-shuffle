@@ -53,6 +53,14 @@ under the License.
 			<version>4.1.49.Final-${flink.shaded.version}</version>
 			<scope>provided</scope>
 		</dependency>
+
+		<dependency>
+			<groupId>com.alibaba.flink.shuffle</groupId>
+			<artifactId>shuffle-core</artifactId>
+			<version>${project.version}</version>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 </project>
