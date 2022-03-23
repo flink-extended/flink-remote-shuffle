@@ -20,10 +20,16 @@ package com.alibaba.flink.shuffle.storage.partition;
 
 import com.alibaba.flink.shuffle.common.exception.ShuffleException;
 import com.alibaba.flink.shuffle.common.utils.CommonUtils;
+import com.alibaba.flink.shuffle.core.ids.DataSetID;
+import com.alibaba.flink.shuffle.core.ids.JobID;
+import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.listener.DataListener;
 import com.alibaba.flink.shuffle.core.listener.FailureListener;
+import com.alibaba.flink.shuffle.core.memory.BufferDispatcher;
 import com.alibaba.flink.shuffle.core.storage.BufferQueue;
 import com.alibaba.flink.shuffle.core.storage.BufferWithBacklog;
+import com.alibaba.flink.shuffle.core.storage.DataPartition;
+import com.alibaba.flink.shuffle.core.storage.NoOpDataPartition;
 import com.alibaba.flink.shuffle.core.utils.BufferUtils;
 import com.alibaba.flink.shuffle.storage.utils.StorageTestUtils;
 import com.alibaba.flink.shuffle.storage.utils.TestDataListener;
@@ -284,7 +290,15 @@ public class LocalFileMapPartitionReaderTest {
         for (int i = 0; i < numBuffers; ++i) {
             buffers.add(CommonUtils.allocateDirectByteBuffer(StorageTestUtils.DATA_BUFFER_SIZE));
         }
-        return new BufferQueue(buffers);
+        BufferDispatcher dispatcher = new BufferDispatcher("TestDispatcher", 1, 1024);
+        DataPartition partition =
+                new NoOpDataPartition(
+                        new JobID(CommonUtils.randomBytes(16)),
+                        new DataSetID(CommonUtils.randomBytes(16)),
+                        new MapPartitionID(CommonUtils.randomBytes(16)));
+        BufferQueue bufferQueue = new BufferQueue(partition, dispatcher);
+        bufferQueue.add(buffers);
+        return bufferQueue;
     }
 
     private LocalFileMapPartitionReader createPartitionReader(

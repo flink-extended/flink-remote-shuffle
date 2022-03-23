@@ -19,37 +19,42 @@
 package com.alibaba.flink.shuffle.core.storage;
 
 import com.alibaba.flink.shuffle.common.utils.CommonUtils;
+import com.alibaba.flink.shuffle.core.memory.BufferDispatcher;
+import com.alibaba.flink.shuffle.core.utils.BufferUtils;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.Queue;
 
 /** A buffer queue implementation enhanced with a <b>release</b> state. */
 @NotThreadSafe
 public class BufferQueue {
 
-    public static final BufferQueue RELEASED_EMPTY_BUFFER_QUEUE = new BufferQueue();
-
     /** All available buffers in this buffer queue. */
-    private final Queue<ByteBuffer> buffers;
+    private final Queue<ByteBuffer> buffers = new ArrayDeque<>();
+
+    /** Target {@link DataPartition} this buffer queue belongs to. */
+    private final DataPartition owner;
+
+    /** Target {@link BufferDispatcher} where buffers are allocated from and recycled to. */
+    private final BufferDispatcher dispatcher;
+
+    /** Number of buffers occupied by this buffer queue (added but still not recycled). */
+    private int numBuffersOccupied;
 
     /** Whether this buffer queue is released or not. */
     private boolean isReleased;
 
-    public BufferQueue(List<ByteBuffer> buffers) {
-        CommonUtils.checkArgument(buffers != null, "Must be not null.");
-        this.buffers = new ArrayDeque<>(buffers);
-    }
+    public BufferQueue(DataPartition owner, BufferDispatcher dispatcher) {
+        CommonUtils.checkArgument(owner != null, "Must be not null.");
+        CommonUtils.checkArgument(dispatcher != null, "Must be not null.");
 
-    private BufferQueue() {
-        this.isReleased = true;
-        this.buffers = new ArrayDeque<>();
+        this.owner = owner;
+        this.dispatcher = dispatcher;
     }
 
     /** Returns the number of available buffers in this buffer queue. */
@@ -75,6 +80,7 @@ public class BufferQueue {
         CommonUtils.checkState(!isReleased, "Buffer queue has been released.");
 
         buffers.add(availableBuffer);
+        ++numBuffersOccupied;
     }
 
     /**
@@ -86,18 +92,40 @@ public class BufferQueue {
         CommonUtils.checkState(!isReleased, "Buffer queue has been released.");
 
         buffers.addAll(availableBuffers);
+        numBuffersOccupied += availableBuffers.size();
+    }
+
+    public int numBuffersOccupied() {
+        return numBuffersOccupied;
+    }
+
+    public void recycleAll() {
+        numBuffersOccupied -= buffers.size();
+
+        DataPartitionMeta dpm = owner.getPartitionMeta();
+        BufferUtils.recycleBuffers(
+                buffers, dispatcher, dpm.getJobID(), dpm.getDataSetID(), dpm.getDataPartitionID());
+        buffers.clear();
+    }
+
+    public void recycle(ByteBuffer buffer) {
+        if (buffer == null) {
+            return;
+        }
+        --numBuffersOccupied;
+
+        DataPartitionMeta dpm = owner.getPartitionMeta();
+        BufferUtils.recycleBuffer(
+                buffer, dispatcher, dpm.getJobID(), dpm.getDataSetID(), dpm.getDataPartitionID());
     }
 
     /**
-     * Releases this buffer queue and returns all available buffers. After released, no buffer can
+     * Releases this buffer queue and recycles all available buffers. After released, no buffer can
      * be added to or polled from this buffer queue.
      */
-    public List<ByteBuffer> release() {
+    public void release() {
         isReleased = true;
-
-        List<ByteBuffer> released = new ArrayList<>(buffers);
-        buffers.clear();
-        return released;
+        recycleAll();
     }
 
     /** Returns true is this buffer queue has been released. */

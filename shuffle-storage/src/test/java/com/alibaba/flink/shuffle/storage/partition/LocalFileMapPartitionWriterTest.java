@@ -19,11 +19,18 @@
 package com.alibaba.flink.shuffle.storage.partition;
 
 import com.alibaba.flink.shuffle.common.exception.ShuffleException;
+import com.alibaba.flink.shuffle.common.utils.CommonUtils;
+import com.alibaba.flink.shuffle.core.ids.DataSetID;
+import com.alibaba.flink.shuffle.core.ids.JobID;
+import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.core.listener.DataRegionCreditListener;
 import com.alibaba.flink.shuffle.core.listener.FailureListener;
 import com.alibaba.flink.shuffle.core.memory.Buffer;
+import com.alibaba.flink.shuffle.core.memory.BufferDispatcher;
 import com.alibaba.flink.shuffle.core.storage.BufferQueue;
+import com.alibaba.flink.shuffle.core.storage.DataPartition;
+import com.alibaba.flink.shuffle.core.storage.NoOpDataPartition;
 import com.alibaba.flink.shuffle.storage.utils.StorageTestUtils;
 import com.alibaba.flink.shuffle.storage.utils.TestDataCommitListener;
 import com.alibaba.flink.shuffle.storage.utils.TestDataRegionCreditListener;
@@ -37,7 +44,6 @@ import org.junit.runners.Parameterized;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -114,7 +120,7 @@ public class LocalFileMapPartitionWriterTest {
         assertEquals(1, partitionWriter.getNumPendingBuffers());
         assertEquals(2, writingTask.getNumWritingTriggers());
 
-        BufferQueue buffers = new BufferQueue(new ArrayList<>());
+        BufferQueue buffers = createBufferQueue();
         buffers.add(ByteBuffer.wrap(StorageTestUtils.DATA_BYTES));
         partitionWriter.assignCredits(buffers, (ignored) -> {});
         assertEquals(1, buffers.size());
@@ -133,7 +139,7 @@ public class LocalFileMapPartitionWriterTest {
         partitionWriter.startRegion(regionIndex, false);
         partitionWriter.writeData();
 
-        BufferQueue buffers = new BufferQueue(new ArrayList<>());
+        BufferQueue buffers = createBufferQueue();
         for (int i = 1; i < BaseDataPartitionWriter.MIN_CREDITS_TO_NOTIFY; ++i) {
             buffers.add(ByteBuffer.allocateDirect(StorageTestUtils.DATA_BUFFER_SIZE));
         }
@@ -179,11 +185,21 @@ public class LocalFileMapPartitionWriterTest {
         assertEquals(0, partitionWriter.getNumPendingBuffers());
         assertTrue(failureListener.isFailed());
 
-        BufferQueue buffers = new BufferQueue(new ArrayList<>());
+        BufferQueue buffers = createBufferQueue();
         buffers.add(ByteBuffer.allocateDirect(StorageTestUtils.DATA_BUFFER_SIZE));
 
         partitionWriter.assignCredits(buffers, (ignored) -> {});
         assertEquals(1, buffers.size());
+    }
+
+    private BufferQueue createBufferQueue() {
+        BufferDispatcher dispatcher = new BufferDispatcher("TestDispatcher", 1, 1024);
+        DataPartition partition =
+                new NoOpDataPartition(
+                        new JobID(CommonUtils.randomBytes(16)),
+                        new DataSetID(CommonUtils.randomBytes(16)),
+                        new MapPartitionID(CommonUtils.randomBytes(16)));
+        return new BufferQueue(partition, dispatcher);
     }
 
     private LocalFileMapPartitionWriter createLocalFileMapPartitionWriter(
