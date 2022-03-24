@@ -50,7 +50,6 @@ import com.alibaba.flink.shuffle.e2e.zookeeper.ZooKeeperTestUtils;
 import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcService;
 import com.alibaba.flink.shuffle.rpc.utils.AkkaRpcServiceUtils;
 import com.alibaba.flink.shuffle.rpc.utils.RpcUtils;
-import com.alibaba.flink.shuffle.transfer.AbstractNettyTest;
 
 import org.apache.flink.api.common.time.Deadline;
 
@@ -143,7 +142,7 @@ public class LocalShuffleCluster {
                             logDirName,
                             new Configuration(config),
                             i,
-                            AbstractNettyTest.getAvailablePort(),
+                            TestJvmProcess.getAvailablePort(),
                             getDataDirForWorker(i));
             shuffleWorkers[i].startProcess();
         }
