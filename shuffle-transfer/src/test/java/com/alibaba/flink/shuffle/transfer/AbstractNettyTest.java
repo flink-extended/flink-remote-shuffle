@@ -35,10 +35,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.util.ArrayDeque;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
-import java.util.Set;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -143,32 +142,14 @@ public class AbstractNettyTest {
     }
 
     public static int getAvailablePort() {
-        return getAvailablePorts(1)[0];
-    }
-
-    public static int[] getAvailablePorts(int num) {
-        Set<Integer> ports = new HashSet<>();
-        for (int i = 0; i < 100; i++) {
-            try (ServerSocket serverSocket = new ServerSocket(0)) {
-                int port = serverSocket.getLocalPort();
-                if (port != 0) {
-                    ports.add(port);
-                }
-                if (ports.size() >= num) {
-                    break;
-                }
+        Random random = new Random();
+        for (int i = 0; i < 1024; i++) {
+            int port = random.nextInt(65535 - 10240) + 10240;
+            try (ServerSocket serverSocket = new ServerSocket(port)) {
+                return serverSocket.getLocalPort();
             } catch (IOException ignored) {
             }
         }
-        if (ports.size() == num) {
-            int[] ret = new int[num];
-            int i = 0;
-            for (int port : ports) {
-                ret[i++] = port;
-            }
-            return ret;
-        } else {
-            throw new RuntimeException("Could not find free permitted ports on the machine.");
-        }
+        throw new RuntimeException("Could not find a free permitted port on the machine.");
     }
 }
