@@ -189,15 +189,36 @@ public class LocalShuffleCluster {
 
     public void shutdown() throws Exception {
         for (int i = 0; i < numWorkers; i++) {
-            shuffleWorkers[i].destroy();
+            try {
+                shuffleWorkers[i].destroy();
+            } catch (Throwable throwable) {
+                LOG.error("Failed to stop shuffle worker.", throwable);
+            }
         }
 
-        shuffleManager.destroy();
+        try {
+            shuffleManager.destroy();
+        } catch (Throwable throwable) {
+            LOG.error("Failed to stop shuffle manager.", throwable);
+        }
 
-        RpcUtils.terminateRpcService(rpcService, 30000L);
+        try {
+            RpcUtils.terminateRpcService(rpcService, 30000L);
+        } catch (Throwable throwable) {
+            LOG.error("Failed to stop rpc service.", throwable);
+        }
 
-        ZooKeeperTestUtils.deleteAll(zkClient);
-        zkClient.close();
+        try {
+            ZooKeeperTestUtils.deleteAll(zkClient);
+        } catch (Throwable throwable) {
+            LOG.error("Failed to clear zk data.", throwable);
+        }
+
+        try {
+            zkClient.close();
+        } catch (Throwable throwable) {
+            LOG.error("Failed to stop zk client.", throwable);
+        }
     }
 
     public Optional<Integer> findShuffleWorker(int processId) {
