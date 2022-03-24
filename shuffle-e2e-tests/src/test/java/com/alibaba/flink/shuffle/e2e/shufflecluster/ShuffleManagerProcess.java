@@ -43,6 +43,7 @@ public class ShuffleManagerProcess extends TestJvmProcess {
         super("ShuffleManager", logDirName);
         this.jvmArgs = LocalShuffleClusterUtils.generateDynamicConfigs(configuration);
 
+        configuration.setInteger(ManagerOptions.RPC_PORT, getAvailablePort());
         configuration.setInteger(RestOptions.REST_MANAGER_BIND_PORT, getAvailablePort());
         ShuffleManagerProcessSpec processSpec = new ShuffleManagerProcessSpec(configuration);
         setJvmDirectMemory(processSpec.getJvmDirectMemorySize().getMebiBytes());

@@ -357,9 +357,8 @@ public class ReadingIntegrationTest {
         dataStores = new ArrayList<>();
         nettyServers = new ArrayList<>();
         workerDescs = new ArrayList<>();
-        int[] ports = AbstractNettyTest.getAvailablePorts(numShuffleWorkers);
         for (int i = 0; i < numShuffleWorkers; i++) {
-            int dataPort = ports[i];
+            int dataPort = AbstractNettyTest.getAvailablePort();
             workerDescs.add(
                     new ShuffleWorkerDescriptor(
                             null, InetAddress.getLocalHost().getHostAddress(), dataPort));
