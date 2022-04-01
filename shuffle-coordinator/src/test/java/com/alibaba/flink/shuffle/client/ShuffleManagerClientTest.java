@@ -459,6 +459,22 @@ public class ShuffleManagerClientTest {
         }
     }
 
+    @Test
+    public void testNotifyNewShuffleManagerLeaderAfterClosed() {
+        ShuffleManagerClientImpl shuffleManagerClient =
+                new ShuffleManagerClientImpl(
+                        RandomIDUtils.randomJobId(),
+                        new RecordShuffleWorkerStatusListener(),
+                        rpcService,
+                        testingFatalErrorHandler,
+                        ShuffleManagerClientConfiguration.fromConfiguration(configuration),
+                        haServices,
+                        new HeartbeatServices(Long.MAX_VALUE, Long.MAX_VALUE));
+        shuffleManagerClient.close();
+        // this should not throw any exception
+        shuffleManagerClient.notifyLeaderAddress(LeaderInformation.empty());
+    }
+
     private static class RecordShuffleWorkerStatusListener implements ShuffleWorkerStatusListener {
 
         private final BlockingQueue<InstanceID> unrelatedWorkers = new LinkedBlockingQueue<>();
