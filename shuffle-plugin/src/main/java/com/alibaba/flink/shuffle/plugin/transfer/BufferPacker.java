@@ -82,9 +82,10 @@ public class BufferPacker {
 
     public void drain() throws InterruptedException {
         if (cachedBuffer != null) {
-            handleRipeBuffer(cachedBuffer, currentSubIdx);
+            Buffer dumpedBuffer = cachedBuffer;
+            cachedBuffer = null;
+            handleRipeBuffer(dumpedBuffer, currentSubIdx);
         }
-        cachedBuffer = null;
         currentSubIdx = -1;
     }
 

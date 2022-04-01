@@ -38,6 +38,7 @@ import java.util.List;
 import static org.apache.flink.runtime.io.network.buffer.Buffer.DataType.DATA_BUFFER;
 import static org.apache.flink.runtime.io.network.buffer.Buffer.DataType.EVENT_BUFFER;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 /** Test for {@link BufferPacker}. */
@@ -189,6 +190,26 @@ public class BufferPackerTest {
         checkDataType(unpacked, EVENT_BUFFER, DATA_BUFFER, DATA_BUFFER);
         verifyBuffers(unpacked, 0, 1, 2);
         unpacked.forEach(Buffer::recycleBuffer);
+    }
+
+    @Test
+    public void testFailedToHandleRipeBufferAndClose() throws Exception {
+        List<Buffer> buffers = requestBuffers(1);
+        setCompressed(buffers, false);
+        setDataType(buffers, DATA_BUFFER);
+        fillBuffers(buffers, 0);
+
+        BiConsumerWithException<ByteBuf, Integer, InterruptedException> ripeBufferHandler =
+                (ripe, sub) -> {
+                    ripe.release();
+                    throw new RuntimeException("Test");
+                };
+        BufferPacker packer = new BufferPacker(ripeBufferHandler);
+        packer.process(buffers.get(0), 0);
+        assertThrows(RuntimeException.class, packer::drain);
+        // this should never throw any exception
+        packer.close();
+        assertEquals(0, bufferPool.bestEffortGetNumOfUsedBuffers());
     }
 
     private List<Buffer> requestBuffers(int n) {
