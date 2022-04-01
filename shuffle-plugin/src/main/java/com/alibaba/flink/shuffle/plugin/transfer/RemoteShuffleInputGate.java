@@ -344,6 +344,7 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
                     shuffleReadClient.close();
                 } catch (Throwable throwable) {
                     closeException = closeException == null ? throwable : closeException;
+                    LOG.error("Failed to close shuffle read client.", throwable);
                 }
             }
             buffersToRecycle =
@@ -352,10 +353,27 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
             closed = true;
         }
 
-        buffersToRecycle.forEach(Buffer::recycleBuffer);
-        transferBufferPool.destroy();
-        if (bufferPool != null) {
-            bufferPool.lazyDestroy();
+        try {
+            buffersToRecycle.forEach(Buffer::recycleBuffer);
+        } catch (Throwable throwable) {
+            closeException = closeException == null ? throwable : closeException;
+            LOG.error("Failed to recycle buffers.", throwable);
+        }
+
+        try {
+            transferBufferPool.destroy();
+        } catch (Throwable throwable) {
+            closeException = closeException == null ? throwable : closeException;
+            LOG.error("Failed to close transfer buffer pool.", throwable);
+        }
+
+        try {
+            if (bufferPool != null) {
+                bufferPool.lazyDestroy();
+            }
+        } catch (Throwable throwable) {
+            closeException = closeException == null ? throwable : closeException;
+            LOG.error("Failed to close local buffer pool.", throwable);
         }
 
         if (closeException != null) {
