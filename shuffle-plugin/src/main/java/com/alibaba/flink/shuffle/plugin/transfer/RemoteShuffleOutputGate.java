@@ -19,6 +19,7 @@
 package com.alibaba.flink.shuffle.plugin.transfer;
 
 import com.alibaba.flink.shuffle.common.utils.CommonUtils;
+import com.alibaba.flink.shuffle.common.utils.ExceptionUtils;
 import com.alibaba.flink.shuffle.coordinator.manager.DefaultShuffleResource;
 import com.alibaba.flink.shuffle.coordinator.manager.ShuffleWorkerDescriptor;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
@@ -35,6 +36,9 @@ import org.apache.flink.runtime.io.network.buffer.BufferPool;
 import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
 import org.apache.flink.util.function.SupplierWithException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
@@ -43,6 +47,8 @@ import java.net.InetSocketAddress;
  * worker.
  */
 public class RemoteShuffleOutputGate {
+
+    private static final Logger LOG = LoggerFactory.getLogger(RemoteShuffleOutputGate.class);
 
     /** A {@link ShuffleDescriptor} which describes shuffle meta and shuffle worker address. */
     private final RemoteShuffleDescriptor shuffleDesc;
@@ -133,11 +139,33 @@ public class RemoteShuffleOutputGate {
 
     /** Close the transportation gate. */
     public void close() throws IOException {
-        if (bufferPool != null) {
-            bufferPool.lazyDestroy();
+        Throwable closeException = null;
+        try {
+            if (bufferPool != null) {
+                bufferPool.lazyDestroy();
+            }
+        } catch (Throwable throwable) {
+            closeException = throwable;
+            LOG.error("Failed to close local buffer pool.", throwable);
         }
-        bufferPacker.close();
-        shuffleWriteClient.close();
+
+        try {
+            bufferPacker.close();
+        } catch (Throwable throwable) {
+            closeException = closeException == null ? throwable : closeException;
+            LOG.error("Failed to close buffer packer.", throwable);
+        }
+
+        try {
+            shuffleWriteClient.close();
+        } catch (Throwable throwable) {
+            closeException = closeException == null ? throwable : closeException;
+            LOG.error("Failed to close shuffle write client.", throwable);
+        }
+
+        if (closeException != null) {
+            ExceptionUtils.rethrowAsRuntimeException(closeException);
+        }
     }
 
     /** Returns shuffle descriptor. */
