@@ -63,6 +63,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -121,6 +122,8 @@ public class ShuffleManagerClientImpl implements ShuffleManagerClient, LeaderRet
      * shuffle workers.
      */
     private final Set<InstanceID> relatedShuffleWorkers = new HashSet<>();
+
+    private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
     public ShuffleManagerClientImpl(
             JobID jobID,
@@ -225,6 +228,9 @@ public class ShuffleManagerClientImpl implements ShuffleManagerClient, LeaderRet
 
     @Override
     public void close() {
+        if (!isClosed.compareAndSet(false, true)) {
+            return;
+        }
         try {
             mainThreadExecutor
                     .submit(
@@ -254,7 +260,14 @@ public class ShuffleManagerClientImpl implements ShuffleManagerClient, LeaderRet
 
     @Override
     public void notifyLeaderAddress(LeaderInformation leaderInfo) {
-        mainThreadExecutor.execute(() -> notifyOfNewShuffleManagerLeader(leaderInfo));
+        try {
+            mainThreadExecutor.execute(() -> notifyOfNewShuffleManagerLeader(leaderInfo));
+        } catch (Throwable throwable) {
+            if (isClosed.get()) {
+                return;
+            }
+            throw throwable;
+        }
     }
 
     @Override
