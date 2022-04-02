@@ -17,8 +17,8 @@
 # limitations under the License.
 ################################################################################
 
-OLD_VERSION="0.1.0-SNAPSHOT"
-NEW_VERSION="1.0-SNAPSHOT"
+OLD_VERSION="1.0-SNAPSHOT"
+NEW_VERSION="1.1-SNAPSHOT"
 
 bin=`dirname "$0"`
 cd $bin/../
