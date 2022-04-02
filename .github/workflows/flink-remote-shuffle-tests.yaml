@@ -1,9 +1,9 @@
 name: Remote Shuffle Service
 on:
   push:
-    branches: [ main, release-* ]
+    branches: [main, release-*, dev-*]
   pull_request:
-    branches: [ main, release-* ]
+    branches: [main, release-*, dev-*]
 jobs:
   build-and-test:
     runs-on: ubuntu-18.04
