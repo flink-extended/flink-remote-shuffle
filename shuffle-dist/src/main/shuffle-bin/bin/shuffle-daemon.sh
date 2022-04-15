@@ -113,7 +113,7 @@ case $STARTSTOP in
 
         echo "Starting $DAEMON daemon on host $HOSTNAME."
 
-        "$JAVA_RUN" "${log_setting[@]}" $JVM_ARGS -classpath "`manglePathList "$SHUFFLE_CLASSPATH"`" ${CLASS_TO_RUN} "${ARGS[@]}" > "$out" 200<&- 2>&1 < /dev/null &
+        "$JAVA_RUN" "${log_setting[@]}" $JVM_ARGS -classpath "`manglePathList "$SHUFFLE_CLASSPATH"`" ${CLASS_TO_RUN} "${ARGS[@]}" -c ${SHUFFLE_CONF_DIR} > "$out" 200<&- 2>&1 < /dev/null &
 
         mypid=$!
 
