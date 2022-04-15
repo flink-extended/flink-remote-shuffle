@@ -175,7 +175,7 @@ runBashJavaUtilsCmd() {
 EOF
 
     local log_setting=("-Dlog4j.configurationFile=file:${java_utils_log_conf}")
-    local output=`"${JAVA_RUN}" "${log_setting}" -classpath "${class_path}" com.alibaba.flink.shuffle.core.utils.BashJavaUtils ${cmd} "${dynamic_args[@]}" 2>&1 | tail -n 1000`
+    local output=`"${JAVA_RUN}" "${log_setting}" -classpath "${class_path}" com.alibaba.flink.shuffle.core.utils.BashJavaUtils ${cmd} "${dynamic_args[@]}" -c ${SHUFFLE_CONF_DIR} 2>&1 | tail -n 1000`
     if [[ $? -ne 0 ]]; then
         echo "[ERROR] Cannot run BashJavaUtils to execute command ${cmd}." 1>&2
         # Print the output in case the user redirect the log to console.
