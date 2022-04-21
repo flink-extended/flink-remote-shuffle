@@ -73,7 +73,7 @@ public class DataSender extends ChannelInboundHandlerAdapter {
 
                     Buffer buffer = bufferWithBacklog.getBuffer();
                     int backlog = (int) bufferWithBacklog.getBacklog();
-                    NetworkMetrics.numBytesWritingThroughput().mark(buffer.readableBytes());
+                    NetworkMetrics.numBytesReadingThroughput().mark(buffer.readableBytes());
                     TransferMessage.ReadData readData =
                             new TransferMessage.ReadData(
                                     currentProtocolVersion(),
