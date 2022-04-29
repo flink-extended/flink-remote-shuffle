@@ -91,4 +91,4 @@ echo $$ >> "$pid" 2>/dev/null
 # Release the lock because the java process runs in the foreground and would block other processes from modifying the pid file
 [[ ${flock_exist} -eq 0 ]] &&  flock -u 200
 
-exec "$JAVA_RUN" "${log_setting[@]}" $JVM_ARGS -classpath "`manglePathList "$SHUFFLE_CLASSPATH"`" ${CLASS_TO_RUN} "${ARGS[@]}"
+exec "$JAVA_RUN" "${log_setting[@]}" $JVM_ARGS -classpath "`manglePathList "$SHUFFLE_CLASSPATH"`" ${CLASS_TO_RUN} "${ARGS[@]}" -c ${SHUFFLE_CONF_DIR}
