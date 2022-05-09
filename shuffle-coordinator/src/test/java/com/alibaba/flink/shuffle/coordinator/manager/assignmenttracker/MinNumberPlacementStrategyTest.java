@@ -51,7 +51,8 @@ public class MinNumberPlacementStrategyTest {
         configuration.setString(
                 ManagerOptions.PARTITION_PLACEMENT_STRATEGY,
                 PartitionPlacementStrategyLoader.MIN_NUM_PLACEMENT_STRATEGY_NAME);
-        configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
+        configuration.setMemorySize(
+                StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES, MemorySize.ZERO);
         AssignmentTrackerImpl assignmentTracker = new AssignmentTrackerImpl(configuration);
         assignmentTracker.registerJob(jobId);
 
@@ -100,6 +101,7 @@ public class MinNumberPlacementStrategyTest {
                 PartitionPlacementStrategyLoader.MIN_NUM_PLACEMENT_STRATEGY_NAME,
                 "worker1",
                 "worker2",
+                "worker3",
                 null);
     }
 

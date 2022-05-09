@@ -39,9 +39,13 @@ public class StorageMetrics {
     public static final String NUM_AVAILABLE_READING_BUFFERS =
             STORAGE + ".num_available_reading_buffers";
 
-    public static final String NUM_HDD_MAX_USABLE_BYTES = STORAGE + ".num_hdd_max_usable_bytes";
+    public static final String NUM_HDD_MAX_FREE_BYTES = STORAGE + ".num_hdd_max_free_bytes";
 
-    public static final String NUM_SSD_MAX_USABLE_BYTES = STORAGE + ".num_ssd_max_usable_bytes";
+    public static final String NUM_SSD_MAX_FREE_BYTES = STORAGE + ".num_ssd_max_free_bytes";
+
+    public static final String NUM_HDD_MAX_USED_BYTES = STORAGE + ".num_hdd_max_used_bytes";
+
+    public static final String NUM_SSD_MAX_USED_BYTES = STORAGE + ".num_ssd_max_used_bytes";
 
     public static final String NUM_TOTAL_PARTITION_FILE_BYTES =
             STORAGE + ".num_total_partition_file_bytes";
@@ -89,14 +93,14 @@ public class StorageMetrics {
                 });
     }
 
-    public static void registerGaugeForNumHddMaxUsableBytes(Supplier<Long> numHddMaxUsableBytes) {
+    public static void registerGaugeForNumHddMaxFreeBytes(Supplier<Long> numHddMaxFreeBytes) {
         MetricUtils.registerMetric(
                 STORAGE,
-                NUM_HDD_MAX_USABLE_BYTES,
+                NUM_HDD_MAX_FREE_BYTES,
                 new Gauge<Long>() {
                     @Override
                     public Long getValue() {
-                        return numHddMaxUsableBytes.get();
+                        return numHddMaxFreeBytes.get();
                     }
 
                     @Override
@@ -106,14 +110,48 @@ public class StorageMetrics {
                 });
     }
 
-    public static void registerGaugeForNumSsdMaxUsableBytes(Supplier<Long> numSsdMaxUsableBytes) {
+    public static void registerGaugeForNumSsdMaxFreeBytes(Supplier<Long> numSsdMaxFreeBytes) {
         MetricUtils.registerMetric(
                 STORAGE,
-                NUM_SSD_MAX_USABLE_BYTES,
+                NUM_SSD_MAX_FREE_BYTES,
                 new Gauge<Long>() {
                     @Override
                     public Long getValue() {
-                        return numSsdMaxUsableBytes.get();
+                        return numSsdMaxFreeBytes.get();
+                    }
+
+                    @Override
+                    public long lastUpdateTime() {
+                        return System.currentTimeMillis();
+                    }
+                });
+    }
+
+    public static void registerGaugeForNumHddMaxUsedBytes(Supplier<Long> numHddMaxUsedBytes) {
+        MetricUtils.registerMetric(
+                STORAGE,
+                NUM_HDD_MAX_USED_BYTES,
+                new Gauge<Long>() {
+                    @Override
+                    public Long getValue() {
+                        return numHddMaxUsedBytes.get();
+                    }
+
+                    @Override
+                    public long lastUpdateTime() {
+                        return System.currentTimeMillis();
+                    }
+                });
+    }
+
+    public static void registerGaugeForNumSsdMaxUsedBytes(Supplier<Long> numSsdMaxUsedBytes) {
+        MetricUtils.registerMetric(
+                STORAGE,
+                NUM_SSD_MAX_USED_BYTES,
+                new Gauge<Long>() {
+                    @Override
+                    public Long getValue() {
+                        return numSsdMaxUsedBytes.get();
                     }
 
                     @Override

@@ -171,7 +171,7 @@ public class LocalShuffleMetaStoreTest {
         LocalMapPartitionFileMeta fileMeta =
                 new LocalMapPartitionFileMeta(
                         storagePath + "test", 10, LocalMapPartitionFile.LATEST_STORAGE_VERSION);
-        StorageMeta storageMeta = new StorageMeta(storagePath, StorageType.SSD);
+        StorageMeta storageMeta = new StorageMeta(storagePath, StorageType.SSD, storagePath);
         return new LocalFileMapPartitionMeta(
                 jobId, dataSetId, dataPartitionId, fileMeta, storageMeta);
     }

@@ -34,12 +34,16 @@ import com.alibaba.flink.shuffle.core.storage.DataPartitionReadingView;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWritingView;
 import com.alibaba.flink.shuffle.core.storage.ReadingViewContext;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 import com.alibaba.flink.shuffle.core.storage.WritingViewContext;
 import com.alibaba.flink.shuffle.core.utils.BufferUtils;
 import com.alibaba.flink.shuffle.storage.exception.ConcurrentWriteException;
+import com.alibaba.flink.shuffle.storage.partition.HDDOnlyLocalFileMapPartitionFactory;
+import com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactory;
 import com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionMeta;
 import com.alibaba.flink.shuffle.storage.partition.LocalMapPartitionFile;
 import com.alibaba.flink.shuffle.storage.partition.LocalMapPartitionFileMeta;
+import com.alibaba.flink.shuffle.storage.partition.SSDOnlyLocalFileMapPartitionFactory;
 import com.alibaba.flink.shuffle.storage.utils.StorageTestUtils;
 import com.alibaba.flink.shuffle.storage.utils.TestDataCommitListener;
 import com.alibaba.flink.shuffle.storage.utils.TestDataListener;
@@ -417,6 +421,29 @@ public class PartitionedDataStoreImplTest {
         consumeData(dataStore, mapDataPartitionIDS, numRegions, 1, false);
         assertEquals(numProducers, partitionStateListener.getNumCreated());
         assertEquals(0, partitionStateListener.getNumRemoved());
+    }
+
+    @Test
+    public void testUpdateStorageInfo() throws Exception {
+        produceData(dataStore, 1, 1, false);
+
+        dataStore.updateFreeStorageSpace();
+        dataStore.updateStorageHealthStatus();
+        dataStore.updateUsedStorageSpace();
+
+        Map<String, StorageSpaceInfo> storageSpaceInfos = dataStore.getStorageSpaceInfos();
+        assertEquals(2, storageSpaceInfos.size());
+        assertNull(storageSpaceInfos.get(SSDOnlyLocalFileMapPartitionFactory.class.getName()));
+        assertEquals(
+                storageSpaceInfos.get(LocalFileMapPartitionFactory.class.getName()),
+                storageSpaceInfos.get(HDDOnlyLocalFileMapPartitionFactory.class.getName()));
+
+        StorageSpaceInfo storageSpaceInfo =
+                storageSpaceInfos.get(LocalFileMapPartitionFactory.class.getName());
+        assertEquals(0, storageSpaceInfo.getSsdMaxFreeSpaceBytes());
+        assertEquals(0, storageSpaceInfo.getSsdMaxUsedSpaceBytes());
+        assertTrue(storageSpaceInfo.getHddMaxFreeSpaceBytes() > 0);
+        assertEquals(32784200, storageSpaceInfo.getHddMaxUsedSpaceBytes());
     }
 
     @Test

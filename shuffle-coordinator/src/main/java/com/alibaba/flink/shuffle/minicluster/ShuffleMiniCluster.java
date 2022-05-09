@@ -208,7 +208,7 @@ public class ShuffleMiniCluster implements AutoCloseableAsync {
                         HeartbeatServicesUtils.createManagerJobHeartbeatServices(configuration);
 
                 configuration.setMemorySize(
-                        StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
+                        StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES, MemorySize.ZERO);
 
                 AkkaRpcServiceUtils.loadRpcSystem(configuration);
                 startShuffleManager();

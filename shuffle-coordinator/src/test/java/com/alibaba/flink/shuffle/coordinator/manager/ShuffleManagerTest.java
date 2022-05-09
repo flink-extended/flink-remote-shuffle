@@ -40,7 +40,7 @@ import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 import com.alibaba.flink.shuffle.core.utils.OneShotLatch;
 import com.alibaba.flink.shuffle.core.utils.TestLogger;
 import com.alibaba.flink.shuffle.rpc.message.Acknowledge;
@@ -382,11 +382,11 @@ public class ShuffleManagerTest extends TestLogger {
                         new TestShuffleWorkerGateway(),
                         "localhost",
                         10240);
-        Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
-        usableSpace.put(partitionFactoryName, UsableStorageSpaceInfo.INFINITE_USABLE_SPACE);
+        Map<String, StorageSpaceInfo> storageSpaceInfos = new HashMap<>();
+        storageSpaceInfos.put(partitionFactoryName, StorageSpaceInfo.INFINITE_STORAGE_SPACE);
         shuffleManager
                 .getAssignmentTracker()
-                .reportWorkerStorageSpaces(workerId, registrationID, usableSpace);
+                .reportWorkerStorageSpaces(workerId, registrationID, storageSpaceInfos);
 
         final JobID jobID = RandomIDUtils.randomJobId();
         final InstanceID instanceId = new InstanceID();
@@ -426,11 +426,11 @@ public class ShuffleManagerTest extends TestLogger {
         RegistrationResponse response = successfulFuture.get(TIMEOUT, TimeUnit.MILLISECONDS);
         assertTrue(response instanceof ShuffleWorkerRegistrationSuccess);
 
-        Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
-        usableSpace.put(partitionFactoryName, UsableStorageSpaceInfo.INFINITE_USABLE_SPACE);
+        Map<String, StorageSpaceInfo> storageSpaceInfos = new HashMap<>();
+        storageSpaceInfos.put(partitionFactoryName, StorageSpaceInfo.INFINITE_STORAGE_SPACE);
         shuffleManager.heartbeatFromWorker(
                 workerRegistration.getWorkerID(),
-                new WorkerToManagerHeartbeatPayload(Collections.emptyList(), usableSpace));
+                new WorkerToManagerHeartbeatPayload(Collections.emptyList(), storageSpaceInfos));
 
         // register shuffle client
         final JobID jobID = RandomIDUtils.randomJobId();
@@ -566,13 +566,13 @@ public class ShuffleManagerTest extends TestLogger {
                                 RandomIDUtils.randomDataSetId(),
                                 RandomIDUtils.randomMapPartitionId()));
 
-        Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
-        usableSpace.put(partitionFactoryName, UsableStorageSpaceInfo.INFINITE_USABLE_SPACE);
+        Map<String, StorageSpaceInfo> storageSpaceInfos = new HashMap<>();
+        storageSpaceInfos.put(partitionFactoryName, StorageSpaceInfo.INFINITE_STORAGE_SPACE);
         shuffleManager.heartbeatFromWorker(
                 worker.getWorkerID(),
                 new WorkerToManagerHeartbeatPayload(
                         Arrays.asList(dataPartitionStatus, releasingDataPartitionStatus),
-                        usableSpace));
+                        storageSpaceInfos));
 
         assertTrue(
                 shuffleManager
@@ -603,7 +603,8 @@ public class ShuffleManagerTest extends TestLogger {
         testingFatalErrorHandler = new TestingFatalErrorHandler();
         InstanceID shuffleManagerInstanceID = new InstanceID();
         Configuration configuration = new Configuration();
-        configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
+        configuration.setMemorySize(
+                StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES, MemorySize.ZERO);
         testAssignmentTracker = new AssignmentTrackerImpl(configuration);
 
         leaderElectionService = new TestingLeaderElectionService();
@@ -667,10 +668,10 @@ public class ShuffleManagerTest extends TestLogger {
         }
 
         static ShuffleWorkerRegistration createShuffleWorkerRegistration(final String rpcAddress) {
-            Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
-            usableSpace.put(partitionFactoryName, UsableStorageSpaceInfo.INFINITE_USABLE_SPACE);
+            Map<String, StorageSpaceInfo> storageSpaceInfos = new HashMap<>();
+            storageSpaceInfos.put(partitionFactoryName, StorageSpaceInfo.INFINITE_STORAGE_SPACE);
             return new ShuffleWorkerRegistration(
-                    rpcAddress, hostName, shuffleWorkerID, dataPort, processId, usableSpace);
+                    rpcAddress, hostName, shuffleWorkerID, dataPort, processId, storageSpaceInfos);
         }
 
         static InstanceID getShuffleWorkerID() {

@@ -19,7 +19,7 @@
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
 import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -35,9 +35,10 @@ class LocalityPlacementStrategy extends BasePartitionPlacementStrategy {
 
     private final Map<String, WorkerStatus> workersByHostName = new HashMap<>();
 
-    LocalityPlacementStrategy(long reservedSpaceBytes) {
-        super(reservedSpaceBytes);
-        this.defaultPlacementStrategy = new RoundRobinPlacementStrategy(reservedSpaceBytes);
+    LocalityPlacementStrategy(long minReservedSpaceBytes, long maxUsableSpaceBytes) {
+        super(minReservedSpaceBytes, maxUsableSpaceBytes);
+        this.defaultPlacementStrategy =
+                new RoundRobinPlacementStrategy(minReservedSpaceBytes, maxUsableSpaceBytes);
     }
 
     @Override
@@ -51,9 +52,9 @@ class LocalityPlacementStrategy extends BasePartitionPlacementStrategy {
         }
 
         if (selectedWorker != null) {
-            UsableStorageSpaceInfo usableSpace =
-                    selectedWorker.getStorageUsableSpace(partitionFactory.getClass().getName());
-            if (isUsableSpaceEnough(partitionFactory, usableSpace)) {
+            StorageSpaceInfo storageSpaceInfo =
+                    selectedWorker.getStorageSpaceInfo(partitionFactory.getClass().getName());
+            if (isStorageSpaceValid(partitionFactory, storageSpaceInfo)) {
                 return PlacementUtils.singleElementWorkerArray(selectedWorker);
             }
         }

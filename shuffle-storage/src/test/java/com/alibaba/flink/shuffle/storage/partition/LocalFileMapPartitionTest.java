@@ -257,8 +257,9 @@ public class LocalFileMapPartitionTest {
     }
 
     private LocalFileMapPartition createLocalFileMapPartition() {
+        String storagePath = temporaryFolder.getRoot().getAbsolutePath() + "/";
         return new LocalFileMapPartition(
-                new StorageMeta(temporaryFolder.getRoot().getAbsolutePath() + "/", StorageType.SSD),
+                new StorageMeta(storagePath, StorageType.SSD, storagePath),
                 StorageTestUtils.NO_OP_PARTITIONED_DATA_STORE,
                 StorageTestUtils.JOB_ID,
                 StorageTestUtils.DATA_SET_ID,

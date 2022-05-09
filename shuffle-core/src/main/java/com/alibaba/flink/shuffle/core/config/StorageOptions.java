@@ -173,7 +173,7 @@ public class StorageOptions {
      * small to avoid wasting too large storage resources and for production usage, we suggest
      * setting this to a larger value, for example, 50g.
      */
-    public static final ConfigOption<MemorySize> STORAGE_RESERVED_SPACE_BYTES =
+    public static final ConfigOption<MemorySize> STORAGE_MIN_RESERVED_SPACE_BYTES =
             new ConfigOption<MemorySize>("remote-shuffle.storage.min-reserved-space-bytes")
                     .defaultValue(MemorySize.parse("5g"))
                     .description(
@@ -184,6 +184,18 @@ public class StorageOptions {
                                     + " The default value 5g is pretty small to avoid wasting too "
                                     + "large storage resources and for production usage, we suggest"
                                     + " setting this to a larger value, for example, 50g.");
+
+    /**
+     * Maximum usable space size per disk for shuffle workers. This option is used to filter out the
+     * workers which already store too much data and reserve enough space for other applications.
+     */
+    public static final ConfigOption<MemorySize> STORAGE_MAX_USABLE_SPACE_BYTES =
+            new ConfigOption<MemorySize>("remote-shuffle.storage.max-usable-space-bytes")
+                    .defaultValue(MemorySize.MAX_VALUE)
+                    .description(
+                            "Maximum usable space size per disk for shuffle workers. This option"
+                                    + " is used to filter out the workers which already store too "
+                                    + "much data and reserve enough space for other applications.");
 
     // ------------------------------------------------------------------------
 

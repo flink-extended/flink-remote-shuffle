@@ -18,7 +18,7 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager;
 
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 
 import java.io.Serializable;
 import java.util.List;
@@ -33,20 +33,20 @@ public class WorkerToManagerHeartbeatPayload implements Serializable {
 
     private final List<DataPartitionStatus> dataPartitionStatuses;
 
-    private final Map<String, UsableStorageSpaceInfo> usableSpace;
+    private final Map<String, StorageSpaceInfo> storageSpaceInfos;
 
     public WorkerToManagerHeartbeatPayload(
             List<DataPartitionStatus> dataPartitionStatuses,
-            Map<String, UsableStorageSpaceInfo> usableSpace) {
+            Map<String, StorageSpaceInfo> storageSpaceInfos) {
         this.dataPartitionStatuses = dataPartitionStatuses;
-        this.usableSpace = checkNotNull(usableSpace);
+        this.storageSpaceInfos = checkNotNull(storageSpaceInfos);
     }
 
     public List<DataPartitionStatus> getDataPartitionStatuses() {
         return dataPartitionStatuses;
     }
 
-    public Map<String, UsableStorageSpaceInfo> getUsableStorageSpace() {
-        return usableSpace;
+    public Map<String, StorageSpaceInfo> getStorageSpaceInfos() {
+        return storageSpaceInfos;
     }
 }

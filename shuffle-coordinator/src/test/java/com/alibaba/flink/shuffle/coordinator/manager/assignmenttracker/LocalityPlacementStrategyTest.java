@@ -23,7 +23,7 @@ import com.alibaba.flink.shuffle.coordinator.manager.ShuffleResource;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -78,11 +78,11 @@ public class LocalityPlacementStrategyTest {
             assertEquals("localhost", shuffleResource.getMapPartitionLocation().getWorkerAddress());
         }
 
-        Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
-        usableSpace.put(PARTITION_FACTORY_CLASS, UsableStorageSpaceInfo.ZERO_USABLE_SPACE);
+        Map<String, StorageSpaceInfo> storageSpaceInfos = new HashMap<>();
+        storageSpaceInfos.put(PARTITION_FACTORY_CLASS, StorageSpaceInfo.ZERO_STORAGE_SPACE);
         for (WorkerStatus worker : assignmentTracker.getWorkers().values()) {
             if (worker.getWorkerAddress().equals("localhost")) {
-                worker.updateStorageUsableSpace(usableSpace);
+                worker.updateStorageSpaceInfo(storageSpaceInfos);
             }
         }
 
@@ -105,7 +105,8 @@ public class LocalityPlacementStrategyTest {
         selectWorkerWithEnoughSpace(
                 PartitionPlacementStrategyLoader.LOCALITY_PLACEMENT_STRATEGY_NAME,
                 "localhost",
-                "remote",
+                "remote1",
+                "remote2",
                 "localhost");
     }
 

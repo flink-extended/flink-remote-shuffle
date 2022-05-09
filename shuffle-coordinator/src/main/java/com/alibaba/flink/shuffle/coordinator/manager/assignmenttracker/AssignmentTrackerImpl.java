@@ -34,7 +34,7 @@ import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -410,7 +410,7 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
     public void reportWorkerStorageSpaces(
             InstanceID instanceID,
             RegistrationID workerRegistrationID,
-            Map<String, UsableStorageSpaceInfo> usableSpace) {
+            Map<String, StorageSpaceInfo> storageSpaceInfos) {
         WorkerStatus workerStatus = workers.get(workerRegistrationID);
         if (workerStatus == null) {
             LOG.warn("Received worker storage spaces from unknown worker {}", workerRegistrationID);
@@ -418,7 +418,7 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
         }
 
         checkState(instanceID.equals(workerStatus.getWorkerID()));
-        workerStatus.updateStorageUsableSpace(usableSpace);
+        workerStatus.updateStorageSpaceInfo(storageSpaceInfos);
     }
 
     public Map<JobID, JobStatus> getJobs() {

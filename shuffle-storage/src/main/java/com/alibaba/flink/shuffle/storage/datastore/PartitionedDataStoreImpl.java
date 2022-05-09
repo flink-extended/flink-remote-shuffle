@@ -46,7 +46,7 @@ import com.alibaba.flink.shuffle.core.storage.DataSet;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
 import com.alibaba.flink.shuffle.core.storage.ReadingViewContext;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 import com.alibaba.flink.shuffle.core.storage.WritingViewContext;
 import com.alibaba.flink.shuffle.storage.StorageMetrics;
 import com.alibaba.flink.shuffle.storage.utils.DataPartitionUtils;
@@ -535,14 +535,22 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
     }
 
     @Override
-    public long numDataPartitionTotalBytes() {
+    public long updateUsedStorageSpace() {
         long numTotalBytes = 0;
+        Map<String, Long> storageUsedBytes = new HashMap<>();
         synchronized (lock) {
             for (DataSet dataSet : dataSets.values()) {
                 for (DataPartition dataPartition : dataSet.getDataPartitions()) {
-                    numTotalBytes += dataPartition.totalBytes();
+                    long dataPartitionBytes = dataPartition.totalBytes();
+                    numTotalBytes += dataPartitionBytes;
+                    storageUsedBytes.compute(
+                            dataPartition.getPartitionMeta().getStorageMeta().getStorageName(),
+                            (k, v) -> v == null ? dataPartitionBytes : v + dataPartitionBytes);
                 }
             }
+        }
+        for (DataPartitionFactory factory : partitionFactories.values()) {
+            factory.updateUsedStorageSpace(storageUsedBytes);
         }
         return numTotalBytes;
     }
@@ -643,19 +651,19 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
     }
 
     @Override
-    public void updateUsableStorageSpace() {
+    public void updateFreeStorageSpace() {
         for (DataPartitionFactory partitionFactory : partitionFactories.values()) {
-            partitionFactory.updateUsableStorageSpace();
+            partitionFactory.updateFreeStorageSpace();
         }
     }
 
     @Override
-    public Map<String, UsableStorageSpaceInfo> getUsableStorageSpace() {
-        Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
+    public Map<String, StorageSpaceInfo> getStorageSpaceInfos() {
+        Map<String, StorageSpaceInfo> storageSpaceInfos = new HashMap<>();
         for (Map.Entry<String, DataPartitionFactory> entry : partitionFactories.entrySet()) {
-            usableSpace.put(entry.getKey(), entry.getValue().getUsableStorageSpace());
+            storageSpaceInfos.put(entry.getKey(), entry.getValue().getStorageSpaceInfo());
         }
-        return usableSpace;
+        return storageSpaceInfos;
     }
 
     @Override

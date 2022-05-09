@@ -25,7 +25,7 @@ import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerGateway;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 
 import java.net.InetAddress;
 import java.util.Collections;
@@ -49,7 +49,7 @@ class WorkerStatus {
 
     private final int dataPort;
 
-    private final Map<String, UsableStorageSpaceInfo> usableStorageSpace = new HashMap<>();
+    private final Map<String, StorageSpaceInfo> storageSpaceInfos = new HashMap<>();
 
     private final Map<DataPartitionCoordinate, DataPartitionStatus> dataPartitions =
             new HashMap<>();
@@ -77,13 +77,13 @@ class WorkerStatus {
         }
     }
 
-    public void updateStorageUsableSpace(Map<String, UsableStorageSpaceInfo> usableSpace) {
-        usableStorageSpace.putAll(usableSpace);
+    public void updateStorageSpaceInfo(Map<String, StorageSpaceInfo> newStorageSpaceInfos) {
+        storageSpaceInfos.putAll(newStorageSpaceInfos);
     }
 
-    public UsableStorageSpaceInfo getStorageUsableSpace(String partitionFactoryName) {
-        return usableStorageSpace.getOrDefault(
-                partitionFactoryName, UsableStorageSpaceInfo.ZERO_USABLE_SPACE);
+    public StorageSpaceInfo getStorageSpaceInfo(String partitionFactoryName) {
+        return storageSpaceInfos.getOrDefault(
+                partitionFactoryName, StorageSpaceInfo.ZERO_STORAGE_SPACE);
     }
 
     public InstanceID getWorkerID() {

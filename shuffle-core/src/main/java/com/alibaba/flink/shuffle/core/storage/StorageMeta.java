@@ -35,16 +35,28 @@ public class StorageMeta implements Serializable {
 
     protected final StorageType storageType;
 
-    protected volatile long numUsableSpaceBytes;
+    /**
+     * Same storage name means same underlying storage media, for example, different storage paths
+     * (directory) may be on the same disk and have the same storage name.
+     */
+    private final String storageName;
+
+    /** Remaining storage space in bytes on the target storage media. */
+    protected volatile long numFreeSpaceBytes;
 
     protected volatile boolean isHealthy = true;
 
-    public StorageMeta(String storagePath, StorageType storageType) {
+    /** Storage space in bytes already used on the target storage media by shuffle data. */
+    protected volatile long numUsedSpaceBytes;
+
+    public StorageMeta(String storagePath, StorageType storageType, String storageName) {
         CommonUtils.checkArgument(storagePath != null, "Must be not null.");
         CommonUtils.checkArgument(storageType != null, "Must be not null.");
+        CommonUtils.checkArgument(storageName != null, "Must be not null.");
 
         this.storagePath = storagePath;
         this.storageType = storageType;
+        this.storageName = storageName;
     }
 
     public String getStoragePath() {
@@ -55,13 +67,25 @@ public class StorageMeta implements Serializable {
         return storageType;
     }
 
-    public long getUsableStorageSpace() {
-        return numUsableSpaceBytes;
+    public String getStorageName() {
+        return storageName;
     }
 
-    public long updateUsableStorageSpace() {
-        numUsableSpaceBytes = Long.MAX_VALUE;
-        return numUsableSpaceBytes;
+    public long getFreeStorageSpace() {
+        return numFreeSpaceBytes;
+    }
+
+    public long getUsedStorageSpace() {
+        return numUsedSpaceBytes;
+    }
+
+    public long updateFreeStorageSpace() {
+        numFreeSpaceBytes = Long.MAX_VALUE;
+        return numFreeSpaceBytes;
+    }
+
+    public void updateUsedStorageSpace(long numUsedSpaceBytes) {
+        this.numUsedSpaceBytes = numUsedSpaceBytes;
     }
 
     public void updateStorageHealthStatus() {
@@ -77,10 +101,12 @@ public class StorageMeta implements Serializable {
         dataOutput.writeUTF(storagePath);
     }
 
-    public static StorageMeta readFrom(DataInput dataInput) throws IOException {
+    public static StorageMeta readFrom(DataInput dataInput, DataPartitionFactory partitionFactory)
+            throws IOException {
         StorageType storageType = StorageType.valueOf(dataInput.readUTF());
         String storagePath = dataInput.readUTF();
-        return new StorageMeta(storagePath, storageType);
+        return new StorageMeta(
+                storagePath, storageType, partitionFactory.getStorageNameFromPath(storagePath));
     }
 
     @Override
@@ -110,6 +136,8 @@ public class StorageMeta implements Serializable {
                 + storagePath
                 + ", StorageType="
                 + storageType
+                + ", storageName="
+                + storageName
                 + '}';
     }
 }

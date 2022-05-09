@@ -44,7 +44,10 @@ public class NoOpDataPartition implements DataPartition {
 
         this.partitionMeta =
                 new TestDataPartitionMeta(
-                        jobID, dataSetID, partitionID, new StorageMeta("/tmp", StorageType.SSD));
+                        jobID,
+                        dataSetID,
+                        partitionID,
+                        new StorageMeta("/tmp", StorageType.SSD, "/tmp"));
     }
 
     @Override

@@ -28,7 +28,7 @@ import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 
 import java.util.Collection;
 import java.util.List;
@@ -178,9 +178,9 @@ public interface AssignmentTracker {
      */
     Map<DataPartitionCoordinate, InstanceID> getDataPartitionDistribution(JobID jobID);
 
-    /** Reports the available storage space information of the corresponding worker. */
+    /** Reports the storage space information of the corresponding worker. */
     void reportWorkerStorageSpaces(
             InstanceID instanceID,
             RegistrationID shuffleWorkerRegisterId,
-            Map<String, UsableStorageSpaceInfo> usableSpace);
+            Map<String, StorageSpaceInfo> storageSpaceInfos);
 }

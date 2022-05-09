@@ -329,11 +329,12 @@ public class StorageTestUtils {
     }
 
     public static StorageMeta getStorageMeta() {
-        return new StorageMeta("/tmp/", StorageType.SSD);
+        return new StorageMeta("/tmp/", StorageType.SSD, "/tmp/");
     }
 
     public static StorageMeta getStorageMeta(TemporaryFolder temporaryFolder) {
-        return new StorageMeta(getStoragePath(temporaryFolder), StorageType.SSD);
+        String storagePath = getStoragePath(temporaryFolder);
+        return new StorageMeta(storagePath, StorageType.SSD, storagePath);
     }
 
     public static String getStoragePath(TemporaryFolder temporaryFolder) {

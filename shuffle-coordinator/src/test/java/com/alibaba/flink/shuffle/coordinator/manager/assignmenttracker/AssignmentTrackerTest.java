@@ -36,7 +36,7 @@ import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 import com.alibaba.flink.shuffle.rpc.message.Acknowledge;
 
 import org.apache.commons.lang3.tuple.Triple;
@@ -117,7 +117,8 @@ public class AssignmentTrackerTest {
         JobID jobId = randomJobId();
 
         Configuration configuration = new Configuration();
-        configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
+        configuration.setMemorySize(
+                StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES, MemorySize.ZERO);
         configuration.setString(
                 ManagerOptions.PARTITION_PLACEMENT_STRATEGY,
                 PartitionPlacementStrategyLoader.MIN_NUM_PLACEMENT_STRATEGY_NAME);
@@ -393,7 +394,8 @@ public class AssignmentTrackerTest {
         JobID jobId = randomJobId();
 
         Configuration configuration = new Configuration();
-        configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
+        configuration.setMemorySize(
+                StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES, MemorySize.ZERO);
         AssignmentTrackerImpl assignmentTracker = new AssignmentTrackerImpl(configuration);
         assignmentTracker.registerJob(jobId);
 
@@ -462,7 +464,8 @@ public class AssignmentTrackerTest {
                 new ReleaseRecordingShuffleWorkerGateway();
 
         Configuration configuration = new Configuration();
-        configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
+        configuration.setMemorySize(
+                StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES, MemorySize.ZERO);
         configuration.setString(
                 ManagerOptions.PARTITION_PLACEMENT_STRATEGY,
                 PartitionPlacementStrategyLoader.MIN_NUM_PLACEMENT_STRATEGY_NAME);
@@ -715,7 +718,8 @@ public class AssignmentTrackerTest {
     @Test
     public void testInitPartitionPlacementStrategy() {
         Configuration configuration = new Configuration();
-        configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
+        configuration.setMemorySize(
+                StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES, MemorySize.ZERO);
         PartitionPlacementStrategy defaultStrategy =
                 PartitionPlacementStrategyLoader.loadPlacementStrategyFactory(configuration);
         assertTrue(defaultStrategy instanceof RoundRobinPlacementStrategy);
@@ -770,9 +774,9 @@ public class AssignmentTrackerTest {
             fail(e.getMessage());
         }
 
-        Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
-        usableSpace.put(partitionFactory, UsableStorageSpaceInfo.ZERO_USABLE_SPACE);
-        assignmentTracker.getWorkers().get(worker1).updateStorageUsableSpace(usableSpace);
+        Map<String, StorageSpaceInfo> storageSpaceInfos = new HashMap<>();
+        storageSpaceInfos.put(partitionFactory, StorageSpaceInfo.ZERO_STORAGE_SPACE);
+        assignmentTracker.getWorkers().get(worker1).updateStorageSpaceInfo(storageSpaceInfos);
         assignmentTracker.requestShuffleResource(
                 jobId, randomDataSetId(), randomMapPartitionId(), 2, partitionFactory, null);
     }
@@ -785,7 +789,8 @@ public class AssignmentTrackerTest {
             InstanceID workerInstanceID,
             ShuffleWorkerGateway gateway) {
         Configuration configuration = new Configuration();
-        configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
+        configuration.setMemorySize(
+                StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES, MemorySize.ZERO);
         AssignmentTrackerImpl assignmentTracker = new AssignmentTrackerImpl(configuration);
         assignmentTracker.registerJob(jobId);
 
@@ -807,9 +812,12 @@ public class AssignmentTrackerTest {
             String workerAddr,
             int dataPort) {
         assignmentTracker.registerWorker(workerID, registrationID, gateway, workerAddr, dataPort);
-        Map<String, UsableStorageSpaceInfo> usableSpace = new HashMap<>();
-        usableSpace.put(partitionFactory, UsableStorageSpaceInfo.INFINITE_USABLE_SPACE);
-        assignmentTracker.getWorkers().get(registrationID).updateStorageUsableSpace(usableSpace);
+        Map<String, StorageSpaceInfo> storageSpaceInfos = new HashMap<>();
+        storageSpaceInfos.put(partitionFactory, StorageSpaceInfo.INFINITE_STORAGE_SPACE);
+        assignmentTracker
+                .getWorkers()
+                .get(registrationID)
+                .updateStorageSpaceInfo(storageSpaceInfos);
     }
 
     private static class ReleaseRecordingShuffleWorkerGateway extends EmptyShuffleWorkerGateway {

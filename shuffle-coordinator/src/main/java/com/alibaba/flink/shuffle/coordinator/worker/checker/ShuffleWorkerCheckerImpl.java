@@ -23,7 +23,7 @@ import com.alibaba.flink.shuffle.coordinator.utils.WorkerCheckerUtils;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorker;
 import com.alibaba.flink.shuffle.core.executor.ExecutorThreadFactory;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 import com.alibaba.flink.shuffle.storage.StorageMetrics;
 import com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactory;
 
@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
@@ -51,30 +50,22 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
 
     private final PartitionedDataStore dataStore;
 
-    /** The max storage usable bytes of all HDD storage disks. */
-    private final AtomicLong numHddMaxUsableBytes = new AtomicLong(-1);
-
-    /** The max storage usable bytes of all SSD storage disks. */
-    private final AtomicLong numSsdMaxUsableBytes = new AtomicLong(-1);
+    /** Local storage space information of this shuffle worker. */
+    private volatile StorageSpaceInfo storageSpaceInfo = StorageSpaceInfo.ZERO_STORAGE_SPACE;
 
     /**
      * The total bytes of all data partition in the data store, including total bytes of data files
      * and index files.
      */
-    private long numTotalPartitionFileBytes;
+    private volatile long numTotalPartitionFileBytes;
 
     public long getNumTotalPartitionFileBytes() {
         return numTotalPartitionFileBytes;
     }
 
     @Override
-    public long getNumHddMaxUsableBytes() {
-        return numHddMaxUsableBytes.get();
-    }
-
-    @Override
-    public long getNumSsdMaxUsableBytes() {
-        return numSsdMaxUsableBytes.get();
+    public StorageSpaceInfo getStorageSpaceInfo() {
+        return storageSpaceInfo;
     }
 
     @Override
@@ -103,8 +94,14 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
             StorageCheckRunnable storageCheckRunnable = new StorageCheckRunnable();
             storageCheckRunnable.run();
 
-            StorageMetrics.registerGaugeForNumHddMaxUsableBytes(this::getNumHddMaxUsableBytes);
-            StorageMetrics.registerGaugeForNumSsdMaxUsableBytes(this::getNumSsdMaxUsableBytes);
+            StorageMetrics.registerGaugeForNumHddMaxFreeBytes(
+                    storageSpaceInfo::getHddMaxFreeSpaceBytes);
+            StorageMetrics.registerGaugeForNumSsdMaxFreeBytes(
+                    storageSpaceInfo::getSsdMaxFreeSpaceBytes);
+            StorageMetrics.registerGaugeForNumHddMaxUsedBytes(
+                    storageSpaceInfo::getHddMaxUsedSpaceBytes);
+            StorageMetrics.registerGaugeForNumSsdMaxUsedBytes(
+                    storageSpaceInfo::getSsdMaxUsedSpaceBytes);
             StorageMetrics.registerGaugeForNumTotalPartitionFileBytes(
                     this::getNumTotalPartitionFileBytes);
 
@@ -124,9 +121,9 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
             long start = System.nanoTime();
 
             try {
-                numTotalPartitionFileBytes = dataStore.numDataPartitionTotalBytes();
+                numTotalPartitionFileBytes = dataStore.updateUsedStorageSpace();
             } catch (Throwable t) {
-                LOG.error("Failed to update the data size.", t);
+                LOG.error("Failed to update the used space.", t);
             }
 
             try {
@@ -136,33 +133,42 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
             }
 
             try {
-                updateStorageUsableSpaces();
+                dataStore.updateFreeStorageSpace();
             } catch (Throwable t) {
-                LOG.error("Failed to update the usable spaces.", t);
+                LOG.error("Failed to update the free space.", t);
+            }
+
+            try {
+                StorageSpaceInfo newStorageSpaceInfo =
+                        dataStore
+                                .getStorageSpaceInfos()
+                                .get(LocalFileMapPartitionFactory.class.getName());
+                if (newStorageSpaceInfo != null) {
+                    storageSpaceInfo = newStorageSpaceInfo;
+                }
+            } catch (Throwable t) {
+                LOG.error("Failed to update the storage space information.", t);
             }
 
             LOG.info(
-                    "Update data store info in {} ms, max usable space, HDD: {}({}), SSD:{}({}), "
+                    "Update data store info in {} ms, max free space, HDD: {}({}), SSD:{}({}), "
+                            + "max used space, HDD: {}({}), SSD:{}({}), "
                             + "total partition file bytes: {}({}).",
                     String.format("%.2f", (float) ((System.nanoTime() - start) / 1000000)),
-                    WorkerCheckerUtils.bytesToHumanReadable(numHddMaxUsableBytes.get()),
-                    numHddMaxUsableBytes,
-                    WorkerCheckerUtils.bytesToHumanReadable(numSsdMaxUsableBytes.get()),
-                    numSsdMaxUsableBytes,
+                    WorkerCheckerUtils.bytesToHumanReadable(
+                            storageSpaceInfo.getHddMaxFreeSpaceBytes()),
+                    storageSpaceInfo.getHddMaxFreeSpaceBytes(),
+                    WorkerCheckerUtils.bytesToHumanReadable(
+                            storageSpaceInfo.getSsdMaxFreeSpaceBytes()),
+                    storageSpaceInfo.getSsdMaxFreeSpaceBytes(),
+                    WorkerCheckerUtils.bytesToHumanReadable(
+                            storageSpaceInfo.getHddMaxUsedSpaceBytes()),
+                    storageSpaceInfo.getHddMaxUsedSpaceBytes(),
+                    WorkerCheckerUtils.bytesToHumanReadable(
+                            storageSpaceInfo.getSsdMaxUsedSpaceBytes()),
+                    storageSpaceInfo.getSsdMaxUsedSpaceBytes(),
                     WorkerCheckerUtils.bytesToHumanReadable(numTotalPartitionFileBytes),
                     numTotalPartitionFileBytes);
-        }
-
-        private void updateStorageUsableSpaces() {
-            dataStore.updateUsableStorageSpace();
-            UsableStorageSpaceInfo usableSpace =
-                    dataStore
-                            .getUsableStorageSpace()
-                            .get(LocalFileMapPartitionFactory.class.getName());
-            if (usableSpace != null) {
-                numHddMaxUsableBytes.set(usableSpace.getHddUsableSpaceBytes());
-                numSsdMaxUsableBytes.set(usableSpace.getSsdUsableSpaceBytes());
-            }
         }
     }
 }

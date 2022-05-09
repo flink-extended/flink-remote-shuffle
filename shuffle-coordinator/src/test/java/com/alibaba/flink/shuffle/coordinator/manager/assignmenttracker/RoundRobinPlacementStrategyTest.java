@@ -123,6 +123,7 @@ public class RoundRobinPlacementStrategyTest {
                 PartitionPlacementStrategyLoader.ROUND_ROBIN_PLACEMENT_STRATEGY_NAME,
                 "worker1",
                 "worker2",
+                "worker3",
                 null);
     }
 

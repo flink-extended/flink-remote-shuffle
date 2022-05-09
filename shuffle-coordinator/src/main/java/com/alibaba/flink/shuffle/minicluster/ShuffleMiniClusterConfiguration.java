@@ -92,8 +92,10 @@ public class ShuffleMiniClusterConfiguration {
                 : configuration.getString(WorkerOptions.BIND_HOST, "localhost");
     }
 
-    public long getReservedSpaceBytes() {
-        return configuration.getMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES).getBytes();
+    public long getMinReservedSpaceBytes() {
+        return configuration
+                .getMemorySize(StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES)
+                .getBytes();
     }
 
     public Configuration getConfiguration() {

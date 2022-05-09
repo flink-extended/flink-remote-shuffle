@@ -100,10 +100,11 @@ public interface PartitionedDataStore {
     void releaseDataByJobID(JobID jobID, @Nullable Throwable throwable);
 
     /**
-     * Returns the total bytes of all data partition in the data store, including total bytes of
-     * data files and index files.
+     * Updates the used storage space information for the target shuffle worker and returns the
+     * total bytes of all data partitions in the data store, including both data files and index
+     * files.
      */
-    long numDataPartitionTotalBytes();
+    long updateUsedStorageSpace();
 
     /**
      * Shuts down this data store and releases the resources.
@@ -137,7 +138,7 @@ public interface PartitionedDataStore {
     SingleThreadExecutorPool getExecutorPool(StorageMeta storageMeta);
 
     /** Updates the available storage space information for the target shuffle worker. */
-    void updateUsableStorageSpace();
+    void updateFreeStorageSpace();
 
     /**
      * Checks the health status of the underlying storage. It will remove the unhealthy storage and
@@ -145,6 +146,9 @@ public interface PartitionedDataStore {
      */
     void updateStorageHealthStatus();
 
-    /** Gets the available storage space information for the target shuffle worker. */
-    Map<String, UsableStorageSpaceInfo> getUsableStorageSpace();
+    /**
+     * Gets the storage space information indexed by partition factory name for the target shuffle
+     * worker.
+     */
+    Map<String, StorageSpaceInfo> getStorageSpaceInfos();
 }
