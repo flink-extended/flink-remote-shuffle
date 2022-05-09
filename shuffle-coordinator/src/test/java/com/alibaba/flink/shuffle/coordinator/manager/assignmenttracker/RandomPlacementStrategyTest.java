@@ -113,6 +113,7 @@ public class RandomPlacementStrategyTest {
                 PartitionPlacementStrategyLoader.RANDOM_PLACEMENT_STRATEGY_NAME,
                 "worker1",
                 "worker2",
+                "worker3",
                 null);
     }
 

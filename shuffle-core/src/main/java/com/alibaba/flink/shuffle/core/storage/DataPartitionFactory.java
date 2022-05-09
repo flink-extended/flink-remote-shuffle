@@ -24,6 +24,7 @@ import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 
 import java.io.DataInput;
+import java.util.Map;
 
 /**
  * Factory to create new {@link DataPartition}s. Different type of {@link DataPartition}s need
@@ -75,13 +76,19 @@ public interface DataPartitionFactory {
     DataPartition.DataPartitionType getDataPartitionType();
 
     /** Updates the available storage space information. */
-    void updateUsableStorageSpace();
+    void updateFreeStorageSpace();
 
-    /** Gets the available storage space information. */
-    UsableStorageSpaceInfo getUsableStorageSpace();
+    /** Gets the storage space information, including used space and available space. */
+    StorageSpaceInfo getStorageSpaceInfo();
 
-    /** Whether the given usable storage space is enough for this data partition factory. */
-    boolean isUsableStorageSpaceEnough(UsableStorageSpaceInfo usableSpace, long reservedSpaceBytes);
+    /**
+     * Whether the given storage space is valid (no overuse and remaining space enough) for this
+     * data partition factory.
+     */
+    boolean isStorageSpaceValid(
+            StorageSpaceInfo storageSpaceInfo,
+            long minReservedSpaceBytes,
+            long maxUsableSpaceBytes);
 
     /**
      * Checks the health status of the underlying storage. It will remove the unhealthy storage and
@@ -94,4 +101,10 @@ public interface DataPartitionFactory {
 
     /** Whether this partition factory only uses HDD as storage device. */
     boolean useHddOnly();
+
+    /** Obtains the underlying storage media name from the storage path. */
+    String getStorageNameFromPath(String storagePath);
+
+    /** Updates the storage spaces in bytes already used. */
+    void updateUsedStorageSpace(Map<String, Long> storageUsedBytes);
 }

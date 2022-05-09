@@ -292,7 +292,7 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
                                                 shuffleWorkerLocation.getWorkerID(),
                                                 shuffleWorkerLocation.getDataPort(),
                                                 getProcessID(),
-                                                dataStore.getUsableStorageSpace())));
+                                                dataStore.getStorageSpaceInfos())));
 
         connectingConnection.start();
     }
@@ -582,10 +582,10 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
             validateRunsInMainThread();
             try {
                 return new WorkerToManagerHeartbeatPayload(
-                        metaStore.listDataPartitions(), dataStore.getUsableStorageSpace());
+                        metaStore.listDataPartitions(), dataStore.getStorageSpaceInfos());
             } catch (Exception e) {
                 return new WorkerToManagerHeartbeatPayload(
-                        new ArrayList<>(), dataStore.getUsableStorageSpace());
+                        new ArrayList<>(), dataStore.getStorageSpaceInfos());
             }
         }
     }

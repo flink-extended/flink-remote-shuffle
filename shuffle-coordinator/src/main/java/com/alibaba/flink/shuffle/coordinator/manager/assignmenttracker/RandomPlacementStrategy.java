@@ -19,7 +19,7 @@
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
 import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,8 +36,8 @@ import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.Pl
 class RandomPlacementStrategy extends BasePartitionPlacementStrategy {
     private static final Random RANDOM_ORDER = new Random();
 
-    RandomPlacementStrategy(long reservedSpaceBytes) {
-        super(reservedSpaceBytes);
+    RandomPlacementStrategy(long minReservedSpaceBytes, long maxUsableSpaceBytes) {
+        super(minReservedSpaceBytes, maxUsableSpaceBytes);
     }
 
     @Override
@@ -49,9 +49,9 @@ class RandomPlacementStrategy extends BasePartitionPlacementStrategy {
         for (int startIndex = 0; startIndex < candidates.size(); startIndex++) {
             int selectedIndex = RANDOM_ORDER.nextInt(candidates.size() - startIndex) + startIndex;
             selectedWorker = candidates.get(selectedIndex);
-            UsableStorageSpaceInfo usableSpace =
-                    selectedWorker.getStorageUsableSpace(partitionFactory.getClass().getName());
-            if (isUsableSpaceEnough(partitionFactory, usableSpace)) {
+            StorageSpaceInfo storageSpaceInfo =
+                    selectedWorker.getStorageSpaceInfo(partitionFactory.getClass().getName());
+            if (isStorageSpaceValid(partitionFactory, storageSpaceInfo)) {
                 break;
             }
             selectedWorker = null;

@@ -18,7 +18,8 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
-import static com.alibaba.flink.shuffle.core.config.StorageOptions.STORAGE_RESERVED_SPACE_BYTES;
+import static com.alibaba.flink.shuffle.core.config.StorageOptions.STORAGE_MAX_USABLE_SPACE_BYTES;
+import static com.alibaba.flink.shuffle.core.config.StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES;
 
 /** Utility methods to manipulate {@link PartitionPlacementStrategy}s. */
 public class PlacementUtils {
@@ -27,16 +28,20 @@ public class PlacementUtils {
             throws ShuffleResourceAllocationException {
         if (numWorkers > 0) {
             throw new ShuffleResourceAllocationException(
-                    "No available workers. This may not indicate that there is no normal worker node,"
-                            + " because maybe all workers have been filtered out."
-                            + " You can decrease the value of the configuration "
-                            + STORAGE_RESERVED_SPACE_BYTES.key()
-                            + " ("
-                            + STORAGE_RESERVED_SPACE_BYTES.defaultValue().toHumanReadableString()
-                            + " by default) to allow workers with smaller storage space to be used"
-                            + " for writing data.");
+                    String.format(
+                            "No available workers. This may indicate that there is no worker node "
+                                    + "with enough storage space, because maybe all workers have "
+                                    + "been filtered out. You may need to decrease the configured "
+                                    + "value of %s (%s by default) to allow workers with smaller "
+                                    + "free storage space to be used for data writing, or you may "
+                                    + "need to increase the configured value of %s (infinite by "
+                                    + "default) to allow workers to use more storage space for data"
+                                    + " writing.",
+                            STORAGE_MIN_RESERVED_SPACE_BYTES.key(),
+                            STORAGE_MIN_RESERVED_SPACE_BYTES.defaultValue().toHumanReadableString(),
+                            STORAGE_MAX_USABLE_SPACE_BYTES.key()));
         } else {
-            throw new ShuffleResourceAllocationException("No available workers");
+            throw new ShuffleResourceAllocationException("No available workers.");
         }
     }
 

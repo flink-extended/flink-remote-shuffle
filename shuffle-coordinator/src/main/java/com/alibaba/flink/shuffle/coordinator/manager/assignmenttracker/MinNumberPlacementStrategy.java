@@ -19,7 +19,7 @@
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
 import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementUtils.singleElementWorkerArray;
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementUtils.throwNoAvailableWorkerException;
@@ -31,8 +31,8 @@ import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.Pl
  */
 class MinNumberPlacementStrategy extends BasePartitionPlacementStrategy {
 
-    MinNumberPlacementStrategy(long reservedSpaceBytes) {
-        super(reservedSpaceBytes);
+    MinNumberPlacementStrategy(long minReservedSpaceBytes, long maxUsableSpaceBytes) {
+        super(minReservedSpaceBytes, maxUsableSpaceBytes);
     }
 
     @Override
@@ -41,9 +41,9 @@ class MinNumberPlacementStrategy extends BasePartitionPlacementStrategy {
         DataPartitionFactory partitionFactory = partitionPlacementContext.getPartitionFactory();
         WorkerStatus selectedWorker = null;
         for (WorkerStatus workerStatus : workers) {
-            UsableStorageSpaceInfo usableSpace =
-                    workerStatus.getStorageUsableSpace(partitionFactory.getClass().getName());
-            if (isUsableSpaceEnough(partitionFactory, usableSpace)) {
+            StorageSpaceInfo storageSpaceInfo =
+                    workerStatus.getStorageSpaceInfo(partitionFactory.getClass().getName());
+            if (isStorageSpaceValid(partitionFactory, storageSpaceInfo)) {
                 if (selectedWorker == null
                         || workerStatus.getDataPartitions().size()
                                 < selectedWorker.getDataPartitions().size()) {

@@ -18,17 +18,16 @@
 
 package com.alibaba.flink.shuffle.coordinator.worker.checker;
 
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
+
 /**
  * A interface to achieve the state of the shuffle worker, including storage state, the information
  * of data partition files, etc.
  */
 public interface ShuffleWorkerChecker {
 
-    /** The max storage usable bytes of all HDD storage disks. */
-    long getNumHddMaxUsableBytes();
-
-    /** The max storage usable bytes of all SSD storage disks. */
-    long getNumSsdMaxUsableBytes();
+    /** Gets the storage space information of the target shuffle worker. */
+    StorageSpaceInfo getStorageSpaceInfo();
 
     /** Close the shuffle worker checker. */
     void close();

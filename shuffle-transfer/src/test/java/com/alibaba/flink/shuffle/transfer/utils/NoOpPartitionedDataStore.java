@@ -30,7 +30,7 @@ import com.alibaba.flink.shuffle.core.storage.DataPartitionWritingView;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
 import com.alibaba.flink.shuffle.core.storage.ReadingViewContext;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 import com.alibaba.flink.shuffle.core.storage.WritingViewContext;
 
 import javax.annotation.Nullable;
@@ -74,7 +74,7 @@ public class NoOpPartitionedDataStore implements PartitionedDataStore {
     public void releaseDataByJobID(JobID jobID, @Nullable Throwable throwable) {}
 
     @Override
-    public long numDataPartitionTotalBytes() {
+    public long updateUsedStorageSpace() {
         return 0;
     }
 
@@ -107,13 +107,13 @@ public class NoOpPartitionedDataStore implements PartitionedDataStore {
     }
 
     @Override
-    public void updateUsableStorageSpace() {}
+    public void updateFreeStorageSpace() {}
 
     @Override
     public void updateStorageHealthStatus() {}
 
     @Override
-    public Map<String, UsableStorageSpaceInfo> getUsableStorageSpace() {
+    public Map<String, StorageSpaceInfo> getStorageSpaceInfos() {
         return null;
     }
 }

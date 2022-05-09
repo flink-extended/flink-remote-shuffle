@@ -22,6 +22,7 @@ import com.alibaba.flink.shuffle.common.utils.CommonUtils;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionMeta;
 import com.alibaba.flink.shuffle.core.storage.MapPartitionMeta;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
@@ -55,12 +56,13 @@ public class LocalFileMapPartitionMeta extends MapPartitionMeta {
      * Reconstructs the {@link DataPartitionMeta} from {@link DataInput} when recovering from
      * failure.
      */
-    public static LocalFileMapPartitionMeta readFrom(DataInput dataInput) throws IOException {
+    public static LocalFileMapPartitionMeta readFrom(
+            DataInput dataInput, DataPartitionFactory partitionFactory) throws IOException {
         JobID jobID = JobID.readFrom(dataInput);
         DataSetID dataSetID = DataSetID.readFrom(dataInput);
         MapPartitionID partitionID = MapPartitionID.readFrom(dataInput);
 
-        StorageMeta storageMeta = StorageMeta.readFrom(dataInput);
+        StorageMeta storageMeta = StorageMeta.readFrom(dataInput, partitionFactory);
         LocalMapPartitionFileMeta fileMeta = LocalMapPartitionFileMeta.readFrom(dataInput);
 
         return new LocalFileMapPartitionMeta(jobID, dataSetID, partitionID, fileMeta, storageMeta);

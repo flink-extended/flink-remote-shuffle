@@ -56,20 +56,26 @@ public final class PartitionPlacementStrategyLoader {
     public static PartitionPlacementStrategy loadPlacementStrategyFactory(
             final Configuration configuration) {
         checkNotNull(configuration);
-        long reservedSpaceBytes =
-                configuration.getMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES).getBytes();
+        long minReservedSpaceBytes =
+                configuration
+                        .getMemorySize(StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES)
+                        .getBytes();
+        long maxUsableSpaceBytes =
+                configuration
+                        .getMemorySize(StorageOptions.STORAGE_MAX_USABLE_SPACE_BYTES)
+                        .getBytes();
         String strategyParam = configuration.getString(ManagerOptions.PARTITION_PLACEMENT_STRATEGY);
-        LOG.info("Using the data partition placement strategy: " + strategyParam);
+        LOG.info("Using the data partition placement strategy: {}.", strategyParam);
 
         switch (strategyParam.toLowerCase()) {
             case MIN_NUM_PLACEMENT_STRATEGY_NAME:
-                return new MinNumberPlacementStrategy(reservedSpaceBytes);
+                return new MinNumberPlacementStrategy(minReservedSpaceBytes, maxUsableSpaceBytes);
             case RANDOM_PLACEMENT_STRATEGY_NAME:
-                return new RandomPlacementStrategy(reservedSpaceBytes);
+                return new RandomPlacementStrategy(minReservedSpaceBytes, maxUsableSpaceBytes);
             case ROUND_ROBIN_PLACEMENT_STRATEGY_NAME:
-                return new RoundRobinPlacementStrategy(reservedSpaceBytes);
+                return new RoundRobinPlacementStrategy(minReservedSpaceBytes, maxUsableSpaceBytes);
             case LOCALITY_PLACEMENT_STRATEGY_NAME:
-                return new LocalityPlacementStrategy(reservedSpaceBytes);
+                return new LocalityPlacementStrategy(minReservedSpaceBytes, maxUsableSpaceBytes);
             default:
                 throw new IllegalArgumentException(
                         "Unknown partition placement strategy: " + strategyParam);

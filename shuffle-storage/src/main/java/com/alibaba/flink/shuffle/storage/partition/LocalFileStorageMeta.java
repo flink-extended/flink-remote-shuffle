@@ -42,14 +42,14 @@ public class LocalFileStorageMeta extends StorageMeta {
 
     private static final String HEALTH_CHECK_FILE_SUFFIX = ".health_check";
 
-    public LocalFileStorageMeta(String storagePath, StorageType storageType) {
-        super(storagePath, storageType);
+    public LocalFileStorageMeta(String storagePath, StorageType storageType, String storageName) {
+        super(storagePath, storageType, storageName);
     }
 
     @Override
-    public long updateUsableStorageSpace() {
-        numUsableSpaceBytes = Paths.get(storagePath).toFile().getUsableSpace();
-        return numUsableSpaceBytes;
+    public long updateFreeStorageSpace() {
+        numFreeSpaceBytes = Paths.get(storagePath).toFile().getUsableSpace();
+        return numFreeSpaceBytes;
     }
 
     @Override

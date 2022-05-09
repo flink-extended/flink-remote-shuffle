@@ -71,7 +71,8 @@ public class ShuffleMiniClusterTest {
 
     private Configuration initConfiguration() throws IOException {
         Configuration configuration = new Configuration();
-        configuration.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
+        configuration.setMemorySize(
+                StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES, MemorySize.ZERO);
         configuration.setString(
                 StorageOptions.STORAGE_LOCAL_DATA_DIRS.key(),
                 TEMP_FOLDER.newFolder().getAbsolutePath());

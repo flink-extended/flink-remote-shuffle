@@ -33,8 +33,8 @@ import java.util.Properties;
 
 import static com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactoryTest.assertExpectedStorageMeta;
 import static com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactoryTest.expectedEvenDiskUsedCount;
+import static com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactoryTest.updateStorageFreeSpace;
 import static com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactoryTest.updateStorageHealthStatus;
-import static com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactoryTest.updateStorageUsableSpace;
 import static org.junit.Assert.assertEquals;
 
 /** Tests for {@link SSDOnlyLocalFileMapPartitionFactory}. */
@@ -78,43 +78,41 @@ public class SSDOnlyLocalFileMapPartitionFactoryTest {
     }
 
     @Test
-    public void testUpdateUsableStorageSpace() {
+    public void testUpdateFreeStorageSpace() {
         LocalFileMapPartitionFactory partitionFactory = new SSDOnlyLocalFileMapPartitionFactory();
         LocalFileMapPartitionFactoryTest.FakeStorageMeta[] storageMetas =
                 LocalFileMapPartitionFactoryTest.addStorageMetas(partitionFactory);
 
-        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
-        assertEquals(0, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
+        assertEquals(0, partitionFactory.getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
+        assertEquals(0, partitionFactory.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes());
 
-        LocalFileMapPartitionFactoryTest.updateStorageUsableSpace(
-                storageMetas, 4, partitionFactory);
-        assertEquals(7, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
-        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+        LocalFileMapPartitionFactoryTest.updateStorageFreeSpace(storageMetas, 4, partitionFactory);
+        assertEquals(7, partitionFactory.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes());
+        assertEquals(0, partitionFactory.getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
 
-        LocalFileMapPartitionFactoryTest.updateStorageUsableSpace(
-                storageMetas, 0, partitionFactory);
-        assertEquals(3, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
-        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+        LocalFileMapPartitionFactoryTest.updateStorageFreeSpace(storageMetas, 0, partitionFactory);
+        assertEquals(3, partitionFactory.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes());
+        assertEquals(0, partitionFactory.getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
     }
 
     @Test
-    public void testUpdateUsableStorageSpaceWithUnhealthyStorage() {
+    public void testUpdateFreeStorageSpaceWithUnhealthyStorage() {
         LocalFileMapPartitionFactory partitionFactory = new SSDOnlyLocalFileMapPartitionFactory();
         LocalFileMapPartitionFactoryTest.FakeStorageMeta[] storageMetas =
                 LocalFileMapPartitionFactoryTest.addStorageMetas(partitionFactory);
-        updateStorageUsableSpace(storageMetas, 0, partitionFactory);
+        updateStorageFreeSpace(storageMetas, 0, partitionFactory);
 
         updateStorageHealthStatus(storageMetas, 2, 4, false, partitionFactory);
-        assertEquals(1, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
-        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+        assertEquals(1, partitionFactory.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes());
+        assertEquals(0, partitionFactory.getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
 
         updateStorageHealthStatus(storageMetas, 0, 2, false, partitionFactory);
-        assertEquals(0, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
-        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+        assertEquals(0, partitionFactory.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes());
+        assertEquals(0, partitionFactory.getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
 
         updateStorageHealthStatus(storageMetas, 2, 4, true, partitionFactory);
-        assertEquals(3, partitionFactory.getUsableStorageSpace().getSsdUsableSpaceBytes());
-        assertEquals(0, partitionFactory.getUsableStorageSpace().getHddUsableSpaceBytes());
+        assertEquals(3, partitionFactory.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes());
+        assertEquals(0, partitionFactory.getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
     }
 
     @Test
@@ -122,7 +120,7 @@ public class SSDOnlyLocalFileMapPartitionFactoryTest {
         LocalFileMapPartitionFactory partitionFactory = new SSDOnlyLocalFileMapPartitionFactory();
         LocalFileMapPartitionFactoryTest.FakeStorageMeta[] storageMetas =
                 LocalFileMapPartitionFactoryTest.addStorageMetas(partitionFactory);
-        updateStorageUsableSpace(storageMetas, 0, partitionFactory);
+        updateStorageFreeSpace(storageMetas, 0, partitionFactory);
 
         updateStorageHealthStatus(storageMetas, 2, 4, false, partitionFactory);
         assertExpectedStorageMeta(partitionFactory, storageMetas[0]);

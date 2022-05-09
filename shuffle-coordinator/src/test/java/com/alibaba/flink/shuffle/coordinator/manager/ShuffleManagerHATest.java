@@ -34,7 +34,7 @@ import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcService;
 import com.alibaba.flink.shuffle.rpc.test.TestingRpcService;
 
@@ -213,7 +213,7 @@ public class ShuffleManagerHATest {
         public void reportWorkerStorageSpaces(
                 InstanceID instanceID,
                 RegistrationID shuffleWorkerRegisterId,
-                Map<String, UsableStorageSpaceInfo> usableSpace) {}
+                Map<String, StorageSpaceInfo> storageSpaceInfos) {}
 
         @Override
         public Map<DataPartitionCoordinate, InstanceID> getDataPartitionDistribution(JobID jobID) {

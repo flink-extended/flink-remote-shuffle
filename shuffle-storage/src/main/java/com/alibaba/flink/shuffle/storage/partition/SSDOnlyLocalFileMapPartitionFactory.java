@@ -22,8 +22,8 @@ import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.common.exception.ConfigurationException;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 import com.alibaba.flink.shuffle.core.storage.StorageType;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
 
 import java.util.List;
 
@@ -42,8 +42,9 @@ public class SSDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
                             "No valid data dir of SSD storage type is configured for %s.",
                             StorageOptions.STORAGE_LOCAL_DATA_DIRS.key()));
         }
+        hddStorageMetas.clear();
         updateStorageHealthStatus();
-        updateUsableStorageSpace();
+        updateFreeStorageSpace();
     }
 
     @Override
@@ -54,25 +55,28 @@ public class SSDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
     }
 
     @Override
-    public void updateUsableStorageSpace() {
-        usableSpace.setHddUsableSpaceBytes(0);
-        long maxSsdUsableSpaceBytes = 0;
+    public void updateFreeStorageSpace() {
+        storageSpaceInfo.setHddMaxFreeSpaceBytes(0);
+        long maxSsdFreeSpaceBytes = 0;
         for (StorageMeta storageMeta : getSsdStorageMetas()) {
             if (!storageMeta.isHealthy()) {
                 continue;
             }
-            long usableSpaceBytes = storageMeta.updateUsableStorageSpace();
-            if (usableSpaceBytes > maxSsdUsableSpaceBytes) {
-                maxSsdUsableSpaceBytes = usableSpaceBytes;
+            long freeSpaceBytes = storageMeta.updateFreeStorageSpace();
+            if (freeSpaceBytes > maxSsdFreeSpaceBytes) {
+                maxSsdFreeSpaceBytes = freeSpaceBytes;
             }
         }
-        usableSpace.setSsdUsableSpaceBytes(maxSsdUsableSpaceBytes);
+        storageSpaceInfo.setSsdMaxFreeSpaceBytes(maxSsdFreeSpaceBytes);
     }
 
     @Override
-    public boolean isUsableStorageSpaceEnough(
-            UsableStorageSpaceInfo usableSpace, long reservedSpaceBytes) {
-        return reservedSpaceBytes < usableSpace.getSsdUsableSpaceBytes();
+    public boolean isStorageSpaceValid(
+            StorageSpaceInfo storageSpaceInfo,
+            long minReservedSpaceBytes,
+            long maxUsableSpaceBytes) {
+        return minReservedSpaceBytes < storageSpaceInfo.getSsdMaxFreeSpaceBytes()
+                && maxUsableSpaceBytes > storageSpaceInfo.getSsdMaxUsedSpaceBytes();
     }
 
     @Override

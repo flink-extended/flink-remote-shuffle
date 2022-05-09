@@ -88,7 +88,7 @@ public abstract class BatchJobITCaseBase {
         configuration.setString(WorkerOptions.BIND_HOST, address);
         configuration.setString(WorkerOptions.HOST, address);
         configuration.setInteger(ManagerOptions.RPC_PORT, shuffleManagerRpcPort);
-        configuration.setString(StorageOptions.STORAGE_RESERVED_SPACE_BYTES.key(), "0b");
+        configuration.setString(StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES.key(), "0b");
 
         // flink basic configuration.
         int jobManagerRpcPort = NetUtils.getAvailablePort();

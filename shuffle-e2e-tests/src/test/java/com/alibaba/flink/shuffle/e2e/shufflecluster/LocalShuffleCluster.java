@@ -125,7 +125,7 @@ public class LocalShuffleCluster {
         config.setString(
                 ManagerOptions.PARTITION_PLACEMENT_STRATEGY,
                 PartitionPlacementStrategyLoader.MIN_NUM_PLACEMENT_STRATEGY_NAME);
-        config.setMemorySize(StorageOptions.STORAGE_RESERVED_SPACE_BYTES, MemorySize.ZERO);
+        config.setMemorySize(StorageOptions.STORAGE_MIN_RESERVED_SPACE_BYTES, MemorySize.ZERO);
     }
 
     public void start() throws Exception {

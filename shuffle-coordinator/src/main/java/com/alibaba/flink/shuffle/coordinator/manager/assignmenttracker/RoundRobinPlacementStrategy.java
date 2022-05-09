@@ -19,7 +19,7 @@
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
 import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
-import com.alibaba.flink.shuffle.core.storage.UsableStorageSpaceInfo;
+import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementUtils.singleElementWorkerArray;
 import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.PlacementUtils.throwNoAvailableWorkerException;
@@ -30,8 +30,8 @@ import static com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.Pl
  */
 class RoundRobinPlacementStrategy extends BasePartitionPlacementStrategy {
 
-    RoundRobinPlacementStrategy(long reservedSpaceBytes) {
-        super(reservedSpaceBytes);
+    RoundRobinPlacementStrategy(long minReservedSpaceBytes, long maxUsableSpaceBytes) {
+        super(minReservedSpaceBytes, maxUsableSpaceBytes);
     }
 
     @Override
@@ -46,9 +46,9 @@ class RoundRobinPlacementStrategy extends BasePartitionPlacementStrategy {
                 break;
             }
             workers.addLast(selectedWorker);
-            UsableStorageSpaceInfo usableSpace =
-                    selectedWorker.getStorageUsableSpace(partitionFactory.getClass().getName());
-            if (isUsableSpaceEnough(partitionFactory, usableSpace)) {
+            StorageSpaceInfo storageSpaceInfo =
+                    selectedWorker.getStorageSpaceInfo(partitionFactory.getClass().getName());
+            if (isStorageSpaceValid(partitionFactory, storageSpaceInfo)) {
                 break;
             }
             selectedWorker = null;

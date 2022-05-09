@@ -64,8 +64,8 @@ public class ShuffleWorkerCheckerImplTest {
     public void testInitWorkerCheckerWithEmptyStore() {
         ShuffleWorkerCheckerImpl workerChecker =
                 new ShuffleWorkerCheckerImpl(new Configuration(), new EmptyPartitionedDataStore());
-        assertEquals(-1, workerChecker.getNumHddMaxUsableBytes());
-        assertEquals(-1, workerChecker.getNumSsdMaxUsableBytes());
+        assertEquals(0, workerChecker.getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
+        assertEquals(0, workerChecker.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes());
         assertEquals(0, workerChecker.getNumTotalPartitionFileBytes());
     }
 
@@ -73,8 +73,8 @@ public class ShuffleWorkerCheckerImplTest {
     public void testInitWorkerCheckerWithHddStore() {
         ShuffleWorkerCheckerImpl workerChecker =
                 new ShuffleWorkerCheckerImpl(new Configuration(), dataStore);
-        assertTrue(workerChecker.getNumHddMaxUsableBytes() > 0);
-        assertEquals(0, workerChecker.getNumSsdMaxUsableBytes());
+        assertTrue(workerChecker.getStorageSpaceInfo().getHddMaxFreeSpaceBytes() > 0);
+        assertEquals(0, workerChecker.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes());
         assertEquals(0, workerChecker.getNumTotalPartitionFileBytes());
     }
 
@@ -87,8 +87,8 @@ public class ShuffleWorkerCheckerImplTest {
                         StorageType.SSD);
         ShuffleWorkerCheckerImpl workerChecker =
                 new ShuffleWorkerCheckerImpl(new Configuration(), dataStore);
-        assertEquals(0, workerChecker.getNumHddMaxUsableBytes());
-        assertTrue(workerChecker.getNumSsdMaxUsableBytes() > 0);
+        assertEquals(0, workerChecker.getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
+        assertTrue(workerChecker.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes() > 0);
         assertEquals(0, workerChecker.getNumTotalPartitionFileBytes());
     }
 
