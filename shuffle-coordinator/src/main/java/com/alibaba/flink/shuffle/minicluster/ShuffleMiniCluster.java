@@ -27,6 +27,7 @@ import com.alibaba.flink.shuffle.common.config.MemorySize;
 import com.alibaba.flink.shuffle.common.functions.AutoCloseableAsync;
 import com.alibaba.flink.shuffle.common.handler.FatalErrorHandler;
 import com.alibaba.flink.shuffle.common.utils.FutureUtils;
+import com.alibaba.flink.shuffle.common.utils.NetUtils;
 import com.alibaba.flink.shuffle.coordinator.heartbeat.HeartbeatServices;
 import com.alibaba.flink.shuffle.coordinator.heartbeat.HeartbeatServicesUtils;
 import com.alibaba.flink.shuffle.coordinator.highavailability.HaServiceUtils;
@@ -37,6 +38,7 @@ import com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.Assignmen
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorker;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerRunner;
 import com.alibaba.flink.shuffle.core.config.MemoryOptions;
+import com.alibaba.flink.shuffle.core.config.RestOptions;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.config.TransferOptions;
 import com.alibaba.flink.shuffle.core.executor.ExecutorThreadFactory;
@@ -54,7 +56,6 @@ import javax.annotation.concurrent.GuardedBy;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -74,8 +75,6 @@ public class ShuffleMiniCluster implements AutoCloseableAsync {
 
     /** The configuration for this mini cluster. */
     private final ShuffleMiniClusterConfiguration miniClusterConfiguration;
-
-    private final Random random = new Random(System.currentTimeMillis());
 
     private static final int RETRY_TIMES_GET_WORKER_NUMBER = 5;
 
@@ -123,6 +122,9 @@ public class ShuffleMiniCluster implements AutoCloseableAsync {
      */
     public ShuffleMiniCluster(ShuffleMiniClusterConfiguration miniClusterConfiguration) {
         this.miniClusterConfiguration = checkNotNull(miniClusterConfiguration);
+        Configuration configuration = miniClusterConfiguration.getConfiguration();
+        configuration.setInteger(RestOptions.REST_MANAGER_BIND_PORT, NetUtils.getAvailablePort());
+
         this.rpcServices =
                 new ArrayList<>(
                         1
@@ -330,9 +332,10 @@ public class ShuffleMiniCluster implements AutoCloseableAsync {
 
             // Choose a random rpc port for the configuration
             Configuration workerConfiguration = new Configuration(configuration);
-            // TODO: only choose available port
-            int randomPort = random.nextInt(30000) + 20000;
-            workerConfiguration.setInteger(TransferOptions.SERVER_DATA_PORT, randomPort);
+            workerConfiguration.setInteger(
+                    TransferOptions.SERVER_DATA_PORT, NetUtils.getAvailablePort());
+            workerConfiguration.setInteger(
+                    RestOptions.REST_WORKER_BIND_PORT, NetUtils.getAvailablePort());
             workerConfiguration.setMemorySize(
                     MemoryOptions.MEMORY_SIZE_FOR_DATA_READING,
                     MemoryOptions.MIN_VALID_MEMORY_SIZE);

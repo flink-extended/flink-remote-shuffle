@@ -19,6 +19,7 @@
 package com.alibaba.flink.shuffle.coordinator.worker;
 
 import com.alibaba.flink.shuffle.common.utils.CommonUtils;
+import com.alibaba.flink.shuffle.common.utils.NetUtils;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
 
 import java.io.Serializable;
@@ -36,7 +37,7 @@ public class ShuffleWorkerLocation implements Serializable {
 
     public ShuffleWorkerLocation(String externalAddress, int dataPort, InstanceID workerID) {
         CommonUtils.checkArgument(externalAddress != null, "Must be not null.");
-        CommonUtils.checkArgument(CommonUtils.isValidHostPort(dataPort), "Illegal data port.");
+        CommonUtils.checkArgument(NetUtils.isValidHostPort(dataPort), "Illegal data port.");
         CommonUtils.checkArgument(workerID != null, "Must be not null.");
 
         this.externalAddress = externalAddress;

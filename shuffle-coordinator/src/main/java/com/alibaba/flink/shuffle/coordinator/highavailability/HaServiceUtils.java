@@ -20,7 +20,7 @@ package com.alibaba.flink.shuffle.coordinator.highavailability;
 
 import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.common.exception.ConfigurationException;
-import com.alibaba.flink.shuffle.common.utils.CommonUtils;
+import com.alibaba.flink.shuffle.common.utils.NetUtils;
 import com.alibaba.flink.shuffle.coordinator.highavailability.embeded.EmbeddedHaServices;
 import com.alibaba.flink.shuffle.coordinator.highavailability.standalone.StandaloneHaServices;
 import com.alibaba.flink.shuffle.coordinator.highavailability.zookeeper.ZooKeeperHaServices;
@@ -103,7 +103,7 @@ public class HaServiceUtils {
                             + "' is missing (hostname/address of ShuffleManager to connect to).");
         }
 
-        if (!CommonUtils.isValidHostPort(port)) {
+        if (!NetUtils.isValidHostPort(port)) {
             throw new ConfigurationException(
                     "Invalid value for '"
                             + ManagerOptions.RPC_PORT.key()

@@ -35,9 +35,7 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.net.ServerSocket;
 import java.util.Arrays;
-import java.util.Random;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
@@ -262,18 +260,6 @@ public abstract class TestJvmProcess {
                 ShutdownHookUtil.removeShutdownHook(shutdownHook, getClass().getSimpleName(), LOG);
             }
         }
-    }
-
-    public static int getAvailablePort() {
-        Random random = new Random();
-        for (int i = 0; i < 1024; i++) {
-            int port = random.nextInt(65535 - 10240) + 10240;
-            try (ServerSocket serverSocket = new ServerSocket(port)) {
-                return serverSocket.getLocalPort();
-            } catch (IOException ignored) {
-            }
-        }
-        throw new RuntimeException("Could not find a free permitted port on the machine.");
     }
 
     public String getProcessOutput() {

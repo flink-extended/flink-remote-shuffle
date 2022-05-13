@@ -19,6 +19,7 @@
 package com.alibaba.flink.shuffle.plugin.itcase;
 
 import com.alibaba.flink.shuffle.common.config.Configuration;
+import com.alibaba.flink.shuffle.common.utils.NetUtils;
 import com.alibaba.flink.shuffle.core.config.ManagerOptions;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.config.WorkerOptions;
@@ -77,6 +78,7 @@ public abstract class BatchJobITCaseBase {
     @Before
     public void before() throws Exception {
         // basic configuration
+        int shuffleManagerRpcPort = NetUtils.getAvailablePort();
         String address = InetAddress.getLocalHost().getHostAddress();
         configuration.setString(
                 StorageOptions.STORAGE_LOCAL_DATA_DIRS,
@@ -85,22 +87,24 @@ public abstract class BatchJobITCaseBase {
         configuration.setString(ManagerOptions.RPC_BIND_ADDRESS, address);
         configuration.setString(WorkerOptions.BIND_HOST, address);
         configuration.setString(WorkerOptions.HOST, address);
-        configuration.setInteger(ManagerOptions.RPC_PORT, ManagerOptions.RPC_PORT.defaultValue());
-        configuration.setInteger(
-                ManagerOptions.RPC_BIND_PORT, ManagerOptions.RPC_PORT.defaultValue());
+        configuration.setInteger(ManagerOptions.RPC_PORT, shuffleManagerRpcPort);
+        configuration.setString(StorageOptions.STORAGE_RESERVED_SPACE_BYTES.key(), "0b");
 
         // flink basic configuration.
+        int jobManagerRpcPort = NetUtils.getAvailablePort();
         flinkConfiguration.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.BATCH);
         flinkConfiguration.setString(
                 ShuffleServiceOptions.SHUFFLE_SERVICE_FACTORY_CLASS,
                 RemoteShuffleServiceFactory.class.getName());
         flinkConfiguration.setString(ManagerOptions.RPC_ADDRESS.key(), address);
+        flinkConfiguration.setInteger(JobManagerOptions.PORT, jobManagerRpcPort);
         flinkConfiguration.setLong(JobManagerOptions.SLOT_REQUEST_TIMEOUT, 5000L);
         flinkConfiguration.setString(RestOptions.BIND_PORT, "0");
         flinkConfiguration.set(TaskManagerOptions.TOTAL_PROCESS_MEMORY, MemorySize.parse("1g"));
         flinkConfiguration.set(TaskManagerOptions.NETWORK_MEMORY_FRACTION, 0.4F);
         flinkConfiguration.setString(PluginOptions.MEMORY_PER_INPUT_GATE.key(), "8m");
         flinkConfiguration.setString(PluginOptions.MEMORY_PER_RESULT_PARTITION.key(), "8m");
+        flinkConfiguration.setInteger(ManagerOptions.RPC_PORT.key(), shuffleManagerRpcPort);
 
         // setup special config.
         setup();
@@ -133,13 +137,17 @@ public abstract class BatchJobITCaseBase {
         Throwable exception = null;
 
         try {
-            flinkCluster.close();
+            if (flinkCluster != null) {
+                flinkCluster.close();
+            }
         } catch (Throwable throwable) {
             exception = throwable;
         }
 
         try {
-            shuffleCluster.close();
+            if (shuffleCluster != null) {
+                shuffleCluster.close();
+            }
         } catch (Throwable throwable) {
             exception = exception != null ? exception : throwable;
         }

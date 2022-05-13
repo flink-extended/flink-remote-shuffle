@@ -29,6 +29,7 @@ import com.alibaba.flink.shuffle.common.functions.RunnableWithException;
 import com.alibaba.flink.shuffle.common.handler.FatalErrorHandler;
 import com.alibaba.flink.shuffle.common.utils.CommonUtils;
 import com.alibaba.flink.shuffle.common.utils.ExceptionUtils;
+import com.alibaba.flink.shuffle.common.utils.NetUtils;
 import com.alibaba.flink.shuffle.coordinator.heartbeat.HeartbeatServicesUtils;
 import com.alibaba.flink.shuffle.coordinator.highavailability.HaServiceUtils;
 import com.alibaba.flink.shuffle.coordinator.highavailability.HaServices;
@@ -142,7 +143,7 @@ public class LocalShuffleCluster {
                             logDirName,
                             new Configuration(config),
                             i,
-                            TestJvmProcess.getAvailablePort(),
+                            NetUtils.getAvailablePort(),
                             getDataDirForWorker(i));
             shuffleWorkers[i].startProcess();
         }

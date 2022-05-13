@@ -20,6 +20,7 @@ package com.alibaba.flink.shuffle.transfer;
 
 import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.common.utils.CommonUtils;
+import com.alibaba.flink.shuffle.common.utils.NetUtils;
 import com.alibaba.flink.shuffle.core.config.TransferOptions;
 import com.alibaba.flink.shuffle.core.config.WorkerOptions;
 
@@ -67,7 +68,7 @@ public class NettyConfig {
 
     public int getServerPort() {
         int serverPort = config.getInteger(TransferOptions.SERVER_DATA_PORT);
-        checkArgument(CommonUtils.isValidHostPort(serverPort), "Invalid port number.");
+        checkArgument(NetUtils.isValidHostPort(serverPort), "Invalid port number.");
         return serverPort;
     }
 
