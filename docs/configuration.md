@@ -195,11 +195,12 @@ conf/remote-shuffle-conf.yaml file.
 
 ### Metric & Rest Related
 
-| Key | Value Type | Default Value | Version | Required | Description |
-| --- | ---------- | ------------- | ------- | -------- | ----------- |
-| `remote-shuffle.rest.bind-host` | String | `0.0.0.0` | 1.0.0 | false | Local address of the network interface that the rest server binds to. |
-| `remote-shuffle.rest.manager.bind-port` | Integer | `23101` | 1.0.0 | false | `ShuffleManager` rest server bind port. |
-| `remote-shuffle.rest.worker.bind-port` | Integer | `23103` | 1.0.0 | false | `ShuffleWorker` rest server bind port. |
+| Key                                                 | Value Type | Default Value    | Version | Required | Description                                                                                                                                                                                                |
+|-----------------------------------------------------|------------|------------------| ------- | -------- |------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `remote-shuffle.rest.bind-host`                     | String     | `0.0.0.0`        | 1.0.0 | false | Local address of the network interface that the rest server binds to.                                                                                                                                      |
+| `remote-shuffle.rest.manager.bind-port`             | Integer    | `23101`          | 1.0.0 | false | `ShuffleManager` rest server bind port.                                                                                                                                                                    |
+| `remote-shuffle.rest.worker.bind-port`              | Integer    | `23103`          | 1.0.0 | false | `ShuffleWorker` rest server bind port.                                                                                                                                                                     |
+| `remote-shuffle.metrics.reporter.factories`         | String     | `null`           | 1.1.0 | false | Specify the implementation classes of metrics reporter. If there are multiple class names, please separate them by `,`. Each class name needs a package name prefix, e.g. `a.b.c.Factory1,a.b.c.Factory2`. |
 
 ## Options for Deployment
 
