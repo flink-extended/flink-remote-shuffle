@@ -429,6 +429,7 @@ public class RemoteShuffleApplicationControllerTest extends KubernetesTestBase {
                 Duration.ofSeconds(30));
     }
 
+    @Ignore("Temporarily ignore.")
     @Test(timeout = 60000L)
     public void testShuffleManagerDelete() throws Exception {
         // create a new shuffle application
