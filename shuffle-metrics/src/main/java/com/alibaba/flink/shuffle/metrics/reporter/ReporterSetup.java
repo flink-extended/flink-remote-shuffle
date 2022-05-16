@@ -28,12 +28,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.alibaba.flink.shuffle.core.config.MetricOptions.METRICS_REPORTER_CLASSES;
+import static com.alibaba.flink.shuffle.metrics.MetricsConstants.CONFIGURATION_ARGS_DELIMITER;
 
 /** Encapsulates everything needed for the instantiation and configuration of a metric reporter. */
 public final class ReporterSetup {
     private static final Logger LOG = LoggerFactory.getLogger(ReporterSetup.class);
-
-    private static final String CONFIGURATION_ARGS_DELIMITER = ";";
 
     public static void fromConfiguration(final Configuration conf) {
         String reportersString = conf.getString(METRICS_REPORTER_CLASSES);

@@ -51,7 +51,7 @@ public class ReporterSetupTest {
         Properties properties = new Properties();
         properties.setProperty(
                 METRICS_REPORTER_CLASSES.key(),
-                "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory;"
+                "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory,"
                         + "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory");
         Configuration conf = new Configuration(properties);
 
@@ -66,7 +66,7 @@ public class ReporterSetupTest {
         Properties properties = new Properties();
         properties.setProperty(
                 METRICS_REPORTER_CLASSES.key(),
-                "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory;"
+                "com.alibaba.flink.shuffle.metrics.reporter.FakedMetricReporterFactory,"
                         + "com.alibaba.flink.shuffle.metrics.reporter.AnotherFakedReporterFactory");
         Configuration conf = new Configuration(properties);
 
