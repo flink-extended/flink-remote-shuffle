@@ -130,7 +130,7 @@ public class StorageOptions {
      */
     public static final ConfigOption<MemorySize> STORAGE_MAX_PARTITION_WRITING_MEMORY =
             new ConfigOption<MemorySize>("remote-shuffle.storage.partition.max-writing-memory")
-                    .defaultValue(MemorySize.parse("128m"))
+                    .defaultValue(MemorySize.parse("32m"))
                     .description(
                             String.format(
                                     "Maximum memory size to use for the data writing of each data "
@@ -146,7 +146,7 @@ public class StorageOptions {
      */
     public static final ConfigOption<MemorySize> STORAGE_MAX_PARTITION_READING_MEMORY =
             new ConfigOption<MemorySize>("remote-shuffle.storage.partition.max-reading-memory")
-                    .defaultValue(MemorySize.parse("128m"))
+                    .defaultValue(MemorySize.parse("32m"))
                     .description(
                             String.format(
                                     "Maximum memory size to use for the data reading of each data "
