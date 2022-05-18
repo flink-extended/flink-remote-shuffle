@@ -104,19 +104,20 @@ public class ShuffleWorkerCheckerImpl implements ShuffleWorkerChecker {
             StorageCheckRunnable storageCheckRunnable = new StorageCheckRunnable();
             storageCheckRunnable.run();
 
-            registerHddMaxFreeBytes(storageSpaceInfo::getHddMaxFreeSpaceBytes);
-            registerSsdMaxFreeBytes(storageSpaceInfo::getSsdMaxFreeSpaceBytes);
-            registerHddMaxUsedBytes(storageSpaceInfo::getHddMaxUsedSpaceBytes);
-            registerSsdMaxUsedBytes(storageSpaceInfo::getSsdMaxUsedSpaceBytes);
-            registerNumDataPartitions(dataStoreStatistics::getNumDataPartitions);
-            registerMaxNumDataRegions(dataStoreStatistics::getMaxNumDataRegions);
-            registerMaxIndexFileBytes(dataStoreStatistics::getMaxIndexFileBytes);
-            registerMaxDataFileBytes(dataStoreStatistics::getMaxDataFileBytes);
-            registerAvgIndexFileBytes(dataStoreStatistics::getAvgIndexFileBytes);
-            registerAgvDataFileBytes(dataStoreStatistics::getAvgDataFileBytes);
-            registerTotalIndexFileBytes(dataStoreStatistics::getTotalIndexFileBytes);
-            registerTotalDataFileBytes(dataStoreStatistics::getTotalDataFileBytes);
-            registerTotalPartitionFileBytes(dataStoreStatistics::getTotalPartitionFileBytes);
+            registerHddMaxFreeBytes(() -> getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
+            registerSsdMaxFreeBytes(() -> getStorageSpaceInfo().getSsdMaxFreeSpaceBytes());
+            registerHddMaxUsedBytes(() -> getStorageSpaceInfo().getHddMaxUsedSpaceBytes());
+            registerSsdMaxUsedBytes(() -> getStorageSpaceInfo().getSsdMaxUsedSpaceBytes());
+            registerNumDataPartitions(() -> getDataStoreStatistics().getNumDataPartitions());
+            registerMaxNumDataRegions(() -> getDataStoreStatistics().getMaxNumDataRegions());
+            registerMaxIndexFileBytes(() -> getDataStoreStatistics().getMaxIndexFileBytes());
+            registerMaxDataFileBytes(() -> getDataStoreStatistics().getMaxDataFileBytes());
+            registerAvgIndexFileBytes(() -> getDataStoreStatistics().getAvgIndexFileBytes());
+            registerAgvDataFileBytes(() -> getDataStoreStatistics().getAvgDataFileBytes());
+            registerTotalIndexFileBytes(() -> getDataStoreStatistics().getTotalIndexFileBytes());
+            registerTotalDataFileBytes(() -> getDataStoreStatistics().getTotalDataFileBytes());
+            registerTotalPartitionFileBytes(
+                    () -> getDataStoreStatistics().getTotalPartitionFileBytes());
 
             storageCheckerService.scheduleAtFixedRate(
                     storageCheckRunnable,
