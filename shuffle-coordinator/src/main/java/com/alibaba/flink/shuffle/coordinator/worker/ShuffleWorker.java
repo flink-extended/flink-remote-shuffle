@@ -43,6 +43,7 @@ import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
+import com.alibaba.flink.shuffle.metrics.entry.MetricUtils;
 import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcEndpoint;
 import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcService;
 import com.alibaba.flink.shuffle.rpc.RpcTargetAddress;
@@ -200,6 +201,12 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
 
         try {
             leaderRetrieveService.stop();
+        } catch (Exception e) {
+            exception = exception == null ? e : exception;
+        }
+
+        try {
+            MetricUtils.stopMetricSystem();
         } catch (Exception e) {
             exception = exception == null ? e : exception;
         }

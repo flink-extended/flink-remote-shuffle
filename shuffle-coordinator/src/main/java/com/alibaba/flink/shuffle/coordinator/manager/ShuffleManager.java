@@ -41,6 +41,7 @@ import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
+import com.alibaba.flink.shuffle.metrics.entry.MetricUtils;
 import com.alibaba.flink.shuffle.rpc.RemoteShuffleFencedRpcEndpoint;
 import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcService;
 import com.alibaba.flink.shuffle.rpc.message.Acknowledge;
@@ -534,6 +535,12 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
 
         try {
             haServices.closeAndCleanupAllData();
+        } catch (Exception e) {
+            exception = exception == null ? e : exception;
+        }
+
+        try {
+            MetricUtils.stopMetricSystem();
         } catch (Exception e) {
             exception = exception == null ? e : exception;
         }

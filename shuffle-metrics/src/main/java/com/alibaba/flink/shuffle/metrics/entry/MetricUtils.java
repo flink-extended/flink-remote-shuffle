@@ -31,14 +31,20 @@ import com.alibaba.metrics.MetricManager;
 import com.alibaba.metrics.MetricName;
 import com.alibaba.metrics.Timer;
 import com.alibaba.metrics.integrate.MetricsIntegrateUtils;
+import com.alibaba.metrics.reporter.MetricManagerReporter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Queue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 
 /** Utils to manager metrics. */
 public class MetricUtils {
     private static final Logger LOG = LoggerFactory.getLogger(MetricUtils.class);
+
+    private static final Queue<MetricManagerReporter> metricReporters = new LinkedBlockingQueue<>();
 
     // ---------------------------------------------------------------
     // Manage metric system
@@ -49,10 +55,34 @@ public class MetricUtils {
         try {
             MetricsIntegrateUtils.registerJvmMetrics(metricConf.getProperties());
             MetricsIntegrateUtils.registerSystemMetrics(metricConf.getProperties());
-            ReporterSetup.fromConfiguration(metricConf.getConfiguration());
-            LOG.info("Metric system start successfully");
+            metricReporters.addAll(ReporterSetup.fromConfiguration(metricConf.getConfiguration()));
+            LOG.info("Start metric system successfully.");
         } catch (Throwable t) {
-            LOG.error("Start metric system failed, ", t);
+            LOG.error("Start metric system failed.", t);
+        }
+    }
+
+    public static void stopMetricSystem() {
+        boolean isError = false;
+        while (!metricReporters.isEmpty()) {
+            MetricManagerReporter metricReporter = metricReporters.poll();
+            try {
+                metricReporter.close();
+                LOG.info(
+                        "Close metric reporter {} successfully.",
+                        metricReporter.getClass().getSimpleName());
+            } catch (Throwable t) {
+                isError = true;
+                LOG.error(
+                        "Close metric reporter {} failed.",
+                        metricReporter.getClass().getSimpleName(),
+                        t);
+            }
+        }
+        if (isError) {
+            LOG.error("Stop metric system failed.");
+        } else {
+            LOG.info("Stop metric system successfully.");
         }
     }
 
