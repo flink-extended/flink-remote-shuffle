@@ -105,7 +105,7 @@ public class StorageOptions {
      */
     public static final ConfigOption<Integer> STORAGE_SSD_NUM_EXECUTOR_THREADS =
             new ConfigOption<Integer>("remote-shuffle.storage.ssd.num-executor-threads")
-                    .defaultValue(Integer.MAX_VALUE)
+                    .defaultValue(32)
                     .description(
                             "Number of threads to be used by data store for data partition processing"
                                     + " of each SSD. The actual number of threads per disk will be "
