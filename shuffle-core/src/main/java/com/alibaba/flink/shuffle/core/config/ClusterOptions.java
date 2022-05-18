@@ -32,7 +32,7 @@ public class ClusterOptions {
      */
     public static final ConfigOption<String> REMOTE_SHUFFLE_CLUSTER_ID =
             new ConfigOption<String>("remote-shuffle.cluster.id")
-                    .defaultValue("/default-cluster")
+                    .defaultValue("/flink-shuffle-cluster")
                     .description(
                             "The unique ID of the remote shuffle cluster used by high-availability."
                                     + " It must start with '/'. Different shuffle clusters must be "

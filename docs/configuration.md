@@ -131,7 +131,7 @@ conf/remote-shuffle-conf.yaml file.
 
 | Key | Value Type | Default Value | Version | Required | Description |
 | --- | ---------- | ------------- | ------- | -------- | ----------- |
-| `remote-shuffle.cluster.id` | String | `/default-cluster` | 1.0.0 | false | The unique ID of the remote shuffle cluster used by high-availability. It must start with '/'. Different shuffle clusters must be configured with different cluster id. This config must be consistent between the `ShuffleManager` and `ShuffleWorker`s. |
+| `remote-shuffle.cluster.id` | String | `/flink-shuffle-cluster` | 1.0.0 | false | The unique ID of the remote shuffle cluster used by high-availability. It must start with '/'. Different shuffle clusters must be configured with different cluster id. This config must be consistent between the `ShuffleManager` and `ShuffleWorker`s. |
 | `remote-shuffle.high-availability.mode` | String | `NONE` | 1.0.0 | false (Must be set if you want to enable HA) | Defines high-availability mode used for the cluster execution. To enable high-availability, set this mode to `ZOOKEEPER` or specify FQN of factory class. |
 | `remote-shuffle.ha.zookeeper.quorum` | String | `null` | 1.0.0 | false (Must be set if high-availability mode is ZOOKEEPER) | The ZooKeeper quorum to use when running the remote shuffle cluster in a high-availability mode with ZooKeeper. |
 | `remote-shuffle.ha.zookeeper.root-path` | String | `flink-remote-shuffle` | 1.0.0 | false | The root path in ZooKeeper under which the remote shuffle cluster stores its entries. Different remote shuffle clusters will be distinguished by the cluster id. This config must be consistent between the Flink cluster side and the shuffle cluster side. |
