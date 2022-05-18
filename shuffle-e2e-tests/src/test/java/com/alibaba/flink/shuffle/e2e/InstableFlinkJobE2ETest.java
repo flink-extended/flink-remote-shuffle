@@ -1,13 +1,11 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+ * Copyright 2021 Alibaba Group Holding Limited.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  	http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,7 +18,6 @@ package com.alibaba.flink.shuffle.e2e;
 
 import com.alibaba.flink.shuffle.common.functions.ConsumerWithException;
 import com.alibaba.flink.shuffle.common.functions.RunnableWithException;
-import com.alibaba.flink.shuffle.e2e.JobForShuffleTesting.TaskStat;
 
 import org.junit.Test;
 
@@ -35,6 +32,7 @@ import static com.alibaba.flink.shuffle.common.utils.CommonUtils.runQuietly;
 import static com.alibaba.flink.shuffle.e2e.JobForShuffleTesting.STAGE0_NAME;
 import static com.alibaba.flink.shuffle.e2e.JobForShuffleTesting.STAGE1_NAME;
 import static com.alibaba.flink.shuffle.e2e.JobForShuffleTesting.STAGE2_NAME;
+import static com.alibaba.flink.shuffle.e2e.JobForShuffleTesting.TaskStat;
 
 /** Tests for instable Flink job. */
 public class InstableFlinkJobE2ETest extends AbstractInstableE2ETest {

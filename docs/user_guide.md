@@ -1,20 +1,17 @@
 <!--
-Licensed to the Apache Software Foundation (ASF) under one
-or more contributor license agreements.  See the NOTICE file
-distributed with this work for additional information
-regarding copyright ownership.  The ASF licenses this file
-to you under the Apache License, Version 2.0 (the
-"License"); you may not use this file except in compliance
-with the License.  You may obtain a copy of the License at
+ Copyright 2021 Alibaba Group Holding Ltd.
 
-  http://www.apache.org/licenses/LICENSE-2.0
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
 
-Unless required by applicable law or agreed to in writing,
-software distributed under the License is distributed on an
-"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-KIND, either express or implied.  See the License for the
-specific language governing permissions and limitations
-under the License.
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
 -->
 
 # User Guide
@@ -271,48 +268,72 @@ PORT/metrics?group=remote-shuffle or http://IP:PORT/metrics?group=jvm&group=syst
 metrics (except for jvm and system metrics) are as follows:
 
 **ShuffleManager Metrics:**
-| Metric Key | Type | Version | Description |
-| ---------- | ---- | ------- | ----------- |
-| `remote-shuffle.cluster.num_shuffle_workers` | Integer | 1.0.0 | Number of available shuffle workers in the remote shuffle cluster. |
-| `remote-shuffle.cluster.num_jobs_serving` | Integer | 1.0.0 | Number of jobs under serving in the remote shuffle cluster. |
-| `remote-shuffle.cluster.total_num_data_partitions` | Integer | 1.1.0 | Toral number of `DataPartition`s stored in the remote shuffle cluster. |
-| `remote-shuffle.cluster.resource_request_throughput` | Double | 1.1.0 | Current throughput of remote shuffle resource allocation. |
-| `remote-shuffle.cluster.hdd_max_free_bytes` | Long | 1.1.0 | Maximum free space in bytes of all HDDs in all shuffle workers. |
-| `remote-shuffle.cluster.ssd_max_free_bytes` | Long | 1.1.0 | Maximum free space in bytes of all SSDs in all shuffle workers. |
-| `remote-shuffle.cluster.hdd_max_used_bytes` | Long | 1.1.0 | Maximum used space in bytes of all HDDs in all shuffle workers. |
-| `remote-shuffle.cluster.ssd_max_used_bytes` | Long | 1.1.0 | Maximum used space in bytes of all SSDs in all shuffle workers. |
+| Metric Key | Type | Version | Description | | ---------- | ---- | ------- | ----------- |
+| `remote-shuffle.cluster.num_shuffle_workers` | Integer | 1.0.0 | Number of available shuffle
+workers in the remote shuffle cluster. | | `remote-shuffle.cluster.num_jobs_serving` | Integer |
+1.0.0 | Number of jobs under serving in the remote shuffle cluster. |
+| `remote-shuffle.cluster.total_num_data_partitions` | Integer | 1.1.0 | Toral number
+of `DataPartition`s stored in the remote shuffle cluster. |
+| `remote-shuffle.cluster.resource_request_throughput` | Double | 1.1.0 | Current throughput of
+remote shuffle resource allocation. | | `remote-shuffle.cluster.hdd_max_free_bytes` | Long | 1.1.0 |
+Maximum free space in bytes of all HDDs in all shuffle workers. |
+| `remote-shuffle.cluster.ssd_max_free_bytes` | Long | 1.1.0 | Maximum free space in bytes of all
+SSDs in all shuffle workers. | | `remote-shuffle.cluster.hdd_max_used_bytes` | Long | 1.1.0 |
+Maximum used space in bytes of all HDDs in all shuffle workers. |
+| `remote-shuffle.cluster.ssd_max_used_bytes` | Long | 1.1.0 | Maximum used space in bytes of all
+SSDs in all shuffle workers. |
 
 **ShuffleWorker Metrics:**
-| Metric Key | Type | Version | Description |
-| ---------- | ---- | ------- | ----------- |
-| `remote-shuffle.storage.num_data_partitions` | Integer | 1.0.0 | Number of `DataPartition`s stored in each `ShuffleWorker`. |
-| `remote-shuffle.storage.num_available_writing_buffers` | Integer | 1.0.0 | Current number of available memory buffers for data writing in each `ShuffleWorker`. |
-| `remote-shuffle.storage.num_available_reading_buffers` | Integer | 1.0.0 | Current number of available memory buffers for data reading in each `ShuffleWorker`. |
-| `remote-shuffle.storage.total_num_executors` | Integer | 1.1.0 | Total number of available executors (data partition processor) in each `ShuffleWorker`. |
-| `remote-shuffle.storage.total_num_writing_buffers` | Integer | 1.1.0 | Total number of memory buffers for data writing in each `ShuffleWorker`. |
-| `remote-shuffle.storage.total_num_reading_buffers` | Integer | 1.1.0 | Total number of memory buffers for data reading in each `ShuffleWorker`. |
-| `remote-shuffle.storage.time_waiting_reading_buffers` | Integer | 1.1.0 | Time in milliseconds used fulfilling the last reading buffers request. |
-| `remote-shuffle.storage.time_waiting_writing_buffers` | Integer | 1.1.0 | Time in milliseconds used fulfilling the last writing buffers request. |
-| `remote-shuffle.storage.hdd_max_free_bytes` | Long | 1.1.0 | Maximum free space in bytes of all HDDs in each `ShuffleWorker`. |
-| `remote-shuffle.storage.ssd_max_free_bytes` | Long | 1.1.0 | Maximum free space in bytes of all SSDs in each `ShuffleWorker`. |
-| `remote-shuffle.storage.hdd_max_used_bytes` | Long | 1.1.0 | Maximum used space in bytes of all HDDs in each `ShuffleWorker`. |
-| `remote-shuffle.storage.ssd_max_used_bytes` | Long | 1.1.0 | Maximum used space in bytes of all SSDs in each `ShuffleWorker`. |
-| `remote-shuffle.storage.total_partition_file_bytes` | Long | 1.1.0 | Total shuffle data and index file size in bytes of each `ShuffleWorker`. |
-| `remote-shuffle.storage.total_data_file_bytes` | Long | 1.1.0 | Total shuffle data file size in bytes of each `ShuffleWorker`. |
-| `remote-shuffle.storage.total_index_file_bytes` | Long | 1.1.0 | Total shuffle index file size in bytes of each `ShuffleWorker`. |
-| `remote-shuffle.storage.max_data_file_bytes` | Long | 1.1.0 | Maximum shuffle data file size in bytes of each `ShuffleWorker`. |
-| `remote-shuffle.storage.max_index_file_bytes` | Long | 1.1.0 | Maximum shuffle index file size in bytes of each `ShuffleWorker`. |
-| `remote-shuffle.storage.avg_data_file_bytes` | Long | 1.1.0 | Average shuffle data file size in bytes of each `ShuffleWorker`. |
-| `remote-shuffle.storage.avg_index_file_bytes` | Long | 1.1.0 | Average shuffle index file size in bytes of each `ShuffleWorker`. |
-| `remote-shuffle.storage.max_num_data_regions` | Integer | 1.1.0 | Maximum number of data regions per data partition in each `ShuffleWorker`. |
-| `remote-shuffle.storage.writing_throughput_bytes` | Double | 1.1.0 | Data partition file writing throughput in bytes of each `ShuffleWorker` (including 1min, 5min and 15min). |
-| `remote-shuffle.storage.reading_throughput_bytes` | Double | 1.1.0 | Data partition file reading throughput in bytes of each `ShuffleWorker` (including 1min, 5min and 15min). |
-| `remote-shuffle.network.num_writing_connections` | Integer | 1.0.0 | Number of tcp connections used for data writing in each `ShuffleWorker` currently. |
-| `remote-shuffle.network.num_reading_connections` | Integer | 1.0.0 | Number of tcp connections used for data reading in each `ShuffleWorker` currently. |
-| `remote-shuffle.network.num_writing_flows` | Integer | 1.0.0 | Number of data writing channels used for data writing in each `ShuffleWorker` currently. Multiple writing channels may multiplex the same tcp connection. |
-| `remote-shuffle.network.num_reading_flows` | Integer | 1.0.0 | Number of data reading channels used for data reading in each `ShuffleWorker` currently. Multiple reading channels may multiplex the same tcp connection. |
-| `remote-shuffle.network.writing_throughput_bytes` | Double | 1.0.0 | Shuffle data writing throughput in bytes of each `ShuffleWorker` (including 1min, 5min and 15min). |
-| `remote-shuffle.network.reading_throughput_bytes` | Double | 1.0.0 | Shuffle data reading throughput in bytes of each `ShuffleWorker` (including 1min, 5min and 15min). |
+| Metric Key | Type | Version | Description | | ---------- | ---- | ------- | ----------- |
+| `remote-shuffle.storage.num_data_partitions` | Integer | 1.0.0 | Number of `DataPartition`s stored
+in each `ShuffleWorker`. | | `remote-shuffle.storage.num_available_writing_buffers` | Integer |
+1.0.0 | Current number of available memory buffers for data writing in each `ShuffleWorker`. |
+| `remote-shuffle.storage.num_available_reading_buffers` | Integer | 1.0.0 | Current number of
+available memory buffers for data reading in each `ShuffleWorker`. |
+| `remote-shuffle.storage.total_num_executors` | Integer | 1.1.0 | Total number of available
+executors (data partition processor) in each `ShuffleWorker`. |
+| `remote-shuffle.storage.total_num_writing_buffers` | Integer | 1.1.0 | Total number of memory
+buffers for data writing in each `ShuffleWorker`. |
+| `remote-shuffle.storage.total_num_reading_buffers` | Integer | 1.1.0 | Total number of memory
+buffers for data reading in each `ShuffleWorker`. |
+| `remote-shuffle.storage.time_waiting_reading_buffers` | Integer | 1.1.0 | Time in milliseconds
+used fulfilling the last reading buffers request. |
+| `remote-shuffle.storage.time_waiting_writing_buffers` | Integer | 1.1.0 | Time in milliseconds
+used fulfilling the last writing buffers request. | | `remote-shuffle.storage.hdd_max_free_bytes` |
+Long | 1.1.0 | Maximum free space in bytes of all HDDs in each `ShuffleWorker`. |
+| `remote-shuffle.storage.ssd_max_free_bytes` | Long | 1.1.0 | Maximum free space in bytes of all
+SSDs in each `ShuffleWorker`. | | `remote-shuffle.storage.hdd_max_used_bytes` | Long | 1.1.0 |
+Maximum used space in bytes of all HDDs in each `ShuffleWorker`. |
+| `remote-shuffle.storage.ssd_max_used_bytes` | Long | 1.1.0 | Maximum used space in bytes of all
+SSDs in each `ShuffleWorker`. | | `remote-shuffle.storage.total_partition_file_bytes` | Long | 1.1.0
+| Total shuffle data and index file size in bytes of each `ShuffleWorker`. |
+| `remote-shuffle.storage.total_data_file_bytes` | Long | 1.1.0 | Total shuffle data file size in
+bytes of each `ShuffleWorker`. | | `remote-shuffle.storage.total_index_file_bytes` | Long | 1.1.0 |
+Total shuffle index file size in bytes of each `ShuffleWorker`. |
+| `remote-shuffle.storage.max_data_file_bytes` | Long | 1.1.0 | Maximum shuffle data file size in
+bytes of each `ShuffleWorker`. | | `remote-shuffle.storage.max_index_file_bytes` | Long | 1.1.0 |
+Maximum shuffle index file size in bytes of each `ShuffleWorker`. |
+| `remote-shuffle.storage.avg_data_file_bytes` | Long | 1.1.0 | Average shuffle data file size in
+bytes of each `ShuffleWorker`. | | `remote-shuffle.storage.avg_index_file_bytes` | Long | 1.1.0 |
+Average shuffle index file size in bytes of each `ShuffleWorker`. |
+| `remote-shuffle.storage.max_num_data_regions` | Integer | 1.1.0 | Maximum number of data regions
+per data partition in each `ShuffleWorker`. | | `remote-shuffle.storage.writing_throughput_bytes` |
+Double | 1.1.0 | Data partition file writing throughput in bytes of each `ShuffleWorker` (including
+1min, 5min and 15min). | | `remote-shuffle.storage.reading_throughput_bytes` | Double | 1.1.0 | Data
+partition file reading throughput in bytes of each `ShuffleWorker` (including 1min, 5min and 15min).
+| | `remote-shuffle.network.num_writing_connections` | Integer | 1.0.0 | Number of tcp connections
+used for data writing in each `ShuffleWorker` currently. |
+| `remote-shuffle.network.num_reading_connections` | Integer | 1.0.0 | Number of tcp connections
+used for data reading in each `ShuffleWorker` currently. |
+| `remote-shuffle.network.num_writing_flows` | Integer | 1.0.0 | Number of data writing channels
+used for data writing in each `ShuffleWorker` currently. Multiple writing channels may multiplex the
+same tcp connection. | | `remote-shuffle.network.num_reading_flows` | Integer | 1.0.0 | Number of
+data reading channels used for data reading in each `ShuffleWorker` currently. Multiple reading
+channels may multiplex the same tcp connection. |
+| `remote-shuffle.network.writing_throughput_bytes` | Double | 1.0.0 | Shuffle data writing
+throughput in bytes of each `ShuffleWorker` (including 1min, 5min and 15min). |
+| `remote-shuffle.network.reading_throughput_bytes` | Double | 1.0.0 | Shuffle data reading
+throughput in bytes of each `ShuffleWorker` (including 1min, 5min and 15min). |
 
 **Upgrading:** Currently, to upgrade the remote shuffle service, you need to first stop the previous
 cluster and start a new one. Note: This can lead to the failover of running jobs which are using
