@@ -1,5 +1,5 @@
 <!--
- Copyright 2021 Alibaba Group Holding Ltd.
+ Copyright 2021 The Flink Remote Shuffle Project
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -110,7 +110,7 @@ be put in the Flink configuration file.
 | `remote-shuffle.high-availability.mode` | String | `NONE` | 1.0.0 | false (Must be set if you want to enable HA) | Defines high-availability mode used for the cluster execution. To enable high-availability, set this mode to `ZOOKEEPER` or specify FQN of factory class. |
 | `remote-shuffle.ha.zookeeper.quorum` | String | `null` | 1.0.0 | false (Must be set if high-availability mode is ZOOKEEPER) | The ZooKeeper quorum to use when running the remote shuffle cluster in a high-availability mode with ZooKeeper. |
 | `remote-shuffle.ha.zookeeper.root-path` | String | `flink-remote-shuffle` | 1.0.0 | false | The root path in ZooKeeper under which the remote shuffle cluster stores its entries. Different remote shuffle clusters will be distinguished by the cluster id. This config must be consistent between the Flink cluster side and the shuffle cluster side. |
-| remote-shuffle.ha.zookeeper.session-timeout | Duration | `60s` | 1.0.0 | false | Defines the session timeout for the ZooKeeper session. |
+| `remote-shuffle.ha.zookeeper.session-timeout` | Duration | `60s` | 1.0.0 | false | Defines the session timeout for the ZooKeeper session. |
 | `remote-shuffle.ha.zookeeper.connection-timeout` | Duration | `15s` | 1.0.0 | false | Defines the connection timeout for the ZooKeeper client. |
 | `remote-shuffle.ha.zookeeper.retry-wait` | Duration | `5s` | 1.0.0 | false | Defines the pause between consecutive connection retries. |
 | `remote-shuffle.ha.zookeeper.max-retry-attempts` | Integer | `3` | 1.0.0 | false | Defines the number of connection retries before the client gives up. |
