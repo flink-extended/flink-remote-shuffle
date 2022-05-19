@@ -17,70 +17,41 @@
 # Running Remote Shuffle Service on Kubernetes
 
 - [Getting Started](#getting-started)
-    - [Introduction](#introduction)
-    - [Preparation](#preparation)
+	- [Introduction](#introduction)
+	- [Preparation](#preparation)
 - [Deploying Remote Shuffle Service Cluster](#deploying-remote-shuffle-service-cluster)
-    - [Deploying Remote Shuffle Operator](#deploying-remote-shuffle-operator)
-    - [Deploying Remote Shuffle Cluster](#deploying-remote-shuffle-cluster)
+	- [Deploying Remote Shuffle Operator](#deploying-remote-shuffle-operator)
+	- [Deploying Remote Shuffle Cluster](#deploying-remote-shuffle-cluster)
 - [Submitting a Flink Job](#submitting-a-flink-job)
 - [Logging & Configuration](#logging--configuration)
 
 ## Getting Started
-
-This page describes how to deploy remote shuffle service on Kubernetes. You can use the released
-image directly: docker.io/flinkremoteshuffle/flink-remote-shuffle:VERSION. Note that you need to
-replace the 'VERSION' filed with the actual version you want to use, for example, 1.0.0.
+This page describes how to deploy remote shuffle service on Kubernetes. You can use the released image directly: docker.io/flinkremoteshuffle/flink-remote-shuffle:VERSION. Note that you need to replace the 'VERSION' filed with the actual version you want to use, for example, 1.0.0.
 
 ### Introduction
-
-Kubernetes is a popular container-orchestration system for automating application deployment,
-scaling, and management. Remote shuffle service allows you to directly deploy the services on a
-running Kubernetes cluster.
+Kubernetes is a popular container-orchestration system for automating application deployment, scaling, and management. Remote shuffle service allows you to directly deploy the services on a running Kubernetes cluster.
 
 ### Preparation
-
 The `Getting Started` section assumes that your environment fulfills the following requirements:
-
 - A functional Kubernetes cluster (Kubernetes >= 1.13).
 
-- Make sure a valid Zookeeper cluster is ready. Or you can refer
-  to [setting up a Zookeeper cluster](https://zookeeper.apache.org/doc/current/zookeeperStarted.html)
-  to start a Zookeeper cluster manually.
+- Make sure a valid Zookeeper cluster is ready. Or you can refer to [setting up a Zookeeper cluster](https://zookeeper.apache.org/doc/current/zookeeperStarted.html) to start a Zookeeper cluster manually.
 
-- [Download the latest binary release](https://github.com/flink-extended/flink-remote-shuffle/releases)
-  or [build remote shuffle service yourself](https://github.com/flink-extended/flink-remote-shuffle#building-from-source)
-  .
+- [Download the latest binary release](https://github.com/flink-extended/flink-remote-shuffle/releases) or [build remote shuffle service yourself](https://github.com/flink-extended/flink-remote-shuffle#building-from-source).
 
-If you have problems setting up a Kubernetes cluster, take a look
-at [how to setup a Kubernetes cluster](https://kubernetes.io/docs/setup/).
+If you have problems setting up a Kubernetes cluster, take a look at [how to setup a Kubernetes cluster](https://kubernetes.io/docs/setup/).
 
 ## Deploying Remote Shuffle Service Cluster
-
-The remote shuffle service cluster contains a `ShuffleManager` and multiple `ShuffleWorker`s.
-The `ShuffleManager` runs as a
-Kubernetes [Deployment](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) (the
-number of replicas is 1), and the shuffle workers run as a
-Kubernetes [DaemonSet](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/) which
-means the number of `ShuffleWorker`s is the same as the number of machines in the Kubernetes
-cluster. The following two points should be noted here:
+The remote shuffle service cluster contains a `ShuffleManager` and multiple `ShuffleWorker`s. The `ShuffleManager` runs as a Kubernetes [Deployment](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) (the number of replicas is 1), and the shuffle workers run as a Kubernetes [DaemonSet](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/) which means the number of `ShuffleWorker`s is the same as the number of machines in the Kubernetes cluster. The following two points should be noted here:
 
 1. Currently, we only support host network for network communication.
 
-2. The shuffle workers use
-   a [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath) volume (specified
-   by `remote-shuffle.kubernetes.worker.volume.host-paths`) or
-   a [emptydir](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir) volume (specified
-   by `remote-shuffle.kubernetes.worker.volume.empty-dirs`) for shuffle data storage.
+2. The shuffle workers use a [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath) volume (specified by `remote-shuffle.kubernetes.worker.volume.host-paths`) or a [emptydir](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir) volume (specified by `remote-shuffle.kubernetes.worker.volume.empty-dirs`) for shuffle data storage.
 
-Additionally, to make it easier to deploy on a Kubernetes cluster, we provided a
-Kubernetes [Operator](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) for remote
-shuffle service, which can control the life cycle of remote shuffle service instances, including
-creation, deletion, and upgrade.
+Additionally, to make it easier to deploy on a Kubernetes cluster, we provided a Kubernetes [Operator](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) for remote shuffle service, which can control the life cycle of remote shuffle service instances, including creation, deletion, and upgrade.
 
 ### Deploying Remote Shuffle Operator
-
-Once you have your Kubernetes cluster ready and `kubectl` is configured to point to it, you can
-launch an operator via:
+Once you have your Kubernetes cluster ready and `kubectl` is configured to point to it, you can launch an operator via:
 
 ```sh
 # Note: You must configure the docker image to be used by modifying the template file first before running this command.
@@ -88,8 +59,7 @@ launch an operator via:
 kubectl apply -f kubernetes-shuffle-operator-template.yaml
 ```
 
-The template file `kubernetes-shuffle-operator-template.yaml` should be in `conf/` directory and its
-contents are as follows.
+The template file `kubernetes-shuffle-operator-template.yaml` should be in `conf/` directory and its contents are as follows.
 
 ```yaml
 ---
@@ -172,7 +142,6 @@ spec:
 ```
 
 ### Deploying Remote Shuffle Cluster
-
 Then you can start `ShuffleManager` and `ShuffleWorker`s via:
 
 ```sh
@@ -181,8 +150,7 @@ Then you can start `ShuffleManager` and `ShuffleWorker`s via:
 kubectl apply -f kubernetes-shuffle-cluster-template.yaml
 ```
 
-The template file `kubernetes-shuffle-cluster-template.yaml` should be in `conf/` directory and its
-contents are as follows.
+The template file `kubernetes-shuffle-cluster-template.yaml` should be in `conf/` directory and its contents are as follows.
 
 ```yaml
 apiVersion: shuffleoperator.alibaba.com/v1
@@ -203,7 +171,7 @@ spec:
     remote-shuffle.high-availability.mode: ZOOKEEPER
     remote-shuffle.ha.zookeeper.quorum: <zookeeper quorum>
     remote-shuffle.kubernetes.manager.env-vars: <env-vars> # You need to configure your time zone here, for example, TZ:Asia/Shanghai.
-    remote-shuffle.kubernetes.worker.env-vars: <env-vars> # You need to configure your time zone here, for example, TZ:Asia/Shanghai.
+    remote-shuffle.kubernetes.worker.env-vars:  <env-vars> # You need to configure your time zone here, for example, TZ:Asia/Shanghai.
 
   shuffleFileConfigs:
     log4j2.properties: |
@@ -235,39 +203,25 @@ spec:
       appender.rolling.strategy.max = ${env:MAX_LOG_FILE_NUMBER:-10}
 ```
 
-- Note that `remote-shuffle.ha.zookeeper.quorum` should be accomplished according to the actual
-  environment.
+- Note that `remote-shuffle.ha.zookeeper.quorum` should be accomplished according to the actual environment.
 
-- Note that `remote-shuffle.kubernetes.container.image` should be accomplished according to the
-  shuffle service image built from source code.
+- Note that `remote-shuffle.kubernetes.container.image` should be accomplished according to the shuffle service image built from source code.
 
-- Note that `remote-shuffle.kubernetes.worker.volume.host-paths` should be accomplished according to
-  the actual storage path on host to be used.
+- Note that `remote-shuffle.kubernetes.worker.volume.host-paths` should be accomplished according to the actual storage path on host to be used.
 
-- Note that `remote-shuffle.kubernetes.manager.env-vars`
-  and `remote-shuffle.kubernetes.worker.env-vars` should be accomplished to specify the right time
-  zone.
+- Note that `remote-shuffle.kubernetes.manager.env-vars` and `remote-shuffle.kubernetes.worker.env-vars` should be accomplished to specify the right time zone.
 
-If you want to build a new image by yourself, please refer
-to [preparing docker environment](https://docs.docker.com/get-docker/)
-and [building from source](https://github.com/flink-extended/flink-remote-shuffle#building-from-source)
-.
+If you want to build a new image by yourself, please refer to [preparing docker environment](https://docs.docker.com/get-docker/) and [building from source](https://github.com/flink-extended/flink-remote-shuffle#building-from-source).
 
-After successfully running the above command `kubectl apply -f XXX`, a new shuffle service cluster
-will be started.
+After successfully running the above command `kubectl apply -f XXX`, a new shuffle service cluster will be started.
 
 ## Submitting a Flink Job
 
-To submit a Flink job, please refer
-to [starting a Flink cluster](./quick_start.md#starting-a-flink-cluster)
-and [submitting a Flink job](./quick_start.md#submitting-a-flink-job).
+To submit a Flink job, please refer to [starting a Flink cluster](./quick_start.md#starting-a-flink-cluster) and [submitting a Flink job](./quick_start.md#submitting-a-flink-job).
 
 If you would like to run Flink jobs on Kubernetes, you need to follow the below steps:
 
-1. First of all, you need to build a new Flink docker image which contains remote shuffle plugin JAR
-   file. Please refer
-   to [how to customize the Flink Docker image](https://nightlies.apache.org/flink/flink-docs-release-1.14/docs/deployment/resource-providers/standalone/docker/#advanced-customization)
-   for more information. The following is a simple customized Flink Docker file example:
+1. First of all, you need to build a new Flink docker image which contains remote shuffle plugin JAR file. Please refer to [how to customize the Flink Docker image](https://nightlies.apache.org/flink/flink-docs-release-1.14/docs/deployment/resource-providers/standalone/docker/#advanced-customization) for more information. The following is a simple customized Flink Docker file example:
 
 ```dockerfile
 FROM flink
@@ -276,10 +230,7 @@ FROM flink
 COPY /<Path of the shuffle plugin JAR>/shuffle-plugin-<version>.jar /opt/flink/lib/
 ```
 
-2. The you should add the following configurations to `conf/flink-conf.yaml` in the extracted Flink
-   directory to configure Flink to use the remote shuffle service. Please note that the
-   configuration of `remote-shuffle.ha.zookeeper.quorum` should be exactly the same as that
-   in `kubernetes-shuffle-cluster-template.yaml`.
+2. The you should add the following configurations to `conf/flink-conf.yaml` in the extracted Flink directory to configure Flink to use the remote shuffle service. Please note that the configuration of `remote-shuffle.ha.zookeeper.quorum` should be exactly the same as that in `kubernetes-shuffle-cluster-template.yaml`.
 
 ```yaml
 shuffle-service-factory.class: com.alibaba.flink.shuffle.plugin.RemoteShuffleServiceFactory
@@ -287,20 +238,13 @@ remote-shuffle.high-availability.mode: ZOOKEEPER
 remote-shuffle.ha.zookeeper.quorum: zk1.host:2181,zk2.host:2181,zk3.host:2181
 ```
 
-3. Finally, you can start a Flink cluster on Kubernetes and submit a Flink job. Please refer
-   to [start a Flink cluster on Kubernetes](https://nightlies.apache.org/flink/flink-docs-release-1.14/docs/deployment/resource-providers/standalone/kubernetes/)
-   or [Flink natively on Kubernetes](https://nightlies.apache.org/flink/flink-docs-release-1.14/docs/deployment/resource-providers/native_kubernetes/)
-   for more information.
+3. Finally, you can start a Flink cluster on Kubernetes and submit a Flink job. Please refer to [start a Flink cluster on Kubernetes](https://nightlies.apache.org/flink/flink-docs-release-1.14/docs/deployment/resource-providers/standalone/kubernetes/) or [Flink natively on Kubernetes](https://nightlies.apache.org/flink/flink-docs-release-1.14/docs/deployment/resource-providers/native_kubernetes/) for more information.
 
 ## Logging & Configuration
 
-From the above YAML file templates, you can figure out how to configure remote shuffle service on
-Kubernetes.
+From the above YAML file templates, you can figure out how to configure remote shuffle service on Kubernetes. 
 
-Kubernetes operator related options and log output file are specified
-in `kubernetes-shuffle-operator-template.yaml`.
+Kubernetes operator related options and log output file are specified in `kubernetes-shuffle-operator-template.yaml`.
 
-Any configurations in [configuration page](./configuration.md), log output format and log appender
-options of `ShuffleManager` and `ShuffleWorker` are configured
-in `kubernetes-shuffle-cluster-template.yaml`.
+Any configurations in [configuration page](./configuration.md), log output format and log appender options of `ShuffleManager` and `ShuffleWorker` are configured in `kubernetes-shuffle-cluster-template.yaml`.
 

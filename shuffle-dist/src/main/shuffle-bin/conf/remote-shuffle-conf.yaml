@@ -16,7 +16,7 @@
 
 # Change it to your pre-created shuffle data storage directory for production usage
 
-remote-shuffle.storage.local-data-dirs: [ SSD ]/tmp
+remote-shuffle.storage.local-data-dirs: [SSD]/tmp
 
 # Configure the following options for high availability deployment mode
 
