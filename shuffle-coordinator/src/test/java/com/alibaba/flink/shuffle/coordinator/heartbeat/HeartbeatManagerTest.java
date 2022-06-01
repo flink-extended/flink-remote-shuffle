@@ -20,8 +20,6 @@ import com.alibaba.flink.shuffle.coordinator.utils.TestingUtils;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.utils.OneShotLatch;
 import com.alibaba.flink.shuffle.core.utils.TestLogger;
-import com.alibaba.flink.shuffle.rpc.executor.ScheduledExecutor;
-import com.alibaba.flink.shuffle.rpc.executor.ScheduledExecutorServiceAdapter;
 
 import org.hamcrest.Matcher;
 import org.junit.Test;
@@ -33,6 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -114,7 +113,7 @@ public class HeartbeatManagerTest extends TestLogger {
         InstanceID targetInstanceID = new InstanceID("barfoo");
         @SuppressWarnings("unchecked")
         HeartbeatListener<Object, Object> heartbeatListener = mock(HeartbeatListener.class);
-        ScheduledExecutor scheduledExecutor = mock(ScheduledExecutor.class);
+        ScheduledExecutorService scheduledExecutor = mock(ScheduledExecutorService.class);
         ScheduledFuture<?> scheduledFuture = mock(ScheduledFuture.class);
 
         doReturn(scheduledFuture)
@@ -314,7 +313,7 @@ public class HeartbeatManagerTest extends TestLogger {
                         heartbeatTimeout,
                         instanceID,
                         heartbeatListener,
-                        mock(ScheduledExecutor.class),
+                        mock(ScheduledExecutorService.class),
                         LOG);
 
         try {
@@ -340,7 +339,7 @@ public class HeartbeatManagerTest extends TestLogger {
                         heartbeatTimeout,
                         instanceID,
                         heartbeatListener,
-                        mock(ScheduledExecutor.class),
+                        mock(ScheduledExecutorService.class),
                         LOG);
 
         try {
@@ -448,7 +447,7 @@ public class HeartbeatManagerTest extends TestLogger {
                         new InstanceID(),
                         new TargetDependentHeartbeatSender(
                                 specialTargetId, specialResponse, defaultResponse),
-                        new ScheduledExecutorServiceAdapter(scheduledThreadPoolExecutor),
+                        scheduledThreadPoolExecutor,
                         LOG);
 
         try {

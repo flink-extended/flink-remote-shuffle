@@ -16,9 +16,6 @@
 
 package com.alibaba.flink.shuffle.coordinator.utils;
 
-import com.alibaba.flink.shuffle.rpc.executor.ScheduledExecutor;
-import com.alibaba.flink.shuffle.rpc.executor.ScheduledExecutorServiceAdapter;
-
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -27,10 +24,10 @@ public class TestingUtils {
 
     private static ScheduledExecutorService scheduledExecutor;
 
-    public static synchronized ScheduledExecutor defaultScheduledExecutor() {
+    public static synchronized ScheduledExecutorService defaultScheduledExecutor() {
         if (scheduledExecutor == null || scheduledExecutor.isShutdown()) {
             scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
         }
-        return new ScheduledExecutorServiceAdapter(scheduledExecutor);
+        return scheduledExecutor;
     }
 }

@@ -43,7 +43,6 @@ import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcService;
 import com.alibaba.flink.shuffle.rpc.RpcTargetAddress;
-import com.alibaba.flink.shuffle.rpc.executor.ScheduledExecutorServiceAdapter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -157,7 +156,7 @@ public class ShuffleManagerClientImpl implements ShuffleManagerClient, LeaderRet
                 heartbeatService.createHeartbeatManagerSender(
                         new InstanceID(jobID.getId()),
                         new ManagerHeartbeatListener(),
-                        new ScheduledExecutorServiceAdapter(mainThreadExecutor),
+                        mainThreadExecutor,
                         LOG);
     }
 
@@ -340,7 +339,7 @@ public class ShuffleManagerClientImpl implements ShuffleManagerClient, LeaderRet
 
                     @Override
                     public void requestHeartbeat(InstanceID instanceID, Void heartbeatPayload) {
-                        heartbeatToShuffleManager();
+                        mainThreadExecutor.execute(() -> heartbeatToShuffleManager());
                     }
                 });
 
@@ -628,11 +627,17 @@ public class ShuffleManagerClientImpl implements ShuffleManagerClient, LeaderRet
 
         @Override
         public void notifyHeartbeatTimeout(InstanceID instanceID) {
-            LOG.info("Timeout with remote shuffle manager {}", instanceID);
-            if (establishedConnection != null
-                    && establishedConnection.getResponse().getInstanceID().equals(instanceID)) {
-                reconnectToShuffleManager(new Exception("Heartbeat timeout"));
-            }
+            mainThreadExecutor.execute(
+                    () -> {
+                        LOG.info("Timeout with remote shuffle manager {}", instanceID);
+                        if (establishedConnection != null
+                                && establishedConnection
+                                        .getResponse()
+                                        .getInstanceID()
+                                        .equals(instanceID)) {
+                            reconnectToShuffleManager(new Exception("Heartbeat timeout"));
+                        }
+                    });
         }
 
         @Override

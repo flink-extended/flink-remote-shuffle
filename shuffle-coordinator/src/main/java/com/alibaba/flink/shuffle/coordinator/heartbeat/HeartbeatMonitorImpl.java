@@ -17,8 +17,10 @@
 package com.alibaba.flink.shuffle.coordinator.heartbeat;
 
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
-import com.alibaba.flink.shuffle.rpc.executor.ScheduledExecutor;
 
+import org.slf4j.Logger;
+
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -39,7 +41,7 @@ public class HeartbeatMonitorImpl<O> implements HeartbeatMonitor<O>, Runnable {
     /** Associated heartbeat target. */
     private final HeartbeatTarget<O> heartbeatTarget;
 
-    private final ScheduledExecutor scheduledExecutor;
+    private final ScheduledExecutorService scheduledExecutor;
 
     /** Listener which is notified about heartbeat timeouts. */
     private final HeartbeatListener<?, ?> heartbeatListener;
@@ -51,26 +53,28 @@ public class HeartbeatMonitorImpl<O> implements HeartbeatMonitor<O>, Runnable {
 
     private final AtomicReference<State> state = new AtomicReference<>(State.RUNNING);
 
+    protected final Logger log;
+
     private volatile long lastHeartbeat;
 
     HeartbeatMonitorImpl(
             InstanceID instanceID,
             HeartbeatTarget<O> heartbeatTarget,
-            ScheduledExecutor scheduledExecutor,
+            ScheduledExecutorService scheduledExecutor,
             HeartbeatListener<?, O> heartbeatListener,
-            long heartbeatTimeoutIntervalMs) {
+            long heartbeatTimeoutIntervalMs,
+            Logger log) {
 
         this.instanceID = checkNotNull(instanceID);
         this.heartbeatTarget = checkNotNull(heartbeatTarget);
         this.scheduledExecutor = checkNotNull(scheduledExecutor);
         this.heartbeatListener = checkNotNull(heartbeatListener);
+        this.log = checkNotNull(log);
 
         checkArgument(
                 heartbeatTimeoutIntervalMs > 0L,
                 "The heartbeat timeout interval has to be larger than 0.");
         this.heartbeatTimeoutIntervalMs = heartbeatTimeoutIntervalMs;
-
-        lastHeartbeat = 0L;
 
         resetHeartbeatTimeout(heartbeatTimeoutIntervalMs);
     }
@@ -106,14 +110,14 @@ public class HeartbeatMonitorImpl<O> implements HeartbeatMonitor<O>, Runnable {
 
     @Override
     public void run() {
-        // The heartbeat has timed out if we're in state running
-        if (state.compareAndSet(State.RUNNING, State.TIMEOUT)) {
-            heartbeatListener.notifyHeartbeatTimeout(instanceID);
+        try {
+            // The heartbeat has timed out if we're in state running
+            if (state.compareAndSet(State.RUNNING, State.TIMEOUT)) {
+                heartbeatListener.notifyHeartbeatTimeout(instanceID);
+            }
+        } catch (Throwable throwable) {
+            log.error("Failed to notify heartbeat timeout.", throwable);
         }
-    }
-
-    public boolean isCanceled() {
-        return state.get() == State.CANCELED;
     }
 
     void resetHeartbeatTimeout(long heartbeatTimeout) {
@@ -153,16 +157,18 @@ public class HeartbeatMonitorImpl<O> implements HeartbeatMonitor<O>, Runnable {
         public HeartbeatMonitor<O> createHeartbeatMonitor(
                 InstanceID instanceID,
                 HeartbeatTarget<O> heartbeatTarget,
-                ScheduledExecutor mainThreadExecutor,
+                ScheduledExecutorService scheduledExecutor,
                 HeartbeatListener<?, O> heartbeatListener,
-                long heartbeatTimeoutIntervalMs) {
+                long heartbeatTimeoutIntervalMs,
+                Logger log) {
 
             return new HeartbeatMonitorImpl<>(
                     instanceID,
                     heartbeatTarget,
-                    mainThreadExecutor,
+                    scheduledExecutor,
                     heartbeatListener,
-                    heartbeatTimeoutIntervalMs);
+                    heartbeatTimeoutIntervalMs,
+                    log);
         }
     }
 }

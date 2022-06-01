@@ -17,7 +17,6 @@
 package com.alibaba.flink.shuffle.coordinator.heartbeat;
 
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
-import com.alibaba.flink.shuffle.rpc.executor.ScheduledExecutor;
 
 import org.slf4j.Logger;
 
@@ -25,6 +24,7 @@ import javax.annotation.concurrent.ThreadSafe;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
@@ -52,7 +52,7 @@ public class HeartbeatManagerImpl<I, O> implements HeartbeatManager<I, O> {
     private final HeartbeatListener<I, O> heartbeatListener;
 
     /** Executor service used to run heartbeat timeout notifications. */
-    private final ScheduledExecutor mainThreadExecutor;
+    private final ScheduledExecutorService scheduledExecutor;
 
     protected final Logger log;
 
@@ -68,13 +68,13 @@ public class HeartbeatManagerImpl<I, O> implements HeartbeatManager<I, O> {
             long heartbeatTimeoutIntervalMs,
             InstanceID ownInstanceID,
             HeartbeatListener<I, O> heartbeatListener,
-            ScheduledExecutor mainThreadExecutor,
+            ScheduledExecutorService scheduledExecutor,
             Logger log) {
         this(
                 heartbeatTimeoutIntervalMs,
                 ownInstanceID,
                 heartbeatListener,
-                mainThreadExecutor,
+                scheduledExecutor,
                 log,
                 new HeartbeatMonitorImpl.Factory<>());
     }
@@ -83,7 +83,7 @@ public class HeartbeatManagerImpl<I, O> implements HeartbeatManager<I, O> {
             long heartbeatTimeoutIntervalMs,
             InstanceID ownInstanceID,
             HeartbeatListener<I, O> heartbeatListener,
-            ScheduledExecutor mainThreadExecutor,
+            ScheduledExecutorService scheduledExecutor,
             Logger log,
             HeartbeatMonitor.Factory<O> heartbeatMonitorFactory) {
 
@@ -93,12 +93,10 @@ public class HeartbeatManagerImpl<I, O> implements HeartbeatManager<I, O> {
         this.heartbeatTimeoutIntervalMs = heartbeatTimeoutIntervalMs;
         this.ownInstanceID = checkNotNull(ownInstanceID);
         this.heartbeatListener = checkNotNull(heartbeatListener);
-        this.mainThreadExecutor = checkNotNull(mainThreadExecutor);
+        this.scheduledExecutor = checkNotNull(scheduledExecutor);
         this.log = checkNotNull(log);
         this.heartbeatMonitorFactory = heartbeatMonitorFactory;
         this.heartbeatTargets = new ConcurrentHashMap<>(16);
-
-        stopped = false;
     }
 
     // ----------------------------------------------------------------------------------------------
@@ -124,25 +122,29 @@ public class HeartbeatManagerImpl<I, O> implements HeartbeatManager<I, O> {
     @Override
     public void monitorTarget(InstanceID instanceID, HeartbeatTarget<O> heartbeatTarget) {
         if (!stopped) {
-            if (heartbeatTargets.containsKey(instanceID)) {
-                log.debug("The target with instance ID {} is already been monitored.", instanceID);
-            } else {
-                HeartbeatMonitor<O> heartbeatMonitor =
-                        heartbeatMonitorFactory.createHeartbeatMonitor(
-                                instanceID,
-                                heartbeatTarget,
-                                mainThreadExecutor,
-                                heartbeatListener,
-                                heartbeatTimeoutIntervalMs);
+            // always monitor the new target to avoid the old monitor not in running state
+            HeartbeatMonitor<O> heartbeatMonitor =
+                    heartbeatMonitorFactory.createHeartbeatMonitor(
+                            instanceID,
+                            heartbeatTarget,
+                            scheduledExecutor,
+                            heartbeatListener,
+                            heartbeatTimeoutIntervalMs,
+                            log);
 
-                heartbeatTargets.put(instanceID, heartbeatMonitor);
+            HeartbeatMonitor<O> oldMonitor = heartbeatTargets.put(instanceID, heartbeatMonitor);
+            if (oldMonitor != null) {
+                oldMonitor.cancel();
+                log.debug(
+                        "Replace the heartbeat monitor of target (instance id: {}) with new one.",
+                        instanceID);
+            }
 
-                // check if we have stopped in the meantime (concurrent stop operation)
-                if (stopped) {
-                    heartbeatMonitor.cancel();
+            // check if we have stopped in the meantime (concurrent stop operation)
+            if (stopped) {
+                heartbeatMonitor.cancel();
 
-                    heartbeatTargets.remove(instanceID);
-                }
+                heartbeatTargets.remove(instanceID);
             }
         }
     }
@@ -163,10 +165,15 @@ public class HeartbeatManagerImpl<I, O> implements HeartbeatManager<I, O> {
         stopped = true;
 
         for (HeartbeatMonitor<O> heartbeatMonitor : heartbeatTargets.values()) {
-            heartbeatMonitor.cancel();
+            try {
+                heartbeatMonitor.cancel();
+            } catch (Throwable throwable) {
+                log.warn("Failed to cancel heartbeat.", throwable);
+            }
         }
 
         heartbeatTargets.clear();
+        scheduledExecutor.shutdown();
     }
 
     @Override
@@ -180,8 +187,8 @@ public class HeartbeatManagerImpl<I, O> implements HeartbeatManager<I, O> {
         }
     }
 
-    ScheduledExecutor getMainThreadExecutor() {
-        return mainThreadExecutor;
+    ScheduledExecutorService getScheduledExecutor() {
+        return scheduledExecutor;
     }
 
     // ----------------------------------------------------------------------------------------------

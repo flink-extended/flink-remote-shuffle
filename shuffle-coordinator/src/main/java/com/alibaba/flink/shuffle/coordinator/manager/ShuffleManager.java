@@ -59,7 +59,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
@@ -89,8 +89,11 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
     /** Fatal error handler. */
     private final FatalErrorHandler fatalErrorHandler;
 
-    /** The executor is responsible for some time-consuming operations. */
-    private final Executor ioExecutor;
+    /**
+     * The executor is responsible for some time-consuming operations, for example, write zk node
+     * and monitor heartbeat.
+     */
+    private final ScheduledExecutorService ioExecutor;
 
     /** The heartbeat service between the shuffle manager and jobs. */
     private final HeartbeatServices jobHeartbeatServices;
@@ -141,7 +144,7 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
             InstanceID managerID,
             HaServices haServices,
             FatalErrorHandler fatalErrorHandler,
-            Executor ioExecutor,
+            ScheduledExecutorService ioExecutor,
             HeartbeatServices jobHeartbeatServices,
             HeartbeatServices workerHeartbeatServices,
             AssignmentTracker assignmentTracker) {
@@ -666,17 +669,11 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
             LOG.info("Initialize the heartbeat services.");
             jobHeartbeatManager =
                     jobHeartbeatServices.createHeartbeatManager(
-                            managerID,
-                            new JobHeartbeatListener(),
-                            getRpcMainThreadScheduledExecutor(),
-                            log);
+                            managerID, new JobHeartbeatListener(), ioExecutor, log);
 
             workerHeartbeatManager =
                     workerHeartbeatServices.createHeartbeatManagerSender(
-                            managerID,
-                            new WorkerHeartbeatListener(),
-                            getRpcMainThreadScheduledExecutor(),
-                            log);
+                            managerID, new WorkerHeartbeatListener(), ioExecutor, log);
         }
     }
 
@@ -818,16 +815,19 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
 
         @Override
         public void notifyHeartbeatTimeout(InstanceID instanceID) {
-            validateRunsInMainThread();
-            LOG.info("The heartbeat of client with id {} timed out.", instanceID);
+            getRpcMainThreadScheduledExecutor()
+                    .execute(
+                            () -> {
+                                LOG.info(
+                                        "The heartbeat of client with id {} timed out.",
+                                        instanceID);
 
-            unregisterClientInternal(jobIdFromInstanceID(instanceID));
+                                unregisterClientInternal(jobIdFromInstanceID(instanceID));
+                            });
         }
 
         @Override
-        public void reportPayload(InstanceID instanceID, Void payload) {
-            validateRunsInMainThread();
-        }
+        public void reportPayload(InstanceID instanceID, Void payload) {}
 
         @Override
         public Void retrievePayload(InstanceID instanceID) {
@@ -840,19 +840,26 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
 
         @Override
         public void notifyHeartbeatTimeout(InstanceID instanceID) {
-            validateRunsInMainThread();
-            LOG.info("The heartbeat of shuffle worker with id {} timed out.", instanceID);
+            getRpcMainThreadScheduledExecutor()
+                    .execute(
+                            () -> {
+                                LOG.info(
+                                        "The heartbeat of shuffle worker with id {} timed out.",
+                                        instanceID);
 
-            closeShuffleWorkerConnection(
-                    instanceID,
-                    new TimeoutException(
-                            "The heartbeat of ShuffleWorker with id "
-                                    + instanceID
-                                    + "  timed out."));
+                                closeShuffleWorkerConnection(
+                                        instanceID,
+                                        new TimeoutException(
+                                                "The heartbeat of ShuffleWorker with id "
+                                                        + instanceID
+                                                        + "  timed out."));
+                            });
         }
 
         @Override
         public void reportPayload(InstanceID instanceID, WorkerToManagerHeartbeatPayload payload) {
+            // for production code, this should be always called from the rpc main thread, we are
+            // not adding an assertion here because some test code will call this method
             final ShuffleWorkerRegistrationInstance shuffleWorkerRegistrationInstance =
                     shuffleWorkers.get(instanceID);
             if (shuffleWorkerRegistrationInstance != null) {

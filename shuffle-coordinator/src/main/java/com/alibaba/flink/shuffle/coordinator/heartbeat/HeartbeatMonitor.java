@@ -17,7 +17,10 @@
 package com.alibaba.flink.shuffle.coordinator.heartbeat;
 
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
-import com.alibaba.flink.shuffle.rpc.executor.ScheduledExecutor;
+
+import org.slf4j.Logger;
+
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * Heartbeat monitor which manages the heartbeat state of the associated heartbeat target. The
@@ -66,16 +69,17 @@ public interface HeartbeatMonitor<O> {
          *
          * @param instanceID the resource id
          * @param heartbeatTarget the heartbeat target
-         * @param mainThreadExecutor the main thread executor
          * @param heartbeatListener the heartbeat listener
          * @param heartbeatTimeoutIntervalMs the heartbeat timeout interval ms
+         * @param log for logging
          * @return the heartbeat monitor
          */
         HeartbeatMonitor<O> createHeartbeatMonitor(
                 InstanceID instanceID,
                 HeartbeatTarget<O> heartbeatTarget,
-                ScheduledExecutor mainThreadExecutor,
+                ScheduledExecutorService scheduledExecutor,
                 HeartbeatListener<?, O> heartbeatListener,
-                long heartbeatTimeoutIntervalMs);
+                long heartbeatTimeoutIntervalMs,
+                Logger log);
     }
 }
