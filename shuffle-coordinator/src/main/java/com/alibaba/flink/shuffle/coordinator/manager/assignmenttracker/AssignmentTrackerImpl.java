@@ -111,8 +111,8 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
         ClusterMetricsUtil.registerNumShuffleWorkers(workers::size);
         ClusterMetricsUtil.registerHddMaxFreeBytes(this::getHddMaxStorageFreeSpace);
         ClusterMetricsUtil.registerSsdMaxFreeBytes(this::getSsdMaxStorageFreeSpace);
-        ClusterMetricsUtil.registerHddMaxUsedBytes(this::getHddMaxStorageFreeSpace);
-        ClusterMetricsUtil.registerSsdMaxUsedBytes(this::getSsdMaxStorageFreeSpace);
+        ClusterMetricsUtil.registerHddMaxUsedBytes(this::getHddMaxStorageUsedSpace);
+        ClusterMetricsUtil.registerSsdMaxUsedBytes(this::getSsdMaxStorageUsedSpace);
     }
 
     public long getHddMaxStorageFreeSpace() {
