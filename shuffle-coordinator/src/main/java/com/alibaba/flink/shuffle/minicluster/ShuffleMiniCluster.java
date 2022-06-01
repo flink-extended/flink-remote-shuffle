@@ -56,8 +56,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
@@ -91,7 +91,7 @@ public class ShuffleMiniCluster implements AutoCloseableAsync {
     private final Collection<RemoteShuffleRpcService> rpcServices;
 
     @GuardedBy("lock")
-    private ExecutorService ioExecutor;
+    private ScheduledExecutorService ioExecutor;
 
     @GuardedBy("lock")
     private HeartbeatServices workerHeartbeatServices;
@@ -197,8 +197,8 @@ public class ShuffleMiniCluster implements AutoCloseableAsync {
                                 configuration, null, "0", shuffleManagerBindAddress);
 
                 ioExecutor =
-                        Executors.newFixedThreadPool(
-                                1, new ExecutorThreadFactory("mini-cluster-io"));
+                        Executors.newSingleThreadScheduledExecutor(
+                                new ExecutorThreadFactory("mini-cluster-io"));
 
                 workerHeartbeatServices =
                         HeartbeatServicesUtils.createManagerWorkerHeartbeatServices(configuration);

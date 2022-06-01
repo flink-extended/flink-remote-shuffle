@@ -57,7 +57,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -616,7 +615,7 @@ public class ShuffleManagerTest extends TestLogger {
                         shuffleManagerInstanceID,
                         highAvailabilityServices,
                         testingFatalErrorHandler,
-                        ForkJoinPool.commonPool(),
+                        TestingUtils.defaultScheduledExecutor(),
                         heartbeatServices,
                         heartbeatServices,
                         testAssignmentTracker);

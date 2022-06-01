@@ -23,12 +23,12 @@ import com.alibaba.flink.shuffle.coordinator.heartbeat.HeartbeatManagerSenderImp
 import com.alibaba.flink.shuffle.coordinator.heartbeat.HeartbeatServices;
 import com.alibaba.flink.shuffle.coordinator.heartbeat.HeartbeatTarget;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
-import com.alibaba.flink.shuffle.rpc.executor.ScheduledExecutor;
 
 import org.slf4j.Logger;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
 
 /** Special {@link HeartbeatServices} which records the unmonitored targets. */
 public class RecordingHeartbeatServices extends HeartbeatServices {
@@ -48,13 +48,13 @@ public class RecordingHeartbeatServices extends HeartbeatServices {
     public <I, O> HeartbeatManager<I, O> createHeartbeatManager(
             InstanceID instanceID,
             HeartbeatListener<I, O> heartbeatListener,
-            ScheduledExecutor mainThreadExecutor,
+            ScheduledExecutorService scheduledExecutor,
             Logger log) {
         return new RecordingHeartbeatManagerImpl<>(
                 heartbeatTimeout,
                 instanceID,
                 heartbeatListener,
-                mainThreadExecutor,
+                scheduledExecutor,
                 log,
                 unmonitoredTargets,
                 monitoredTargets);
@@ -64,14 +64,14 @@ public class RecordingHeartbeatServices extends HeartbeatServices {
     public <I, O> HeartbeatManager<I, O> createHeartbeatManagerSender(
             InstanceID instanceID,
             HeartbeatListener<I, O> heartbeatListener,
-            ScheduledExecutor mainThreadExecutor,
+            ScheduledExecutorService scheduledExecutor,
             Logger log) {
         return new RecordingHeartbeatManagerSenderImpl<>(
                 heartbeatInterval,
                 heartbeatTimeout,
                 instanceID,
                 heartbeatListener,
-                mainThreadExecutor,
+                scheduledExecutor,
                 log,
                 unmonitoredTargets,
                 monitoredTargets);
@@ -97,7 +97,7 @@ public class RecordingHeartbeatServices extends HeartbeatServices {
                 long heartbeatTimeoutIntervalMs,
                 InstanceID ownInstanceID,
                 HeartbeatListener<I, O> heartbeatListener,
-                ScheduledExecutor mainThreadExecutor,
+                ScheduledExecutorService scheduledExecutor,
                 Logger log,
                 BlockingQueue<InstanceID> unmonitoredTargets,
                 BlockingQueue<InstanceID> monitoredTargets) {
@@ -105,7 +105,7 @@ public class RecordingHeartbeatServices extends HeartbeatServices {
                     heartbeatTimeoutIntervalMs,
                     ownInstanceID,
                     heartbeatListener,
-                    mainThreadExecutor,
+                    scheduledExecutor,
                     log);
             this.unmonitoredTargets = unmonitoredTargets;
             this.monitoredTargets = monitoredTargets;
@@ -137,7 +137,7 @@ public class RecordingHeartbeatServices extends HeartbeatServices {
                 long heartbeatTimeout,
                 InstanceID ownInstanceID,
                 HeartbeatListener<I, O> heartbeatListener,
-                ScheduledExecutor mainThreadExecutor,
+                ScheduledExecutorService scheduledExecutor,
                 Logger log,
                 BlockingQueue<InstanceID> unmonitoredTargets,
                 BlockingQueue<InstanceID> monitoredTargets) {
@@ -146,7 +146,7 @@ public class RecordingHeartbeatServices extends HeartbeatServices {
                     heartbeatTimeout,
                     ownInstanceID,
                     heartbeatListener,
-                    mainThreadExecutor,
+                    scheduledExecutor,
                     log);
             this.unmonitoredTargets = unmonitoredTargets;
             this.monitoredTargets = monitoredTargets;

@@ -38,6 +38,7 @@ import com.alibaba.flink.shuffle.coordinator.registration.EstablishedConnection;
 import com.alibaba.flink.shuffle.coordinator.registration.RegistrationConnectionListener;
 import com.alibaba.flink.shuffle.coordinator.worker.checker.ShuffleWorkerChecker;
 import com.alibaba.flink.shuffle.coordinator.worker.metastore.Metastore;
+import com.alibaba.flink.shuffle.core.executor.ExecutorThreadFactory;
 import com.alibaba.flink.shuffle.core.ids.DataPartitionID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
@@ -60,6 +61,8 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
@@ -89,6 +92,12 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
     private final NettyServer nettyServer;
 
     // ------------------------------------------------------------------------
+
+    /**
+     * The executor is responsible for some time-consuming operations, for example, monitor
+     * heartbeat.
+     */
+    private final ScheduledExecutorService ioExecutor;
 
     private final HeartbeatManager<Void, WorkerToManagerHeartbeatPayload> heartbeatManager;
 
@@ -135,11 +144,13 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
         this.leaderRetrieveService =
                 haServices.createLeaderRetrievalService(HaServices.LeaderReceptor.SHUFFLE_WORKER);
 
+        this.ioExecutor =
+                Executors.newSingleThreadScheduledExecutor(new ExecutorThreadFactory("cluster-io"));
         this.heartbeatManager =
                 heartbeatServices.createHeartbeatManager(
                         shuffleWorkerLocation.getWorkerID(),
                         new ManagerHeartbeatListener(),
-                        getRpcMainThreadScheduledExecutor(),
+                        ioExecutor,
                         log);
     }
 
@@ -207,6 +218,12 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
 
         try {
             MetricUtils.stopMetricSystem();
+        } catch (Exception e) {
+            exception = exception == null ? e : exception;
+        }
+
+        try {
+            ioExecutor.shutdown();
         } catch (Exception e) {
             exception = exception == null ? e : exception;
         }
@@ -509,7 +526,8 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
 
         @Override
         public void notifyLeaderAddress(LeaderInformation leaderInfo) {
-            runAsync(() -> notifyOfNewShuffleManagerLeader(leaderInfo));
+            getRpcMainThreadScheduledExecutor()
+                    .execute(() -> notifyOfNewShuffleManagerLeader(leaderInfo));
         }
 
         @Override
@@ -558,23 +576,31 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
 
         @Override
         public void notifyHeartbeatTimeout(InstanceID instanceID) {
-            validateRunsInMainThread();
+            getRpcMainThreadScheduledExecutor()
+                    .execute(
+                            () -> { // first check whether the timeout is still valid
+                                if (establishedConnection != null
+                                        && establishedConnection
+                                                .getResponse()
+                                                .getInstanceID()
+                                                .equals(instanceID)) {
+                                    LOG.info(
+                                            "The heartbeat of ShuffleManager with id {} timed out.",
+                                            instanceID);
 
-            // first check whether the timeout is still valid
-            if (establishedConnection != null
-                    && establishedConnection.getResponse().getInstanceID().equals(instanceID)) {
-                LOG.info("The heartbeat of ShuffleManager with id {} timed out.", instanceID);
-
-                reconnectToShuffleManager(
-                        new Exception(
-                                String.format(
-                                        "The heartbeat of ShuffleManager with id %s timed out.",
-                                        instanceID)));
-            } else {
-                LOG.debug(
-                        "Received heartbeat timeout for outdated ShuffleManager id {}. Ignoring the timeout.",
-                        instanceID);
-            }
+                                    reconnectToShuffleManager(
+                                            new Exception(
+                                                    String.format(
+                                                            "The heartbeat of ShuffleManager with "
+                                                                    + "id %s timed out.",
+                                                            instanceID)));
+                                } else {
+                                    LOG.debug(
+                                            "Received heartbeat timeout for outdated ShuffleManager"
+                                                    + " id {}. Ignoring the timeout.",
+                                            instanceID);
+                                }
+                            });
         }
 
         @Override
@@ -584,7 +610,6 @@ public class ShuffleWorker extends RemoteShuffleRpcEndpoint implements ShuffleWo
 
         @Override
         public WorkerToManagerHeartbeatPayload retrievePayload(InstanceID instanceID) {
-            validateRunsInMainThread();
             try {
                 return new WorkerToManagerHeartbeatPayload(
                         metaStore.listDataPartitions(), dataStore.getStorageSpaceInfos());

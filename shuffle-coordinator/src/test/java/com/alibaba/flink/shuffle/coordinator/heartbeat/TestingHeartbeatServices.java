@@ -17,7 +17,6 @@
 package com.alibaba.flink.shuffle.coordinator.heartbeat;
 
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
-import com.alibaba.flink.shuffle.rpc.executor.ScheduledExecutor;
 
 import org.slf4j.Logger;
 
@@ -25,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
 
@@ -62,7 +62,7 @@ public class TestingHeartbeatServices extends HeartbeatServices {
     public <I, O> HeartbeatManager<I, O> createHeartbeatManager(
             InstanceID instanceID,
             HeartbeatListener<I, O> heartbeatListener,
-            ScheduledExecutor mainThreadExecutor,
+            ScheduledExecutorService scheduledExecutor,
             Logger log) {
 
         HeartbeatManagerImpl<I, O> heartbeatManager =
@@ -70,7 +70,7 @@ public class TestingHeartbeatServices extends HeartbeatServices {
                         heartbeatTimeout,
                         instanceID,
                         heartbeatListener,
-                        mainThreadExecutor,
+                        scheduledExecutor,
                         log,
                         new TestingHeartbeatMonitorFactory<>());
 
@@ -97,7 +97,7 @@ public class TestingHeartbeatServices extends HeartbeatServices {
     public <I, O> HeartbeatManager<I, O> createHeartbeatManagerSender(
             InstanceID instanceID,
             HeartbeatListener<I, O> heartbeatListener,
-            ScheduledExecutor mainThreadExecutor,
+            ScheduledExecutorService scheduledExecutor,
             Logger log) {
 
         HeartbeatManagerSenderImpl<I, O> heartbeatManager =
@@ -106,7 +106,7 @@ public class TestingHeartbeatServices extends HeartbeatServices {
                         heartbeatTimeout,
                         instanceID,
                         heartbeatListener,
-                        mainThreadExecutor,
+                        scheduledExecutor,
                         log,
                         new TestingHeartbeatMonitorFactory<>());
 
@@ -178,16 +178,18 @@ public class TestingHeartbeatServices extends HeartbeatServices {
         public HeartbeatMonitor<O> createHeartbeatMonitor(
                 InstanceID instanceID,
                 HeartbeatTarget<O> heartbeatTarget,
-                ScheduledExecutor mainThreadExecutor,
+                ScheduledExecutorService scheduledExecutor,
                 HeartbeatListener<?, O> heartbeatListener,
-                long heartbeatTimeoutIntervalMs) {
+                long heartbeatTimeoutIntervalMs,
+                Logger log) {
 
             return new TestingHeartbeatMonitor<>(
                     instanceID,
                     heartbeatTarget,
-                    mainThreadExecutor,
+                    scheduledExecutor,
                     heartbeatListener,
-                    heartbeatTimeoutIntervalMs);
+                    heartbeatTimeoutIntervalMs,
+                    log);
         }
     }
 
@@ -203,16 +205,18 @@ public class TestingHeartbeatServices extends HeartbeatServices {
         TestingHeartbeatMonitor(
                 InstanceID instanceID,
                 HeartbeatTarget<O> heartbeatTarget,
-                ScheduledExecutor scheduledExecutor,
+                ScheduledExecutorService scheduledExecutor,
                 HeartbeatListener<?, O> heartbeatListener,
-                long heartbeatTimeoutIntervalMs) {
+                long heartbeatTimeoutIntervalMs,
+                Logger log) {
 
             super(
                     instanceID,
                     heartbeatTarget,
                     scheduledExecutor,
                     heartbeatListener,
-                    heartbeatTimeoutIntervalMs);
+                    heartbeatTimeoutIntervalMs,
+                    log);
         }
 
         @Override

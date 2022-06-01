@@ -17,10 +17,10 @@
 package com.alibaba.flink.shuffle.coordinator.heartbeat;
 
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
-import com.alibaba.flink.shuffle.rpc.executor.ScheduledExecutor;
 
 import org.slf4j.Logger;
 
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -40,14 +40,14 @@ public class HeartbeatManagerSenderImpl<I, O> extends HeartbeatManagerImpl<I, O>
             long heartbeatTimeout,
             InstanceID ownInstanceID,
             HeartbeatListener<I, O> heartbeatListener,
-            ScheduledExecutor mainThreadExecutor,
+            ScheduledExecutorService scheduledExecutor,
             Logger log) {
         this(
                 heartbeatPeriod,
                 heartbeatTimeout,
                 ownInstanceID,
                 heartbeatListener,
-                mainThreadExecutor,
+                scheduledExecutor,
                 log,
                 new HeartbeatMonitorImpl.Factory<>());
     }
@@ -57,19 +57,19 @@ public class HeartbeatManagerSenderImpl<I, O> extends HeartbeatManagerImpl<I, O>
             long heartbeatTimeout,
             InstanceID ownInstanceID,
             HeartbeatListener<I, O> heartbeatListener,
-            ScheduledExecutor mainThreadExecutor,
+            ScheduledExecutorService scheduledExecutor,
             Logger log,
             HeartbeatMonitor.Factory<O> heartbeatMonitorFactory) {
         super(
                 heartbeatTimeout,
                 ownInstanceID,
                 heartbeatListener,
-                mainThreadExecutor,
+                scheduledExecutor,
                 log,
                 heartbeatMonitorFactory);
 
         this.heartbeatPeriod = heartbeatPeriod;
-        mainThreadExecutor.schedule(this, 0L, TimeUnit.MILLISECONDS);
+        getScheduledExecutor().schedule(this, 0L, TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -77,10 +77,14 @@ public class HeartbeatManagerSenderImpl<I, O> extends HeartbeatManagerImpl<I, O>
         if (!stopped) {
             log.debug("Trigger heartbeat request.");
             for (HeartbeatMonitor<O> heartbeatMonitor : getHeartbeatTargets().values()) {
-                requestHeartbeat(heartbeatMonitor);
+                try {
+                    requestHeartbeat(heartbeatMonitor);
+                } catch (Throwable throwable) {
+                    log.warn("Failed to request heartbeat.", throwable);
+                }
             }
 
-            getMainThreadExecutor().schedule(this, heartbeatPeriod, TimeUnit.MILLISECONDS);
+            getScheduledExecutor().schedule(this, heartbeatPeriod, TimeUnit.MILLISECONDS);
         }
     }
 

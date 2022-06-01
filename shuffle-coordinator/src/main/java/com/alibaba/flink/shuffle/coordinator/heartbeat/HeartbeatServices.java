@@ -17,9 +17,10 @@
 package com.alibaba.flink.shuffle.coordinator.heartbeat;
 
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
-import com.alibaba.flink.shuffle.rpc.executor.ScheduledExecutor;
 
 import org.slf4j.Logger;
+
+import java.util.concurrent.ScheduledExecutorService;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
 
@@ -51,7 +52,7 @@ public class HeartbeatServices {
      * @param instanceID Resource Id which identifies the owner of the heartbeat manager
      * @param heartbeatListener Listener which will be notified upon heartbeat timeouts for
      *     registered targets
-     * @param mainThreadExecutor Scheduled executor to be used for scheduling heartbeat timeouts
+     * @param scheduledExecutor Scheduled executor to be used for scheduling heartbeat timeouts
      * @param log Logger to be used for the logging
      * @param <I> Type of the incoming payload
      * @param <O> Type of the outgoing payload
@@ -60,11 +61,11 @@ public class HeartbeatServices {
     public <I, O> HeartbeatManager<I, O> createHeartbeatManager(
             InstanceID instanceID,
             HeartbeatListener<I, O> heartbeatListener,
-            ScheduledExecutor mainThreadExecutor,
+            ScheduledExecutorService scheduledExecutor,
             Logger log) {
 
         return new HeartbeatManagerImpl<>(
-                heartbeatTimeout, instanceID, heartbeatListener, mainThreadExecutor, log);
+                heartbeatTimeout, instanceID, heartbeatListener, scheduledExecutor, log);
     }
 
     /**
@@ -73,7 +74,7 @@ public class HeartbeatServices {
      * @param instanceID Resource Id which identifies the owner of the heartbeat manager
      * @param heartbeatListener Listener which will be notified upon heartbeat timeouts for
      *     registered targets
-     * @param mainThreadExecutor Scheduled executor to be used for scheduling heartbeat timeouts and
+     * @param scheduledExecutor Scheduled executor to be used for scheduling heartbeat timeouts and
      *     periodically send heartbeat requests
      * @param log Logger to be used for the logging
      * @param <I> Type of the incoming payload
@@ -83,7 +84,7 @@ public class HeartbeatServices {
     public <I, O> HeartbeatManager<I, O> createHeartbeatManagerSender(
             InstanceID instanceID,
             HeartbeatListener<I, O> heartbeatListener,
-            ScheduledExecutor mainThreadExecutor,
+            ScheduledExecutorService scheduledExecutor,
             Logger log) {
 
         return new HeartbeatManagerSenderImpl<>(
@@ -91,7 +92,7 @@ public class HeartbeatServices {
                 heartbeatTimeout,
                 instanceID,
                 heartbeatListener,
-                mainThreadExecutor,
+                scheduledExecutor,
                 log);
     }
 

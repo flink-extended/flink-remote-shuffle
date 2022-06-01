@@ -49,8 +49,8 @@ import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -83,7 +83,7 @@ public class ShuffleManagerEntrypoint implements AutoCloseableAsync, FatalErrorH
 
     private final RemoteShuffleRpcService shuffleRpcService;
 
-    private final ExecutorService ioExecutor;
+    private final ScheduledExecutorService ioExecutor;
 
     private final ShuffleManager shuffleManager;
 
@@ -110,7 +110,8 @@ public class ShuffleManagerEntrypoint implements AutoCloseableAsync, FatalErrorH
         configuration.setString(ManagerOptions.RPC_ADDRESS, shuffleRpcService.getAddress());
         configuration.setInteger(ManagerOptions.RPC_PORT, shuffleRpcService.getPort());
 
-        this.ioExecutor = Executors.newFixedThreadPool(1, new ExecutorThreadFactory("cluster-io"));
+        this.ioExecutor =
+                Executors.newSingleThreadScheduledExecutor(new ExecutorThreadFactory("cluster-io"));
 
         this.haServices = HaServiceUtils.createHAServices(configuration);
 

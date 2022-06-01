@@ -25,6 +25,7 @@ import com.alibaba.flink.shuffle.coordinator.leaderelection.TestingLeaderElectio
 import com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.AssignmentTracker;
 import com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker.ChangedWorkerStatus;
 import com.alibaba.flink.shuffle.coordinator.utils.TestingFatalErrorHandler;
+import com.alibaba.flink.shuffle.coordinator.utils.TestingUtils;
 import com.alibaba.flink.shuffle.coordinator.worker.ShuffleWorkerGateway;
 import com.alibaba.flink.shuffle.core.ids.DataPartitionID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
@@ -44,7 +45,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ForkJoinPool;
 
 /** Tests for the ShuffleManager HA. */
 public class ShuffleManagerHATest {
@@ -82,7 +82,7 @@ public class ShuffleManagerHATest {
                         rmInstanceID,
                         highAvailabilityServices,
                         testingFatalErrorHandler,
-                        ForkJoinPool.commonPool(),
+                        TestingUtils.defaultScheduledExecutor(),
                         new HeartbeatServices(100, 200),
                         new HeartbeatServices(100, 200),
                         new TestAssignmentTracker()) {
