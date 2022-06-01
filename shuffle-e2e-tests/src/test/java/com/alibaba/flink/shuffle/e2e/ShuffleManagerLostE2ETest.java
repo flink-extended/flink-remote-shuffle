@@ -73,7 +73,7 @@ public class ShuffleManagerLostE2ETest {
 
     @Before
     public void setup() throws Exception {
-        zkCluster = new ZooKeeperTestEnvironment(1);
+        zkCluster = new ZooKeeperTestEnvironment();
 
         logDir =
                 new File(

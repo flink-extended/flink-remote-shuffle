@@ -175,6 +175,10 @@ public class LocalShuffleCluster {
         LOG.info("Local shuffle cluster started successfully.");
     }
 
+    public int getNumRegisteredWorkers() throws Exception {
+        return shuffleManagerClient.getNumberOfRegisteredWorkers().get();
+    }
+
     public String getDataDirForWorker(int index) {
         return new File(parentDataDir.toFile(), "ShuffleWorker-" + index).getAbsolutePath();
     }
