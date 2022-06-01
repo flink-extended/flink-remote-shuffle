@@ -67,7 +67,7 @@ public class LocalShuffleClusterE2ETest {
             FileUtils.deleteDirectory(logDir);
         }
 
-        zkCluster = new ZooKeeperTestEnvironment(1);
+        zkCluster = new ZooKeeperTestEnvironment();
         cluster =
                 new LocalShuffleCluster(
                         logDir.getAbsolutePath(),

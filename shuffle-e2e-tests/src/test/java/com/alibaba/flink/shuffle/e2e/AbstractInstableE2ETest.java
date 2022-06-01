@@ -60,7 +60,7 @@ public class AbstractInstableE2ETest {
             FileUtils.deleteDirectory(logDir);
         }
 
-        zkEnv = new ZooKeeperTestEnvironment(1);
+        zkEnv = new ZooKeeperTestEnvironment();
         String zkConnect = zkEnv.getConnect();
         String logPath = logDir.getAbsolutePath();
         shuffleCluster =

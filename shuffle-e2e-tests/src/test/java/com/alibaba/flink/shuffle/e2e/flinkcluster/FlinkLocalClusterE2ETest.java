@@ -60,7 +60,7 @@ public class FlinkLocalClusterE2ETest {
             FileUtils.deleteDirectory(logDir);
         }
 
-        zkCluster = new ZooKeeperTestEnvironment(1);
+        zkCluster = new ZooKeeperTestEnvironment();
         cluster =
                 new FlinkLocalCluster(
                         logDir.getAbsolutePath(),

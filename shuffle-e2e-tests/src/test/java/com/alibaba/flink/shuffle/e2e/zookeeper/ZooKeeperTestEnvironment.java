@@ -16,58 +16,32 @@
 
 package com.alibaba.flink.shuffle.e2e.zookeeper;
 
-import org.apache.curator.test.TestingCluster;
 import org.apache.curator.test.TestingServer;
 
 /** Simple ZooKeeper and CuratorFramework setup for tests. */
 public class ZooKeeperTestEnvironment {
 
     private final TestingServer zooKeeperServer;
-    private final TestingCluster zooKeeperCluster;
 
-    /**
-     * Starts a ZooKeeper cluster with the number of quorum peers and a client.
-     *
-     * @param numberOfZooKeeperQuorumPeers Starts a {@link TestingServer}, if <code>1</code>. Starts
-     *     a {@link TestingCluster}, if <code>=>1</code>.
-     */
-    public ZooKeeperTestEnvironment(int numberOfZooKeeperQuorumPeers) {
-        if (numberOfZooKeeperQuorumPeers <= 0) {
-            throw new IllegalArgumentException("Number of peers needs to be >= 1.");
-        }
-
+    /** Starts a ZooKeeper server and a client. */
+    public ZooKeeperTestEnvironment() {
         try {
-            if (numberOfZooKeeperQuorumPeers == 1) {
-                zooKeeperServer = new TestingServer(true);
-                zooKeeperCluster = null;
-            } else {
-                zooKeeperServer = null;
-                zooKeeperCluster = new TestingCluster(numberOfZooKeeperQuorumPeers);
-
-                zooKeeperCluster.start();
-            }
+            zooKeeperServer = new TestingServer(true);
         } catch (Exception e) {
             throw new RuntimeException("Error setting up ZooKeeperTestEnvironment", e);
         }
     }
 
+    public void restart() throws Exception {
+        zooKeeperServer.restart();
+    }
+
     /** Shutdown the client and ZooKeeper server/cluster. */
     public void shutdown() throws Exception {
-
-        if (zooKeeperServer != null) {
-            zooKeeperServer.close();
-        }
-
-        if (zooKeeperCluster != null) {
-            zooKeeperCluster.close();
-        }
+        zooKeeperServer.close();
     }
 
     public String getConnect() {
-        if (zooKeeperServer != null) {
-            return zooKeeperServer.getConnectString();
-        } else {
-            return zooKeeperCluster.getConnectString();
-        }
+        return zooKeeperServer.getConnectString();
     }
 }
