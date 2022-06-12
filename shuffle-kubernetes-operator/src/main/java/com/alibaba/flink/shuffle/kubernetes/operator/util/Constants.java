@@ -24,6 +24,7 @@ public class Constants {
 
     public static final String RESOURCE_NAME_CPU = "cpu";
     public static final String RESOURCE_NAME_MEMORY = "memory";
+    public static final String RESOURCE_NAME_STORAGE = "storage";
     public static final String RESOURCE_UNIT_MB = "Mi";
 
     public static final int MAXIMUM_CHARACTERS_OF_CLUSTER_ID = 45;
