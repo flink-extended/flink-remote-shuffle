@@ -24,6 +24,7 @@ import com.alibaba.flink.shuffle.kubernetes.operator.parameters.util.ContainerCo
 import com.alibaba.flink.shuffle.kubernetes.operator.util.Constants;
 import com.alibaba.flink.shuffle.kubernetes.operator.util.KubernetesUtils;
 
+import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.apps.DaemonSet;
 
 import java.util.ArrayList;
@@ -41,7 +42,7 @@ import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
  * ShuffleWorkers configuration to kubernetes {@link DaemonSet} configuration.
  */
 public class KubernetesShuffleWorkerParameters extends AbstractKubernetesParameters
-        implements KubernetesDaemonSetParameters {
+        implements KubernetesDaemonSetParameters, KubernetesStatefulSetParameters {
 
     private final ShuffleWorkerProcessSpec shuffleWorkerProcessSpec;
 
@@ -190,7 +191,40 @@ public class KubernetesShuffleWorkerParameters extends AbstractKubernetesParamet
     }
 
     @Override
+    public String getStatefulSetName() {
+        return KubernetesUtils.getShuffleWorkersNameWithClusterId(getClusterId());
+    }
+
+    @Override
     public KubernetesPodParameters getPodTemplateParameters() {
         return this;
+    }
+
+    @Override
+    public int getReplicas() {
+        return conf.getInteger(KubernetesOptions.SHUFFLE_WORKER_REPLICAS);
+    }
+
+    @Override
+    public Map<String, Quantity> getStorageResource() {
+        String size = conf.getString(KubernetesOptions.SHUFFLE_WORKER_PVC_STORAGE_SIZE);
+        Map<String, Quantity> resource = new HashMap<>();
+        resource.put(Constants.RESOURCE_NAME_STORAGE, new Quantity(size));
+        return resource;
+    }
+
+    @Override
+    public String getStorageClass() {
+        return conf.getString(KubernetesOptions.SHUFFLE_WORKER_PVC_STORAGE_CLASS);
+    }
+
+    @Override
+    public List<String> getAccessMode() {
+        return conf.getList(KubernetesOptions.SHUFFLE_WORKER_PVC_ACCESS_MODE, String.class);
+    }
+
+    @Override
+    public String getMountPath() {
+        return conf.getString(KubernetesOptions.SHUFFLE_WORKER_PVC_MOUNT_PATH);
     }
 }
