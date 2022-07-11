@@ -26,6 +26,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Objects;
 
 /** ID of the {@link ReducePartition}. */
 public class ReducePartitionID extends DataPartitionID {
@@ -34,48 +35,92 @@ public class ReducePartitionID extends DataPartitionID {
 
     private final int partitionIndex;
 
+    private final long consumerGroupID;
+
     @Override
     public DataPartition.DataPartitionType getPartitionType() {
         return DataPartition.DataPartitionType.REDUCE_PARTITION;
     }
 
     public ReducePartitionID(int partitionIndex) {
-        super(getBytes(partitionIndex));
-        this.partitionIndex = partitionIndex;
+        this(partitionIndex, 0);
     }
 
-    private static byte[] getBytes(int value) {
-        byte[] bytes = new byte[4];
+    public ReducePartitionID(int partitionIndex, long consumerGroupID) {
+        super(getBytes(partitionIndex, consumerGroupID));
+        this.partitionIndex = partitionIndex;
+        this.consumerGroupID = consumerGroupID;
+    }
+
+    private static byte[] getBytes(int value, long consumerGroupID) {
+        byte[] bytes = new byte[4 + 8];
         ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).putInt(value);
+        ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).putLong(consumerGroupID);
         return bytes;
     }
 
     /** Deserializes and creates an {@link ReducePartitionID} from the given {@link DataInput}. */
+    public static ReducePartitionID readFrom(ByteBuf byteBuf) {
+        return new ReducePartitionID(byteBuf.readInt(), byteBuf.readLong());
+    }
+
+    /** Deserializes and creates an {@link ReducePartitionID} from the given {@link DataInput}. */
     public static ReducePartitionID readFrom(DataInput dataInput) throws IOException {
-        return new ReducePartitionID(dataInput.readInt());
+        return new ReducePartitionID(dataInput.readInt(), dataInput.readLong());
     }
 
     public int getPartitionIndex() {
         return partitionIndex;
     }
 
+    public long getConsumerGroupID() {
+        return consumerGroupID;
+    }
+
     @Override
     public int getFootprint() {
-        return 4;
+        return 4 + 8;
     }
 
     @Override
     public void writeTo(ByteBuf byteBuf) {
         byteBuf.writeInt(partitionIndex);
+        byteBuf.writeLong(consumerGroupID);
     }
 
     @Override
     public void writeTo(DataOutput dataOutput) throws IOException {
         dataOutput.writeInt(partitionIndex);
+        dataOutput.writeLong(consumerGroupID);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        if (!super.equals(o)) {
+            return false;
+        }
+        ReducePartitionID that = (ReducePartitionID) o;
+        return partitionIndex == that.partitionIndex && consumerGroupID == that.consumerGroupID;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), partitionIndex, consumerGroupID);
     }
 
     @Override
     public String toString() {
-        return "ReducePartitionID{" + "PartitionIndex=" + partitionIndex + '}';
+        return "ReducePartitionID{"
+                + "PartitionIndex="
+                + partitionIndex
+                + ",consumerGroupID="
+                + consumerGroupID
+                + '}';
     }
 }
