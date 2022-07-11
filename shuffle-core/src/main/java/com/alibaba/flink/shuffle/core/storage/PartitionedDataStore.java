@@ -57,6 +57,9 @@ public interface PartitionedDataStore {
     /** Returns a boolean flag indicating whether the target {@link DataPartition} is consumable. */
     boolean isDataPartitionConsumable(DataPartitionMeta partitionMeta);
 
+    /** Returns a map including all {@link DataPartitionFactory}s in the data store. */
+    Map<String, DataPartitionFactory> partitionFactories();
+
     /**
      * Adds a new {@link DataPartition} to this data store. This happens when adding an external
      * {@link DataPartition} or restarting from failure. Exception will be thrown if the target
