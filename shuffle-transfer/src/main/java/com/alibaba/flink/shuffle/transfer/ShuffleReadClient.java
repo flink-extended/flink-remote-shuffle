@@ -19,10 +19,13 @@ package com.alibaba.flink.shuffle.transfer;
 import com.alibaba.flink.shuffle.core.ids.ChannelID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
+import com.alibaba.flink.shuffle.core.storage.MapPartition;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.CloseChannel;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadAddCredit;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadData;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadHandshakeRequest;
+import com.alibaba.flink.shuffle.transfer.TransferMessage.ReducePartitionReadHandshakeRequest;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 import org.apache.flink.shaded.netty4.io.netty.channel.Channel;
@@ -88,6 +91,15 @@ public class ShuffleReadClient extends CreditListener {
     /** {@link MapPartitionID} of the reading. */
     private final MapPartitionID mapID;
 
+    /** {@link ReducePartitionID} of the reading. */
+    private final ReducePartitionID reduceID;
+
+    /** Number of subpartitions of the reading. */
+    private final int numSubs;
+
+    /** Whether the data paritition is a {@link MapPartition}. */
+    private final boolean isMapPartition;
+
     /** Identifier of the channel. */
     private final ChannelID channelID;
 
@@ -116,9 +128,12 @@ public class ShuffleReadClient extends CreditListener {
             InetSocketAddress address,
             DataSetID dataSetID,
             MapPartitionID mapID,
+            ReducePartitionID reduceID,
+            int numSubs,
             int startSubIdx,
             int endSubIdx,
             int bufferSize,
+            boolean isMapPartition,
             TransferBufferPool bufferPool,
             ConnectionManager connectionManager,
             Consumer<ByteBuf> dataListener,
@@ -127,6 +142,8 @@ public class ShuffleReadClient extends CreditListener {
         checkArgument(address != null, "Must be not null.");
         checkArgument(dataSetID != null, "Must be not null.");
         checkArgument(mapID != null, "Must be not null.");
+        checkArgument(reduceID != null, "Must be not null.");
+        checkArgument(numSubs > 0, "Must be positive value.");
         checkArgument(startSubIdx >= 0, "Must be positive value.");
         checkArgument(endSubIdx >= startSubIdx, "Must be equal or larger than startSubIdx.");
         checkArgument(bufferSize > 0, "Must be positive value.");
@@ -139,6 +156,9 @@ public class ShuffleReadClient extends CreditListener {
         this.addressStr = address.toString();
         this.dataSetID = dataSetID;
         this.mapID = mapID;
+        this.reduceID = reduceID;
+        this.numSubs = numSubs;
+        this.isMapPartition = isMapPartition;
         this.startSubIdx = startSubIdx;
         this.endSubIdx = endSubIdx;
         this.bufferSize = bufferSize;
@@ -148,6 +168,38 @@ public class ShuffleReadClient extends CreditListener {
         this.failureListener = failureListener;
         this.channelID = new ChannelID(randomBytes(16));
         this.channelIDStr = channelID.toString();
+    }
+
+    public InetSocketAddress getAddress() {
+        return address;
+    }
+
+    public ConnectionManager getConnectionManager() {
+        return connectionManager;
+    }
+
+    public TransferBufferPool getBufferPool() {
+        return bufferPool;
+    }
+
+    public int getBufferSize() {
+        return bufferSize;
+    }
+
+    public DataSetID getDataSetID() {
+        return dataSetID;
+    }
+
+    public MapPartitionID getMapID() {
+        return mapID;
+    }
+
+    public boolean isClosed() {
+        return closed;
+    }
+
+    public void setClosed(boolean closed) {
+        this.closed = closed;
     }
 
     /** Create Netty connection to remote. */
@@ -165,8 +217,18 @@ public class ShuffleReadClient extends CreditListener {
         }
         readClientHandler.register(this);
 
-        ReadHandshakeRequest handshake =
-                new ReadHandshakeRequest(
+        TransferMessage handshake = readHandshakeRequestMsg();
+        LOG.debug("(remote: {}) Send {}.", nettyChannel.remoteAddress(), handshake);
+        nettyChannel
+                .writeAndFlush(handshake)
+                .addListener(
+                        new ChannelFutureListenerImpl(
+                                (ignored, throwable) -> exceptionCaught(throwable)));
+    }
+
+    private TransferMessage readHandshakeRequestMsg() {
+        return isMapPartition
+                ? new ReadHandshakeRequest(
                         currentProtocolVersion(),
                         channelID,
                         dataSetID,
@@ -176,13 +238,17 @@ public class ShuffleReadClient extends CreditListener {
                         0,
                         bufferSize,
                         emptyOffset(),
+                        emptyExtraMessage())
+                : new ReducePartitionReadHandshakeRequest(
+                        currentProtocolVersion(),
+                        channelID,
+                        dataSetID,
+                        reduceID,
+                        numSubs,
+                        0,
+                        bufferSize,
+                        emptyOffset(),
                         emptyExtraMessage());
-        LOG.debug("(remote: {}) Send {}.", nettyChannel.remoteAddress(), handshake);
-        nettyChannel
-                .writeAndFlush(handshake)
-                .addListener(
-                        new ChannelFutureListenerImpl(
-                                (ignored, throwable) -> exceptionCaught(throwable)));
     }
 
     public boolean isOpened() {
@@ -196,7 +262,6 @@ public class ShuffleReadClient extends CreditListener {
 
     /** Called by Netty thread. */
     public void dataReceived(ReadData readData) {
-        LOG.trace("(remote: {}, channel: {}) Received {}.", address, channelIDStr, readData);
         if (closed) {
             readData.getBuffer().release();
             return;

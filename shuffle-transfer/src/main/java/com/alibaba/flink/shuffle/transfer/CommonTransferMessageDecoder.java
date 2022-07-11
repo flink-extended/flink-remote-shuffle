@@ -23,6 +23,8 @@ import com.alibaba.flink.shuffle.transfer.TransferMessage.ErrorResponse;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.Heartbeat;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadAddCredit;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadHandshakeRequest;
+import com.alibaba.flink.shuffle.transfer.TransferMessage.ReducePartitionReadHandshakeRequest;
+import com.alibaba.flink.shuffle.transfer.TransferMessage.ReducePartitionWriteHandshakeRequest;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.WriteAddCredit;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.WriteFinish;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.WriteFinishCommit;
@@ -67,6 +69,9 @@ public class CommonTransferMessageDecoder extends TransferMessageDecoder {
             case WriteHandshakeRequest.ID:
                 return TransferMessageDecoder.DecodingResult.fullMessage(
                         WriteHandshakeRequest.readFrom(messageBuffer));
+            case ReducePartitionWriteHandshakeRequest.ID:
+                return TransferMessageDecoder.DecodingResult.fullMessage(
+                        ReducePartitionWriteHandshakeRequest.readFrom(messageBuffer));
             case WriteAddCredit.ID:
                 return TransferMessageDecoder.DecodingResult.fullMessage(
                         WriteAddCredit.readFrom(messageBuffer));
@@ -85,6 +90,9 @@ public class CommonTransferMessageDecoder extends TransferMessageDecoder {
             case ReadHandshakeRequest.ID:
                 return TransferMessageDecoder.DecodingResult.fullMessage(
                         ReadHandshakeRequest.readFrom(messageBuffer));
+            case ReducePartitionReadHandshakeRequest.ID:
+                return TransferMessageDecoder.DecodingResult.fullMessage(
+                        ReducePartitionReadHandshakeRequest.readFrom(messageBuffer));
             case ReadAddCredit.ID:
                 return TransferMessageDecoder.DecodingResult.fullMessage(
                         ReadAddCredit.readFrom(messageBuffer));

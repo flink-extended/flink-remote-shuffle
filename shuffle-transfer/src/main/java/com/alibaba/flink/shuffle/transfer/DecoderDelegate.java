@@ -35,6 +35,8 @@ import static com.alibaba.flink.shuffle.transfer.TransferMessage.MAGIC_NUMBER;
 import static com.alibaba.flink.shuffle.transfer.TransferMessage.ReadAddCredit;
 import static com.alibaba.flink.shuffle.transfer.TransferMessage.ReadData;
 import static com.alibaba.flink.shuffle.transfer.TransferMessage.ReadHandshakeRequest;
+import static com.alibaba.flink.shuffle.transfer.TransferMessage.ReducePartitionReadHandshakeRequest;
+import static com.alibaba.flink.shuffle.transfer.TransferMessage.ReducePartitionWriteHandshakeRequest;
 import static com.alibaba.flink.shuffle.transfer.TransferMessage.WriteData;
 import static com.alibaba.flink.shuffle.transfer.TransferMessage.WriteFinish;
 import static com.alibaba.flink.shuffle.transfer.TransferMessage.WriteHandshakeRequest;
@@ -79,10 +81,12 @@ public class DecoderDelegate extends ChannelInboundHandlerAdapter {
                 msgID -> {
                     switch (msgID) {
                         case WriteHandshakeRequest.ID:
+                        case ReducePartitionWriteHandshakeRequest.ID:
                         case WriteRegionStart.ID:
                         case WriteRegionFinish.ID:
                         case WriteFinish.ID:
                         case ReadHandshakeRequest.ID:
+                        case ReducePartitionReadHandshakeRequest.ID:
                         case ReadAddCredit.ID:
                         case CloseChannel.ID:
                         case CloseConnection.ID:

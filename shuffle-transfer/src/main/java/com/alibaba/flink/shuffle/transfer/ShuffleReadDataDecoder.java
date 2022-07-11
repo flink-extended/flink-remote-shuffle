@@ -22,11 +22,16 @@ import com.alibaba.flink.shuffle.core.ids.ChannelID;
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelHandlerContext;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 /** {@link TransferMessageDecoder} for {@link TransferMessage.ReadData}. */
 public class ShuffleReadDataDecoder extends TransferMessageDecoder {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ShuffleReadDataDecoder.class);
 
     private ByteBuf headerByteBuf;
 
