@@ -492,23 +492,7 @@ public class ShuffleManagerClientImpl implements ShuffleManagerClient, LeaderRet
             DataSetID dataSetId,
             MapPartitionID mapPartitionId,
             int numberOfSubpartitions,
-            String dataPartitionFactoryName) {
-        return sendRpcCall(
-                (shuffleManagerJobGateway) ->
-                        shuffleManagerJobGateway.requestShuffleResource(
-                                jobID,
-                                clientID,
-                                dataSetId,
-                                mapPartitionId,
-                                numberOfSubpartitions,
-                                dataPartitionFactoryName));
-    }
-
-    @Override
-    public CompletableFuture<ShuffleResource> requestShuffleResource(
-            DataSetID dataSetId,
-            MapPartitionID mapPartitionId,
-            int numberOfSubpartitions,
+            long consumerGroupID,
             String dataPartitionFactoryName,
             String taskLocation) {
         return sendRpcCall(
@@ -519,6 +503,7 @@ public class ShuffleManagerClientImpl implements ShuffleManagerClient, LeaderRet
                                 dataSetId,
                                 mapPartitionId,
                                 numberOfSubpartitions,
+                                consumerGroupID,
                                 dataPartitionFactoryName,
                                 taskLocation));
     }

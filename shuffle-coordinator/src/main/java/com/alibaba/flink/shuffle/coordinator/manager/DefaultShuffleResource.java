@@ -17,6 +17,7 @@
 package com.alibaba.flink.shuffle.coordinator.manager;
 
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
+import com.alibaba.flink.shuffle.core.storage.DiskType;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -36,17 +37,26 @@ public class DefaultShuffleResource implements ShuffleResource {
     /** The type of the data partition. */
     private final DataPartition.DataPartitionType dataPartitionType;
 
+    /** The preferred disk type of the {@link ShuffleResource} . */
+    private final DiskType diskType;
+
+    /** The ID of the consumed partition group. */
+    private long consumerGroupID;
+
     public DefaultShuffleResource(
             ShuffleWorkerDescriptor[] shuffleWorkerDescriptors,
-            DataPartition.DataPartitionType dataPartitionType) {
+            DataPartition.DataPartitionType dataPartitionType,
+            DiskType diskType) {
         checkArgument(shuffleWorkerDescriptors.length > 0, "Must be positive.");
         checkArgument(
                 dataPartitionType == DataPartition.DataPartitionType.REDUCE_PARTITION
                         || shuffleWorkerDescriptors.length == 1,
                 "Illegal number of shuffle worker descriptors.");
+        checkArgument(diskType != null, "Must not be null.");
 
         this.shuffleWorkerDescriptors = shuffleWorkerDescriptors;
         this.dataPartitionType = dataPartitionType;
+        this.diskType = diskType;
     }
 
     @Override
@@ -61,8 +71,24 @@ public class DefaultShuffleResource implements ShuffleResource {
         return shuffleWorkerDescriptors[0];
     }
 
+    @Override
+    public void setConsumerGroupID(long consumerGroupID) {
+        this.consumerGroupID = consumerGroupID;
+    }
+
+    @Override
+    public long getConsumerGroupID() {
+        return consumerGroupID;
+    }
+
+    @Override
     public DataPartition.DataPartitionType getDataPartitionType() {
         return dataPartitionType;
+    }
+
+    @Override
+    public DiskType getDiskType() {
+        return diskType;
     }
 
     @Override
@@ -82,6 +108,14 @@ public class DefaultShuffleResource implements ShuffleResource {
             return false;
         }
 
+        if (!diskType.equals(that.diskType)) {
+            return false;
+        }
+
+        if (consumerGroupID != that.consumerGroupID) {
+            return false;
+        }
+
         for (int i = 0; i < shuffleWorkerDescriptors.length; i++) {
             if (!Objects.equals(shuffleWorkerDescriptors[i], that.shuffleWorkerDescriptors[i])) {
                 return false;
@@ -96,6 +130,8 @@ public class DefaultShuffleResource implements ShuffleResource {
                 StringUtils.isBlank(dataPartitionType.toString())
                         ? 0
                         : dataPartitionType.hashCode();
+        result = result * 31 + Objects.hash(consumerGroupID);
+        result = result * 31 + Objects.hash(diskType);
         for (ShuffleWorkerDescriptor shuffleWorkerDescriptor : shuffleWorkerDescriptors) {
             result = result * 31 + Objects.hash(shuffleWorkerDescriptor);
         }
@@ -115,6 +151,8 @@ public class DefaultShuffleResource implements ShuffleResource {
         if (!StringUtils.isBlank(dataPartitionType.toString())) {
             sb.append(",").append("dataPartitionType=").append(dataPartitionType);
         }
+        sb.append(",").append("diskType=").append(diskType);
+        sb.append(",").append("consumerGroupID=").append(consumerGroupID);
         sb.append("}");
 
         return sb.toString();

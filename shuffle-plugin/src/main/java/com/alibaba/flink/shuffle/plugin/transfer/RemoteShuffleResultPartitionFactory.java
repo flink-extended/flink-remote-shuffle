@@ -42,6 +42,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.alibaba.flink.shuffle.plugin.utils.GateUtils.getDataPartitionFactoryName;
+
 /** Factory class to create {@link RemoteShuffleResultPartition}. */
 public class RemoteShuffleResultPartitionFactory {
 
@@ -153,6 +155,7 @@ public class RemoteShuffleResultPartitionFactory {
             bufferCompressor = null;
         }
         RemoteShuffleDescriptor rsd = (RemoteShuffleDescriptor) shuffleDescriptor;
+        String factoryName = getDataPartitionFactoryName(rsd);
         ResultPartition partition =
                 new RemoteShuffleResultPartition(
                         taskNameWithSubtaskAndId,
@@ -169,7 +172,7 @@ public class RemoteShuffleResultPartitionFactory {
                                 rsd,
                                 numSubpartitions,
                                 networkBufferSize,
-                                dataPartitionFactoryName,
+                                factoryName,
                                 bufferPoolFactories.get(1),
                                 connectionManager));
         LOG.debug("{}: Initialized {}", taskNameWithSubtaskAndId, this);

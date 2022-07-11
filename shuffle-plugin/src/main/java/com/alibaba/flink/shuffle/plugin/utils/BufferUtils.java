@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
 
 /** Utility methods to process flink buffers. */
 public class BufferUtils {
@@ -99,5 +100,23 @@ public class BufferUtils {
         } finally {
             buffers.forEach(bufferPool::recycle);
         }
+    }
+
+    public static int calculateSubpartitionCredit(
+            long numToSendBytes, int numEvents, int networkBufferSize) {
+        checkState(numToSendBytes >= 0, "Must be non-negative.");
+        checkState(numEvents >= 0, "Must be non-negative.");
+        if (numToSendBytes == 0 && numEvents == 0) {
+            return 1;
+        }
+        int numEventBuffer =
+                needMoreThanOneBuffer(numToSendBytes, networkBufferSize)
+                        ? 2 * numEvents
+                        : numEvents;
+        return (int) (numToSendBytes / (networkBufferSize - HEADER_LENGTH)) + numEventBuffer + 1;
+    }
+
+    public static boolean needMoreThanOneBuffer(long numToSendBytes, int networkBufferSize) {
+        return numToSendBytes > (networkBufferSize - HEADER_LENGTH);
     }
 }

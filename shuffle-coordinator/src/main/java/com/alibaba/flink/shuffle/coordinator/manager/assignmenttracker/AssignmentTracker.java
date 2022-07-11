@@ -121,6 +121,7 @@ public interface AssignmentTracker {
      * @param dataSetID The id of the dataset that contains this partition.
      * @param mapPartitionID The id represents the map task.
      * @param numberOfConsumers The number of consumers of the partition.
+     * @param consumerGroupID The id of consumer vertex gourp of the partition.
      * @param dataPartitionFactoryName The factory name of the data partition.
      * @param taskLocation The location (host name) of the target task requesting resources.
      * @return The allocated shuffle resources.
@@ -130,6 +131,7 @@ public interface AssignmentTracker {
             DataSetID dataSetID,
             MapPartitionID mapPartitionID,
             int numberOfConsumers,
+            long consumerGroupID,
             String dataPartitionFactoryName,
             String taskLocation)
             throws ShuffleResourceAllocationException;

@@ -74,7 +74,7 @@ public class PluginOptions {
      */
     public static final ConfigOption<MemorySize> MEMORY_PER_INPUT_GATE =
             new ConfigOption<MemorySize>("remote-shuffle.job.memory-per-gate")
-                    .defaultValue(MemorySize.parse("32m"))
+                    .defaultValue(MemorySize.parse("64m"))
                     .description(
                             "The size of network buffers required per input gate. The minimum "
                                     + "valid value is 8m. Usually, several hundreds of megabytes "

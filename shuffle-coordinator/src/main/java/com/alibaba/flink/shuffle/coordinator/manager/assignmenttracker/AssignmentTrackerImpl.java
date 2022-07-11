@@ -30,7 +30,9 @@ import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.core.ids.RegistrationID;
+import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
 import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 
@@ -46,11 +48,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Random;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
 
 /**
@@ -323,6 +327,7 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
             DataSetID dataSetID,
             MapPartitionID mapPartitionID,
             int numberOfConsumers,
+            long consumerGroupID,
             String dataPartitionFactoryName,
             String taskLocation)
             throws ShuffleResourceAllocationException {
@@ -352,25 +357,82 @@ public class AssignmentTrackerImpl implements AssignmentTracker {
                     descriptor);
             return new DefaultShuffleResource(
                     new ShuffleWorkerDescriptor[] {descriptor},
-                    partitionFactory.getDataPartitionType());
+                    partitionFactory.getDataPartitionType(),
+                    partitionFactory.getDiskType());
         }
 
-        WorkerStatus[] selectedWorkerStatuses =
-                partitionPlacementStrategy.selectNextWorker(
-                        new PartitionPlacementContext(partitionFactory, taskLocation));
-        checkState(
-                selectedWorkerStatuses.length == 1,
-                "Currently only one worker need to be selected");
-        WorkerStatus workerStatus = selectedWorkerStatuses[0];
+        boolean isMapPartition = dataPartitionFactoryName.contains("MapPartition");
+        int numWorkers = isMapPartition ? 1 : numberOfConsumers;
+        ShuffleWorkerDescriptor[] workerDescriptors = new ShuffleWorkerDescriptor[numWorkers];
 
-        internalAddDataPartition(
-                workerStatus,
-                new DataPartitionStatus(
-                        jobID, new DataPartitionCoordinate(dataSetID, mapPartitionID)));
+        for (int i = 0; i < numWorkers; i++) {
+            DataPartitionID dataPartitionID =
+                    isMapPartition ? mapPartitionID : new ReducePartitionID(i, consumerGroupID);
+            DataPartitionCoordinate coordinate =
+                    new DataPartitionCoordinate(dataSetID, dataPartitionID);
+            WorkerStatus originalStatus = jobStatus.getDataPartitions().get(coordinate);
+            if (originalStatus != null) {
+                workerDescriptors[i] = originalStatus.createShuffleWorkerDescriptor();
+                continue;
+            }
+
+            WorkerStatus[] workerStatuses =
+                    partitionPlacementStrategy.selectNextWorker(
+                            new PartitionPlacementContext(
+                                    workers, partitionFactory, taskLocation, 1));
+            checkState(workerStatuses.length == 1, "Wrong number of workers.");
+            WorkerStatus workerStatus = checkNotNull(workerStatuses[0]);
+            internalAddDataPartition(workerStatus, new DataPartitionStatus(jobID, coordinate));
+            workerDescriptors[i] = workerStatus.createShuffleWorkerDescriptor();
+        }
 
         return new DefaultShuffleResource(
-                new ShuffleWorkerDescriptor[] {workerStatus.createShuffleWorkerDescriptor()},
-                partitionFactory.getDataPartitionType());
+                workerDescriptors,
+                partitionFactory.getDataPartitionType(),
+                partitionFactory.getDiskType());
+    }
+
+    List<WorkerStatus> chooseWorkers(int numberOfConsumers)
+            throws ShuffleResourceAllocationException {
+        List<WorkerStatus> allWorkers = new ArrayList<>(workers.values());
+        Random random = new Random();
+        int startIndex = random.nextInt(allWorkers.size());
+
+        if (allWorkers.isEmpty()) {
+            throw new ShuffleResourceAllocationException("No available workers");
+        }
+
+        List<WorkerStatus> chosenWorkers = new ArrayList<>(numberOfConsumers);
+        int leftNums = numberOfConsumers % allWorkers.size();
+        if (numberOfConsumers >= allWorkers.size()) {
+            int numTimes = numberOfConsumers / allWorkers.size();
+            for (WorkerStatus allWorker : allWorkers) {
+                for (int j = 0; j < numTimes; j++) {
+                    chosenWorkers.add(allWorker);
+                }
+            }
+        }
+        for (int i = startIndex; i < startIndex + leftNums; i++) {
+            chosenWorkers.add(allWorkers.get(i % allWorkers.size()));
+        }
+
+        return chosenWorkers;
+    }
+
+    /** Public permissions are used for unit testing. */
+    public DataPartition.DataPartitionType getDataPartitionType(String dataPartitionFactoryName)
+            throws ShuffleResourceAllocationException {
+        try {
+            return DataPartitionFactory.getDataPartitionType(dataPartitionFactoryName);
+        } catch (Throwable throwable) {
+            LOG.error("Failed to get the data partition type.", throwable);
+            throw new ShuffleResourceAllocationException(
+                    String.format(
+                            "Could not find the target data partition factory class %s, please "
+                                    + "check the class name make sure the class is in the classpath.",
+                            dataPartitionFactoryName),
+                    throwable);
+        }
     }
 
     @Override
