@@ -78,6 +78,12 @@ public abstract class BaseDataPartition implements DataPartition {
     /** All {@link DataPartitionWriter} writing this data partition. */
     protected final Map<MapPartitionID, DataPartitionWriter> writers = new HashMap<>();
 
+    /** The number of {@link DataPartitionWriter}s who have processed input finish marker. */
+    protected int numInputFinishWriter;
+
+    /** The number of {@link DataPartitionWriter}s who are writing data. */
+    protected int writingCounter;
+
     /** Whether this data partition is released or not. */
     protected boolean isReleased;
 
@@ -225,16 +231,68 @@ public abstract class BaseDataPartition implements DataPartition {
     }
 
     /**
+     * Returns the number of {@link DataPartitionWriter}s who have processed the input finish
+     * marker.
+     */
+    protected int numInputFinishWriter() {
+        return numInputFinishWriter;
+    }
+
+    /**
+     * Increases the number of {@link DataPartitionWriter}s who have processed the input finish
+     * marker. When a {@link DataPartitionWriter} is processing the input finish marker, the method
+     * should be called.
+     */
+    protected void incNumInputFinishWriter() {
+        numInputFinishWriter++;
+    }
+
+    /** Increases the number of {@link DataPartitionWriter}s who are writing data. */
+    protected void incWritingCounter() {
+        writingCounter++;
+    }
+
+    /** Decreases the number of {@link DataPartitionWriter}s who are writing data. */
+    protected void decWritingCounter() {
+        writingCounter--;
+    }
+
+    /** Returns the number of {@link DataPartitionWriter}s who are writing data. */
+    protected int numWritingCounter() {
+        return writingCounter;
+    }
+
+    /**
      * Returns the {@link DataPartitionWritingTask} of this data partition. Different {@link
      * DataPartition} implementations can implement different {@link DataPartitionWritingTask}.
      */
     protected abstract DataPartitionWritingTask getPartitionWritingTask();
 
     /**
+     * Finishes the input process of this {@link DataPartition}. When calling this method, all the
+     * {@link DataPartitionWriter}s have processed their input finish markers yet.
+     */
+    protected abstract void finishInput();
+
+    /**
      * Returns the {@link DataPartitionReadingTask} of this data partition. Different {@link
      * DataPartition} implementations can implement different {@link DataPartitionReadingTask}.
      */
     protected abstract DataPartitionReadingTask getPartitionReadingTask();
+
+    /** Adds the {@link DataPartitionWriter} to the queue that needs to assign buffers. */
+    protected abstract void addPendingBufferWriter(DataPartitionWriter writer);
+
+    /** Removes the {@link DataPartitionWriter} to the queue that needs to assign buffers. */
+    protected abstract void removePendingBufferWriter(DataPartitionWriter writer);
+
+    /**
+     * Returns the number of {@link DataPartitionWriter}s who are waiting to be assigned buffers.
+     */
+    protected abstract int numPendingBufferWriters();
+
+    /** Returns the number of {@link DataPartitionWriter}s who are waiting to be processed. */
+    protected abstract int numPendingProcessWriters();
 
     /**
      * {@link DataPartitionProcessor} is responsible for processing all the pending {@link

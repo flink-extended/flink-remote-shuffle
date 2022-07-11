@@ -34,8 +34,12 @@ import com.alibaba.flink.shuffle.core.utils.ListenerUtils;
 
 import javax.annotation.concurrent.GuardedBy;
 
+import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Queue;
+
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
 
 /**
  * {@link BaseDataPartitionWriter} implements some basics logic of {@link DataPartitionWriter} which
@@ -82,7 +86,7 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
      * processed.
      */
     @GuardedBy("lock")
-    protected final Queue<BufferOrMarker> bufferOrMarkers = new ArrayDeque<>();
+    protected final Deque<BufferOrMarker> bufferOrMarkers = new ArrayDeque<>();
 
     /** Whether this partition writer has been released or not. */
     @GuardedBy("lock")
@@ -96,6 +100,23 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
      * Whether this {@link DataPartitionWriter} needs more credits to receive and cache data or not.
      */
     protected boolean needMoreCredits;
+
+    /** Whether this {@link DataPartitionWriter} has processed the region finish marker. */
+    protected boolean isRegionFinished;
+
+    /**
+     * Whether this {@link DataPartitionWriter} is writing partial data to file writer. If true, do
+     * not poll the writer out from the pending process queue of the {@link BaseReducePartition}.
+     */
+    protected boolean isWritingPartial;
+
+    protected boolean hasTriggeredWriting;
+
+    /**
+     * Whether this {@link DataPartitionWriter} is in the pending process queue of the {@link
+     * BaseReducePartition}.
+     */
+    protected boolean isInProcessQueue;
 
     /** Index number of the current data region being written. */
     protected int currentDataRegionIndex;
@@ -122,20 +143,28 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
     }
 
     @Override
-    public void addBuffer(ReducePartitionID reducePartitionID, Buffer buffer) {
-        addBufferOrMarker(new BufferOrMarker.DataBuffer(mapPartitionID, reducePartitionID, buffer));
+    public void addBuffer(ReducePartitionID reducePartitionID, int dataRegionIndex, Buffer buffer) {
+        addBufferOrMarker(
+                new BufferOrMarker.DataBuffer(
+                        mapPartitionID, dataRegionIndex, reducePartitionID, buffer));
     }
 
     @Override
     public void startRegion(int dataRegionIndex, boolean isBroadcastRegion) {
-        addBufferOrMarker(
-                new BufferOrMarker.RegionStartedMarker(
-                        mapPartitionID, dataRegionIndex, isBroadcastRegion));
+        startRegion(dataRegionIndex, 1, 0, isBroadcastRegion);
     }
 
     @Override
-    public void finishRegion() {
-        addBufferOrMarker(new BufferOrMarker.RegionFinishedMarker(mapPartitionID));
+    public void startRegion(
+            int dataRegionIndex, int numMaps, int requireCredit, boolean isBroadcastRegion) {
+        addBufferOrMarker(
+                new BufferOrMarker.RegionStartedMarker(
+                        mapPartitionID, dataRegionIndex, requireCredit, isBroadcastRegion));
+    }
+
+    @Override
+    public void finishRegion(int dataRegionIndex) {
+        addBufferOrMarker(new BufferOrMarker.RegionFinishedMarker(mapPartitionID, dataRegionIndex));
     }
 
     @Override
@@ -156,7 +185,7 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
         BufferOrMarker bufferOrMarker;
         try {
             while ((bufferOrMarker = pendingBufferOrMarkers.poll()) != null) {
-                if (processBufferOrMarker(bufferOrMarker)) {
+                if (processBufferOrMarker(bufferOrMarker, pendingBufferOrMarkers.isEmpty())) {
                     return true;
                 }
             }
@@ -166,7 +195,8 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
         return false;
     }
 
-    protected boolean processBufferOrMarker(BufferOrMarker bufferOrMarker) throws Exception {
+    protected boolean processBufferOrMarker(
+            BufferOrMarker bufferOrMarker, boolean isLastBufferOrMarker) throws Exception {
         switch (bufferOrMarker.getType()) {
             case ERROR_MARKER:
                 processErrorMarker(bufferOrMarker.asErrorMarker());
@@ -181,7 +211,7 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
                 processRegionFinishedMarker(bufferOrMarker.asRegionFinishedMarker());
                 return false;
             case DATA_BUFFER:
-                processDataBuffer(bufferOrMarker.asDataBuffer());
+                processDataBuffer(bufferOrMarker.asDataBuffer(), isLastBufferOrMarker);
                 return false;
             default:
                 throw new ShuffleException(
@@ -201,7 +231,8 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
         currentDataRegionIndex = marker.getDataRegionIndex();
     }
 
-    protected abstract void processDataBuffer(BufferOrMarker.DataBuffer buffer) throws Exception;
+    protected abstract void processDataBuffer(
+            BufferOrMarker.DataBuffer buffer, boolean isLastBufferOrMarker) throws Exception;
 
     protected void processRegionFinishedMarker(BufferOrMarker.RegionFinishedMarker marker)
             throws Exception {
@@ -211,8 +242,8 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
 
     protected void processInputFinishedMarker(BufferOrMarker.InputFinishedMarker marker)
             throws Exception {
-        CommonUtils.checkState(!needMoreCredits, "Must finish region before finish input.");
-        CommonUtils.checkState(availableCredits.isEmpty(), "Buffers (credits) leanKing.");
+        checkState(!needMoreCredits, "Must finish region before finish input.");
+        checkState(availableCredits.isEmpty(), "Buffers (credits) leaking.");
         ListenerUtils.notifyDataCommitted(marker.getCommitListener());
     }
 
@@ -264,6 +295,32 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
     }
 
     @Override
+    public boolean isInProcessQueue() {
+        return false;
+    }
+
+    @Override
+    public void setInProcessQueue(boolean isInProcessQueue) {}
+
+    @Override
+    public boolean isWritingPartial() {
+        return false;
+    }
+
+    @Override
+    public void triggerFlushFileDataBuffers() throws IOException {}
+
+    @Override
+    public int numBufferOrMarkers() {
+        return bufferOrMarkers.size();
+    }
+
+    @Override
+    public int numPendingCredit() {
+        return 0;
+    }
+
+    @Override
     public Buffer pollBuffer() {
         synchronized (lock) {
             if (isReleased || isError) {
@@ -302,7 +359,7 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
         releaseUnusedCredits();
     }
 
-    private void releaseUnusedCredits() {
+    protected void releaseUnusedCredits() {
         Queue<Buffer> unusedCredits;
         synchronized (lock) {
             unusedCredits = new ArrayDeque<>(availableCredits);
@@ -312,8 +369,9 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
         BufferUtils.recycleBuffers(unusedCredits);
     }
 
-    private Queue<BufferOrMarker> getPendingBufferOrMarkers() {
+    protected Queue<BufferOrMarker> getPendingBufferOrMarkers() {
         synchronized (lock) {
+            hasTriggeredWriting = false;
             if (bufferOrMarkers.isEmpty()) {
                 return null;
             }
@@ -322,13 +380,5 @@ public abstract class BaseDataPartitionWriter implements DataPartitionWriter {
             bufferOrMarkers.clear();
             return pendingBufferOrMarkers;
         }
-    }
-
-    // ---------------------------------------------------------------------------------------------
-    // For test
-    // ---------------------------------------------------------------------------------------------
-
-    int getNumPendingBuffers() {
-        return bufferOrMarkers.size();
     }
 }

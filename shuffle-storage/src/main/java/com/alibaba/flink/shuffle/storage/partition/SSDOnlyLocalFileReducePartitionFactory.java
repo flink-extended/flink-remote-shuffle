@@ -1,11 +1,13 @@
 /*
- * Copyright 2021 The Flink Remote Shuffle Project
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *  	http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,7 +21,6 @@ package com.alibaba.flink.shuffle.storage.partition;
 import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.common.exception.ConfigurationException;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
-import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.core.storage.DiskType;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
 import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
@@ -28,51 +29,47 @@ import com.alibaba.flink.shuffle.core.storage.StorageType;
 import java.util.List;
 
 /**
- * A {@link LocalFileMapPartitionFactory} variant which only uses HDD to store data partition data.
+ * A {@link LocalFileReducePartitionFactory} variant which only uses SSD to store data partition
+ * data.
  */
-public class HDDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFactory {
+public class SSDOnlyLocalFileReducePartitionFactory extends LocalFileReducePartitionFactory {
 
     @Override
     public void initialize(Configuration configuration) {
         super.initialize(configuration);
 
-        if (hddStorageMetas.isEmpty()) {
+        if (ssdStorageMetas.isEmpty()) {
             throw new ConfigurationException(
                     String.format(
-                            "No valid data dir of HDD storage type is configured for %s.",
+                            "No valid data dir of SSD storage type is configured for %s.",
                             StorageOptions.STORAGE_LOCAL_DATA_DIRS.key()));
         }
-        ssdStorageMetas.clear();
+        hddStorageMetas.clear();
         updateStorageHealthStatus();
-        this.updateFreeStorageSpace();
+        updateFreeStorageSpace();
     }
 
     @Override
     protected StorageMeta getNextDataStorageMeta() {
         synchronized (lock) {
-            return getStorageMetaInNonEmptyQueue(hddStorageMetas);
+            return getStorageMetaInNonEmptyQueue(ssdStorageMetas);
         }
-    }
-
-    @Override
-    public DataPartition.DataPartitionType getDataPartitionType() {
-        return super.getDataPartitionType();
     }
 
     @Override
     public void updateFreeStorageSpace() {
-        storageSpaceInfo.setSsdMaxFreeSpaceBytes(0);
-        long maxHddFreeSpaceBytes = 0;
-        for (StorageMeta storageMeta : getHddStorageMetas()) {
+        storageSpaceInfo.setHddMaxFreeSpaceBytes(0);
+        long maxSsdFreeSpaceBytes = 0;
+        for (StorageMeta storageMeta : getSsdStorageMetas()) {
             if (!storageMeta.isHealthy()) {
                 continue;
             }
             long freeSpaceBytes = storageMeta.updateFreeStorageSpace();
-            if (freeSpaceBytes > maxHddFreeSpaceBytes) {
-                maxHddFreeSpaceBytes = freeSpaceBytes;
+            if (freeSpaceBytes > maxSsdFreeSpaceBytes) {
+                maxSsdFreeSpaceBytes = freeSpaceBytes;
             }
         }
-        storageSpaceInfo.setHddMaxFreeSpaceBytes(maxHddFreeSpaceBytes);
+        storageSpaceInfo.setSsdMaxFreeSpaceBytes(maxSsdFreeSpaceBytes);
     }
 
     @Override
@@ -80,13 +77,13 @@ public class HDDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
             StorageSpaceInfo storageSpaceInfo,
             long minReservedSpaceBytes,
             long maxUsableSpaceBytes) {
-        return minReservedSpaceBytes < storageSpaceInfo.getHddMaxFreeSpaceBytes()
-                && maxUsableSpaceBytes > storageSpaceInfo.getHddMaxUsedSpaceBytes();
+        return minReservedSpaceBytes < storageSpaceInfo.getSsdMaxFreeSpaceBytes()
+                && maxUsableSpaceBytes > storageSpaceInfo.getSsdMaxUsedSpaceBytes();
     }
 
     @Override
     public void updateStorageHealthStatus() {
-        List<StorageMeta> storageMetas = getHddStorageMetas();
+        List<StorageMeta> storageMetas = getSsdStorageMetas();
         for (StorageMeta storageMeta : storageMetas) {
             storageMeta.updateStorageHealthStatus();
         }
@@ -94,16 +91,16 @@ public class HDDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
 
     @Override
     public DiskType getDiskType() {
-        return DiskType.HDD_ONLY;
+        return DiskType.SSD_ONLY;
     }
 
     @Override
-    public boolean useHddOnly() {
+    public boolean useSsdOnly() {
         return true;
     }
 
     @Override
     public StorageType getPreferredStorageType() {
-        return StorageType.HDD;
+        return StorageType.SSD;
     }
 }

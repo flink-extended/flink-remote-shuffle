@@ -1,11 +1,13 @@
 /*
- * Copyright 2021 The Flink Remote Shuffle Project
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *  	http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,7 +27,7 @@ import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.ids.DataPartitionID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
-import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionMeta;
@@ -54,11 +56,12 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.stream.Collectors;
 
-/** {@link DataPartitionFactory} of {@link LocalFileMapPartition}. */
+/** {@link DataPartitionFactory} of {@link LocalFileReducePartition}. */
 @NotThreadSafe
-public class LocalFileMapPartitionFactory implements DataPartitionFactory {
+public class LocalFileReducePartitionFactory implements DataPartitionFactory {
 
-    private static final Logger LOG = LoggerFactory.getLogger(LocalFileMapPartitionFactory.class);
+    private static final Logger LOG =
+            LoggerFactory.getLogger(LocalFileReducePartitionFactory.class);
 
     protected final Object lock = new Object();
 
@@ -224,8 +227,8 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
 
     /**
      * Returns 1) null if there is no healthy storage; 2) first storage which meets the reserved
-     * space requirement; 3) storage with maximum free space if no storage meets the reserved space
-     * requirement.
+     * space requirement; 3) storage with maximum usable space if no storage meets the reserved
+     * space requirement.
      */
     protected StorageMeta getStorageMetaInNonEmptyQueue(Queue<StorageMeta> storageMetas) {
         assert Thread.holdsLock(lock);
@@ -264,45 +267,58 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
         return maxFreeSpaceMeta;
     }
 
+    private StorageMeta getStorageMeta(Queue<StorageMeta> storageMetas) {
+        StorageMeta storageMeta = storageMetas.poll();
+        if (storageMeta != null) {
+            storageMetas.add(storageMeta);
+        }
+        return storageMeta;
+    }
+
     @Override
-    public LocalFileMapPartition createDataPartition(
+    public DataPartition createDataPartition(
             PartitionedDataStore dataStore,
             JobID jobID,
             DataSetID dataSetID,
             DataPartitionID dataPartitionID,
             int numMapPartitions,
-            int numReducePartitions) {
+            int numReducePartitions)
+            throws Exception {
         CommonUtils.checkArgument(dataPartitionID != null, "Must be not null.");
-        CommonUtils.checkArgument(dataPartitionID instanceof MapPartitionID, "Illegal type.");
+        CommonUtils.checkArgument(dataPartitionID instanceof ReducePartitionID, "Illegal type.");
 
-        MapPartitionID mapPartitionID = (MapPartitionID) dataPartitionID;
-        StorageMeta storageMeta = getNextDataStorageMeta();
-        if (storageMeta == null) {
-            throw new RuntimeException("No available healthy storage.");
-        }
-        return new LocalFileMapPartition(
-                storageMeta, dataStore, jobID, dataSetID, mapPartitionID, numReducePartitions);
+        // Actually, the dataPartitionID is a ReducePartitionID in which the reduce partition index
+        // is stored.
+        ReducePartitionID reducePartitionID = (ReducePartitionID) dataPartitionID;
+        return new LocalFileReducePartition(
+                getNextDataStorageMeta(),
+                dataStore,
+                jobID,
+                dataSetID,
+                reducePartitionID,
+                numMapPartitions);
     }
 
     @Override
-    public LocalFileMapPartition createDataPartition(
+    public LocalFileReducePartition createDataPartition(
             PartitionedDataStore dataStore, DataPartitionMeta partitionMeta) {
         CommonUtils.checkArgument(
-                partitionMeta instanceof LocalFileMapPartitionMeta, "Illegal data partition type.");
+                partitionMeta instanceof LocalFileReducePartitionMeta,
+                "Illegal data partition type.");
 
-        return new LocalFileMapPartition(dataStore, (LocalFileMapPartitionMeta) partitionMeta);
+        return new LocalFileReducePartition(
+                dataStore, (LocalFileReducePartitionMeta) partitionMeta);
     }
 
     @Override
-    public LocalFileMapPartitionMeta recoverDataPartitionMeta(DataInput dataInput)
+    public LocalFileReducePartitionMeta recoverDataPartitionMeta(DataInput dataInput)
             throws IOException {
-        return LocalFileMapPartitionMeta.readFrom(dataInput, this);
+        return LocalFileReducePartitionMeta.readFrom(dataInput, this);
     }
 
-    /** At the present, only MAP_PARTITION is supported. */
     @Override
     public DataPartition.DataPartitionType getDataPartitionType() {
-        return DataPartition.DataPartitionType.MAP_PARTITION;
+        return DataPartition.DataPartitionType.REDUCE_PARTITION;
     }
 
     @Override
@@ -425,13 +441,17 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
         return maxUsedSpaceBytes;
     }
 
-    protected List<StorageMeta> getSsdStorageMetas() {
+    StorageType getPreferredStorageType() {
+        return preferredStorageType;
+    }
+
+    List<StorageMeta> getSsdStorageMetas() {
         synchronized (lock) {
             return new ArrayList<>(ssdStorageMetas);
         }
     }
 
-    protected List<StorageMeta> getHddStorageMetas() {
+    List<StorageMeta> getHddStorageMetas() {
         synchronized (lock) {
             return new ArrayList<>(hddStorageMetas);
         }
@@ -452,10 +472,6 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
 
     boolean isStorageSpaceLimited() {
         return isStorageSpaceLimited;
-    }
-
-    StorageType getPreferredStorageType() {
-        return preferredStorageType;
     }
 
     void addSsdStorageMeta(StorageMeta storageMeta) {
