@@ -25,7 +25,9 @@ import com.alibaba.flink.shuffle.core.exception.PartitionNotFoundException;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
+import com.alibaba.flink.shuffle.core.storage.DiskType;
 import com.alibaba.flink.shuffle.plugin.RemoteShuffleDescriptor;
 import com.alibaba.flink.shuffle.plugin.utils.BufferUtils;
 import com.alibaba.flink.shuffle.transfer.ConnectionManager;
@@ -255,8 +257,9 @@ public class RemoteShuffleInputGateTest {
                                 new ShuffleWorkerDescriptor(
                                         null, InetAddress.getLocalHost().getHostAddress(), 0)
                             },
-                            DataPartition.DataPartitionType.MAP_PARTITION);
-            ret[i] = new RemoteShuffleDescriptor(rID, jID, resource);
+                            DataPartition.DataPartitionType.MAP_PARTITION,
+                            DiskType.ANY_TYPE);
+            ret[i] = new RemoteShuffleDescriptor(rID, jID, resource, true, 1);
         }
         return ret;
     }
@@ -306,9 +309,12 @@ public class RemoteShuffleInputGateTest {
                 InetSocketAddress address,
                 DataSetID dataSetID,
                 MapPartitionID mapID,
+                ReducePartitionID reduceID,
+                int numSubs,
                 int startSubIdx,
                 int endSubIdx,
                 int bufferSize,
+                boolean isMapPartition,
                 TransferBufferPool bufferPool,
                 Consumer<ByteBuf> dataListener,
                 Consumer<Throwable> failureListener) {
@@ -347,9 +353,12 @@ public class RemoteShuffleInputGateTest {
                     new InetSocketAddress(1),
                     new DataSetID(CommonUtils.randomBytes(1)),
                     new MapPartitionID(CommonUtils.randomBytes(1)),
+                    new ReducePartitionID(0),
+                    1,
                     0,
                     0,
                     Integer.MAX_VALUE,
+                    true,
                     bufferPool,
                     new ConnectionManager(null, null, 3, Duration.ofMillis(1)),
                     dataListener,

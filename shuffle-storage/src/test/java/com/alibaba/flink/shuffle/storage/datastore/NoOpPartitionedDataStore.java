@@ -23,6 +23,7 @@ import com.alibaba.flink.shuffle.core.ids.DataPartitionID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.memory.BufferDispatcher;
+import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionMeta;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionReadingView;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWritingView;
@@ -66,6 +67,11 @@ public class NoOpPartitionedDataStore implements PartitionedDataStore {
     @Override
     public boolean isDataPartitionConsumable(DataPartitionMeta partitionMeta) {
         return false;
+    }
+
+    @Override
+    public Map<String, DataPartitionFactory> partitionFactories() {
+        return null;
     }
 
     @Override

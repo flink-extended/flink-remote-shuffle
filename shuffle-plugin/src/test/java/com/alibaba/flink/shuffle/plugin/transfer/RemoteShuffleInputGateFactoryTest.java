@@ -24,7 +24,9 @@ import com.alibaba.flink.shuffle.coordinator.manager.ShuffleWorkerDescriptor;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
+import com.alibaba.flink.shuffle.core.storage.DiskType;
 import com.alibaba.flink.shuffle.plugin.RemoteShuffleDescriptor;
 import com.alibaba.flink.shuffle.plugin.config.PluginOptions;
 import com.alibaba.flink.shuffle.plugin.utils.ConfigurationUtils;
@@ -131,8 +133,9 @@ public class RemoteShuffleInputGateFactoryTest {
                                 new ShuffleWorkerDescriptor(
                                         null, InetAddress.getLocalHost().getHostAddress(), 0)
                             },
-                            DataPartition.DataPartitionType.MAP_PARTITION);
-            ret[i] = new RemoteShuffleDescriptor(rID, jID, resource);
+                            DataPartition.DataPartitionType.MAP_PARTITION,
+                            DiskType.ANY_TYPE);
+            ret[i] = new RemoteShuffleDescriptor(rID, jID, resource, true, 1);
         }
         return ret;
     }
@@ -206,9 +209,12 @@ public class RemoteShuffleInputGateFactoryTest {
                 InetSocketAddress address,
                 DataSetID dataSetID,
                 MapPartitionID mapID,
+                ReducePartitionID reduceID,
+                int numSubs,
                 int startSubIdx,
                 int endSubIdx,
                 int bufferSize,
+                boolean isMapPartition,
                 TransferBufferPool bufferPool,
                 Consumer<ByteBuf> dataListener,
                 Consumer<Throwable> failureListener) {

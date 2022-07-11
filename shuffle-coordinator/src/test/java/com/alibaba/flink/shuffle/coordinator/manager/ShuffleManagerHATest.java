@@ -180,6 +180,7 @@ public class ShuffleManagerHATest {
                 DataSetID dataSetID,
                 MapPartitionID mapPartitionID,
                 int numberOfConsumers,
+                long consumerGroupID,
                 String dataPartitionFactoryName,
                 String taskLocation) {
             return null;

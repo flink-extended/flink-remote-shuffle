@@ -81,7 +81,7 @@ public class PartitionWritingViewImplTest {
         DataPartitionWritingView writingView = new PartitionWritingViewImpl(partitionWriter);
 
         writingView.finish(noOpDataCommitListener);
-        writingView.regionFinished();
+        writingView.regionFinished(0);
     }
 
     @Test(expected = IllegalStateException.class)
@@ -89,7 +89,7 @@ public class PartitionWritingViewImplTest {
         DataPartitionWritingView writingView = new PartitionWritingViewImpl(partitionWriter);
 
         writingView.onError(new ShuffleException("Test exception."));
-        writingView.regionFinished();
+        writingView.regionFinished(0);
     }
 
     @Test(expected = IllegalStateException.class)
@@ -124,7 +124,7 @@ public class PartitionWritingViewImplTest {
         Buffer buffer = new Buffer(ByteBuffer.allocateDirect(1024), recycleBuffer::set, 1024);
         assertThrows(
                 IllegalStateException.class,
-                () -> writingView.onBuffer(buffer, new ReducePartitionID(0)));
+                () -> writingView.onBuffer(buffer, 0, new ReducePartitionID(0)));
 
         assertNotNull(recycleBuffer.get());
     }
@@ -138,7 +138,7 @@ public class PartitionWritingViewImplTest {
         Buffer buffer = new Buffer(ByteBuffer.allocateDirect(1024), recycleBuffer::set, 1024);
         assertThrows(
                 IllegalStateException.class,
-                () -> writingView.onBuffer(buffer, new ReducePartitionID(0)));
+                () -> writingView.onBuffer(buffer, 0, new ReducePartitionID(0)));
 
         assertNotNull(recycleBuffer.get());
     }
@@ -150,7 +150,7 @@ public class PartitionWritingViewImplTest {
         writingView.regionStarted(10, true);
 
         Buffer buffer = new Buffer(ByteBuffer.allocateDirect(1024), recycleBuffer::set, 1024);
-        assertThrows(IllegalArgumentException.class, () -> writingView.onBuffer(buffer, null));
+        assertThrows(IllegalArgumentException.class, () -> writingView.onBuffer(buffer, 0, null));
 
         assertNotNull(recycleBuffer.get());
     }
@@ -158,7 +158,7 @@ public class PartitionWritingViewImplTest {
     @Test(expected = IllegalArgumentException.class)
     public void testOnNullBuffer() {
         DataPartitionWritingView writingView = new PartitionWritingViewImpl(partitionWriter);
-        writingView.onBuffer(null, new ReducePartitionID(0));
+        writingView.onBuffer(null, 0, new ReducePartitionID(0));
     }
 
     @Test
@@ -167,7 +167,7 @@ public class PartitionWritingViewImplTest {
         DataPartitionWritingView writingView = new PartitionWritingViewImpl(partitionWriter);
 
         Buffer buffer = new Buffer(ByteBuffer.allocateDirect(1024), recycleBuffer::set, 1024);
-        assertThrows(IllegalStateException.class, () -> writingView.onBuffer(buffer, null));
+        assertThrows(IllegalStateException.class, () -> writingView.onBuffer(buffer, 0, null));
 
         assertNotNull(recycleBuffer.get());
     }
@@ -175,7 +175,7 @@ public class PartitionWritingViewImplTest {
     @Test(expected = IllegalStateException.class)
     public void testRegionFinishBeforeStart() {
         DataPartitionWritingView writingView = new PartitionWritingViewImpl(partitionWriter);
-        writingView.regionFinished();
+        writingView.regionFinished(0);
     }
 
     @Test(expected = IllegalStateException.class)

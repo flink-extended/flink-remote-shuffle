@@ -21,12 +21,14 @@ import com.alibaba.flink.shuffle.core.config.TransferOptions;
 import com.alibaba.flink.shuffle.core.ids.ChannelID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.CloseChannel;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.CloseConnection;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ErrorResponse;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadAddCredit;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadData;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadHandshakeRequest;
+import com.alibaba.flink.shuffle.transfer.TransferMessage.ReducePartitionReadHandshakeRequest;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelHandler;
@@ -84,6 +86,8 @@ public class ShuffleReadClientTest extends AbstractNettyTest {
         serverHandler = pair.getRight();
 
         MapPartitionID mapID = new MapPartitionID(CommonUtils.randomBytes(16));
+        ReducePartitionID reduceID = new ReducePartitionID(0);
+        int numSubs = 1;
         readDatas = new ArrayList<>();
         clientBufferPool = new TestTransferBufferPool(NUM_BUFFERS, BUFFER_SIZE);
         connManager = ConnectionManager.createReadConnectionManager(nettyConfig, false);
@@ -94,9 +98,12 @@ public class ShuffleReadClientTest extends AbstractNettyTest {
                         address,
                         dataSetID,
                         mapID,
+                        reduceID,
+                        numSubs,
                         0,
                         0,
                         emptyBufferSize(),
+                        true,
                         clientBufferPool,
                         connManager,
                         readDatas::add,
@@ -175,6 +182,91 @@ public class ShuffleReadClientTest extends AbstractNettyTest {
         checkUntil(() -> assertEquals(7, serverHandler.numMessages()));
         assertTrue(serverHandler.getMsg(5) instanceof CloseChannel);
         assertTrue(serverHandler.getMsg(6) instanceof CloseConnection);
+    }
+
+    /** Basic routine for reduce partition. */
+    @Test
+    public void testReducePartitionReadDataAndSendCredit() throws Exception {
+        ShuffleReadClient client = initReducePartitionReadClient();
+        assertTrue(serverHandler.isEmpty());
+
+        // Client sends ReducePartitionReadHandshakeRequest.
+        client.connect();
+        client.open();
+        checkUntil(() -> assertEquals(1, serverHandler.numMessages()));
+        assertTrue(serverHandler.getLastMsg() instanceof ReducePartitionReadHandshakeRequest);
+        assertEquals(
+                0,
+                ((ReducePartitionReadHandshakeRequest) serverHandler.getLastMsg())
+                        .getInitialCredit());
+
+        // Construct 25 buffers for sending.
+        Queue<ByteBuf> serverBuffers = constructBuffers(25, 3);
+        client.backlogReceived(25);
+        checkUntil(() -> assertEquals(2, serverHandler.numMessages()));
+        assertEquals(20, ((ReadAddCredit) serverHandler.getMsg(1)).getCredit());
+
+        // Server sends ReadData.
+        for (int i = 0; i < 20; i++) {
+            ByteBuf buffer = serverBuffers.poll();
+            serverHandler.send(
+                    new ReadData(
+                            currentProtocolVersion(),
+                            client.getChannelID(),
+                            1,
+                            buffer.readableBytes(),
+                            emptyOffset(),
+                            buffer,
+                            emptyExtraMessage()));
+        }
+        checkUntil(() -> assertEquals(20, readDatas.size()));
+        readDatas.forEach(ReferenceCounted::release);
+        readDatas.clear();
+
+        checkUntil(() -> assertEquals(5, serverHandler.numMessages()));
+        assertEquals(2, ((ReadAddCredit) serverHandler.getMsg(2)).getCredit());
+        assertEquals(2, ((ReadAddCredit) serverHandler.getMsg(3)).getCredit());
+        assertEquals(1, ((ReadAddCredit) serverHandler.getMsg(4)).getCredit());
+
+        for (int i = 0; i < 5; i++) {
+            ByteBuf buffer = serverBuffers.poll();
+            serverHandler.send(
+                    new ReadData(
+                            currentProtocolVersion(),
+                            client.getChannelID(),
+                            1,
+                            buffer.readableBytes(),
+                            emptyOffset(),
+                            buffer,
+                            emptyExtraMessage()));
+        }
+        checkUntil(() -> assertEquals(5, readDatas.size()));
+        while (!readDatas.isEmpty()) {
+            readDatas.remove(0).release();
+        }
+        delayCheck(() -> assertEquals(5, serverHandler.numMessages()));
+
+        client.close();
+        checkUntil(() -> assertEquals(7, serverHandler.numMessages()));
+        assertTrue(serverHandler.getMsg(5) instanceof CloseChannel);
+        assertTrue(serverHandler.getMsg(6) instanceof CloseConnection);
+    }
+
+    ShuffleReadClient initReducePartitionReadClient() {
+        return new ShuffleReadClient(
+                address,
+                dataSetID,
+                new MapPartitionID(CommonUtils.randomBytes(16)),
+                new ReducePartitionID(0),
+                1,
+                0,
+                0,
+                emptyBufferSize(),
+                false,
+                clientBufferPool,
+                connManager,
+                readDatas::add,
+                cause::set);
     }
 
     /** Release all buffers when close. */
@@ -267,6 +359,7 @@ public class ShuffleReadClientTest extends AbstractNettyTest {
 
         // Prepare client0
         MapPartitionID mapID0 = new MapPartitionID(CommonUtils.randomBytes(16));
+        ReducePartitionID reduceID = new ReducePartitionID(0);
         int dataPort0 = getAvailablePort();
         Pair<NettyServer, DummyChannelInboundHandlerAdaptor> pair0 = initShuffleServer(dataPort0);
         NettyServer nettyServer0 = pair0.getLeft();
@@ -285,9 +378,12 @@ public class ShuffleReadClientTest extends AbstractNettyTest {
                         address0,
                         dataSetID,
                         mapID0,
+                        reduceID,
+                        1,
                         0,
                         0,
                         emptyBufferSize(),
+                        true,
                         clientBufferPool0,
                         connManager,
                         dataListener,
@@ -308,9 +404,12 @@ public class ShuffleReadClientTest extends AbstractNettyTest {
                         address1,
                         dataSetID,
                         mapID1,
+                        reduceID,
+                        1,
                         0,
                         0,
                         emptyBufferSize(),
+                        true,
                         clientBufferPool1,
                         connManager,
                         ignore -> {},

@@ -1,0 +1,311 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.alibaba.flink.shuffle.storage.partition;
+
+import com.alibaba.flink.shuffle.common.exception.ShuffleException;
+import com.alibaba.flink.shuffle.common.utils.CommonUtils;
+import com.alibaba.flink.shuffle.core.ids.DataSetID;
+import com.alibaba.flink.shuffle.core.ids.JobID;
+import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.listener.DataListener;
+import com.alibaba.flink.shuffle.core.listener.FailureListener;
+import com.alibaba.flink.shuffle.core.memory.BufferDispatcher;
+import com.alibaba.flink.shuffle.core.storage.BufferQueue;
+import com.alibaba.flink.shuffle.core.storage.BufferWithBacklog;
+import com.alibaba.flink.shuffle.core.storage.DataPartition;
+import com.alibaba.flink.shuffle.core.storage.NoOpDataPartition;
+import com.alibaba.flink.shuffle.core.utils.BufferUtils;
+import com.alibaba.flink.shuffle.storage.utils.StorageTestUtils;
+import com.alibaba.flink.shuffle.storage.utils.TestDataListener;
+import com.alibaba.flink.shuffle.storage.utils.TestFailureListener;
+
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+
+/** Tests for {@link LocalFileReducePartitionReader}. */
+@RunWith(Parameterized.class)
+public class LocalFileReducePartitionReaderTest {
+
+    @Rule public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+    private final boolean dataChecksumEnabled;
+
+    @Parameterized.Parameters
+    public static Object[] data() {
+        return new Boolean[] {true, false};
+    }
+
+    public LocalFileReducePartitionReaderTest(boolean dataChecksumEnabled) {
+        this.dataChecksumEnabled = dataChecksumEnabled;
+    }
+
+    @Test
+    public void testReadData() throws Throwable {
+        int numRegions = 10;
+        int numBuffers = 100;
+        LocalReducePartitionFile partitionFile = createPartitionFile();
+        StorageTestUtils.writeLocalReducePartitionFile(
+                partitionFile,
+                numRegions,
+                StorageTestUtils.NUM_MAP_PARTITIONS,
+                numBuffers,
+                false,
+                dataChecksumEnabled);
+
+        int buffersRead = readData(partitionFile, 1);
+        assertEquals(numRegions * numBuffers * StorageTestUtils.NUM_MAP_PARTITIONS, buffersRead);
+        assertNull(partitionFile.getIndexReadingChannel());
+        assertNull(partitionFile.getDataReadingChannel());
+    }
+
+    @Test
+    public void testReadEmptyData() throws Throwable {
+        LocalReducePartitionFile partitionFile = createPartitionFile();
+        StorageTestUtils.writeLocalReducePartitionFile(
+                partitionFile,
+                0,
+                StorageTestUtils.NUM_MAP_PARTITIONS,
+                0,
+                false,
+                dataChecksumEnabled);
+
+        int buffersRead = readData(partitionFile, 1);
+        assertEquals(0, buffersRead);
+        assertNull(partitionFile.getIndexReadingChannel());
+        assertNull(partitionFile.getDataReadingChannel());
+    }
+
+    @Test
+    public void testReadWithEmptyReducePartition() throws Throwable {
+        int numRegions = 10;
+        int numBuffers = 100;
+        LocalReducePartitionFile partitionFile = createPartitionFile();
+        StorageTestUtils.writeLocalReducePartitionFile(
+                partitionFile,
+                numRegions,
+                StorageTestUtils.NUM_MAP_PARTITIONS,
+                numBuffers,
+                true,
+                dataChecksumEnabled);
+
+        int buffersRead = readData(partitionFile, 1);
+        assertEquals(
+                numRegions * numBuffers * StorageTestUtils.NUM_MAP_PARTITIONS / 2, buffersRead);
+        assertNull(partitionFile.getIndexReadingChannel());
+        assertNull(partitionFile.getDataReadingChannel());
+    }
+
+    @Test
+    public void testReadMultipleReducePartitions() throws Throwable {
+        int numRegions = 10;
+        int numBuffers = 100;
+        LocalReducePartitionFile partitionFile = createPartitionFile();
+        StorageTestUtils.writeLocalReducePartitionFile(
+                partitionFile,
+                numRegions,
+                StorageTestUtils.NUM_MAP_PARTITIONS,
+                numBuffers,
+                false,
+                dataChecksumEnabled);
+
+        int buffersRead = readData(partitionFile, 3);
+        assertEquals(numRegions * numBuffers * StorageTestUtils.NUM_MAP_PARTITIONS, buffersRead);
+        assertNull(partitionFile.getIndexReadingChannel());
+        assertNull(partitionFile.getDataReadingChannel());
+    }
+
+    @Test
+    public void testReadMultipleReducePartitionsWithEmptyOnes() throws Throwable {
+        int numRegions = 10;
+        int numBuffers = 100;
+        LocalReducePartitionFile partitionFile = createPartitionFile();
+        StorageTestUtils.writeLocalReducePartitionFile(
+                partitionFile,
+                numRegions,
+                StorageTestUtils.NUM_MAP_PARTITIONS,
+                numBuffers,
+                true,
+                dataChecksumEnabled);
+
+        int buffersRead = readData(partitionFile, 3);
+        assertEquals(
+                numRegions * numBuffers * StorageTestUtils.NUM_MAP_PARTITIONS / 2, buffersRead);
+        assertNull(partitionFile.getIndexReadingChannel());
+        assertNull(partitionFile.getDataReadingChannel());
+    }
+
+    @Test
+    public void testRelease() throws Throwable {
+        testReleaseOrOnError(true);
+    }
+
+    @Test
+    public void testOnError() throws Throwable {
+        testReleaseOrOnError(false);
+    }
+
+    private void testReleaseOrOnError(boolean isRelease) throws Throwable {
+        LocalReducePartitionFile partitionFile = createPartitionFile();
+        StorageTestUtils.writeLocalReducePartitionFile(
+                partitionFile,
+                10,
+                StorageTestUtils.NUM_MAP_PARTITIONS,
+                100,
+                false,
+                dataChecksumEnabled);
+
+        TestDataListener dataListener = new TestDataListener();
+        TestFailureListener failureListener = new TestFailureListener();
+        LocalFileReducePartitionReader partitionReader =
+                createPartitionReader(0, 0, dataListener, failureListener, partitionFile);
+
+        BufferQueue bufferQueue = createBufferQueue(20);
+        partitionReader.readData(bufferQueue, bufferQueue::add);
+        assertNotNull(dataListener.waitData(0));
+
+        BufferWithBacklog buffer = partitionReader.nextBuffer();
+        assertNotNull(buffer);
+        assertTrue(buffer.getBacklog() > 0);
+        BufferUtils.recycleBuffer(buffer.getBuffer());
+
+        if (isRelease) {
+            partitionReader.release(new ShuffleException("Test exception."));
+            assertTrue(failureListener.isFailed());
+        } else {
+            partitionReader.onError(new ShuffleException("Test exception."));
+            assertFalse(failureListener.isFailed());
+        }
+
+        assertNull(partitionReader.nextBuffer());
+        assertThrows(
+                Exception.class, () -> partitionReader.readData(bufferQueue, bufferQueue::add));
+        assertEquals(20, bufferQueue.size());
+
+        if (!isRelease) {
+            partitionReader.release(new ShuffleException("Test exception."));
+            assertFalse(failureListener.isFailed());
+        }
+    }
+
+    private LocalReducePartitionFile createPartitionFile() {
+        return StorageTestUtils.createLocalReducePartitionFile(
+                temporaryFolder.getRoot().getAbsolutePath());
+    }
+
+    private int readData(LocalReducePartitionFile partitionFile, int numPartitions)
+            throws Throwable {
+        Map<LocalFileReducePartitionReader, TestDataListener> readers = new ConcurrentHashMap<>();
+        TestDataListener noOpListener = new TestDataListener();
+        readers.put(createPartitionReader(0, 0, noOpListener, partitionFile), noOpListener);
+
+        int buffersRead = 0;
+        BufferQueue bufferQueue = createBufferQueue(10);
+
+        while (!readers.isEmpty()) {
+            for (LocalFileReducePartitionReader reader : readers.keySet()) {
+                boolean hasRemaining = reader.readData(bufferQueue, bufferQueue::add);
+                TestDataListener dataListener = readers.get(reader);
+
+                if (!hasRemaining) {
+                    readers.remove(reader);
+                }
+                assertNotNull(dataListener.waitData(0));
+
+                BufferWithBacklog buffer;
+                while ((buffer = reader.nextBuffer()) != null) {
+                    ++buffersRead;
+                    buffer.getBuffer().release();
+                }
+
+                if (!hasRemaining) {
+                    assertTrue(reader.isFinished());
+                }
+            }
+        }
+
+        assertEquals(10, bufferQueue.size());
+        return buffersRead;
+    }
+
+    private BufferQueue createBufferQueue(int numBuffers) {
+        List<ByteBuffer> buffers = new ArrayList<>();
+        for (int i = 0; i < numBuffers; ++i) {
+            buffers.add(CommonUtils.allocateDirectByteBuffer(StorageTestUtils.DATA_BUFFER_SIZE));
+        }
+        BufferDispatcher dispatcher = new BufferDispatcher("TestDispatcher", 1, 1024);
+        DataPartition partition =
+                new NoOpDataPartition(
+                        new JobID(CommonUtils.randomBytes(16)),
+                        new DataSetID(CommonUtils.randomBytes(16)),
+                        new MapPartitionID(CommonUtils.randomBytes(16)));
+        BufferQueue bufferQueue = new BufferQueue(partition, dispatcher);
+        bufferQueue.add(buffers);
+        return bufferQueue;
+    }
+
+    private LocalFileReducePartitionReader createPartitionReader(
+            int startPartitionIndex,
+            int endPartitionIndex,
+            DataListener dataListener,
+            LocalReducePartitionFile partitionFile)
+            throws Exception {
+        return createPartitionReader(
+                startPartitionIndex,
+                endPartitionIndex,
+                dataListener,
+                StorageTestUtils.NO_OP_FAILURE_LISTENER,
+                partitionFile);
+    }
+
+    private LocalFileReducePartitionReader createPartitionReader(
+            int startPartitionIndex,
+            int endPartitionIndex,
+            DataListener dataListener,
+            FailureListener failureListener,
+            LocalReducePartitionFile partitionFile)
+            throws Exception {
+        LocalReducePartitionFileReader fileReader =
+                new LocalReducePartitionFileReader(
+                        dataChecksumEnabled, startPartitionIndex, endPartitionIndex, partitionFile);
+        LocalFileReducePartitionReader partitionReader =
+                new LocalFileReducePartitionReader(
+                        fileReader,
+                        dataListener,
+                        StorageTestUtils.NO_OP_BACKLOG_LISTENER,
+                        failureListener);
+        partitionReader.open();
+        return partitionReader;
+    }
+}

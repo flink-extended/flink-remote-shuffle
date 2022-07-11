@@ -38,6 +38,7 @@ import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
+import com.alibaba.flink.shuffle.core.storage.DiskType;
 import com.alibaba.flink.shuffle.rpc.message.Acknowledge;
 import com.alibaba.flink.shuffle.rpc.test.TestingRpcService;
 import com.alibaba.flink.shuffle.rpc.utils.RpcUtils;
@@ -393,7 +394,8 @@ public class ShuffleManagerClientTest {
                         new ShuffleWorkerDescriptor[] {
                             new ShuffleWorkerDescriptor(new InstanceID("worker1"), "worker1", 20480)
                         },
-                        DataPartition.DataPartitionType.MAP_PARTITION);
+                        DataPartition.DataPartitionType.MAP_PARTITION,
+                        DiskType.ANY_TYPE);
         smGateway.setAllocateShuffleResourceConsumer(
                 (jobID, dataSetID, mapPartitionID, numberOfSubpartitions) -> {
                     resourceRequestFuture.complete(
@@ -436,7 +438,9 @@ public class ShuffleManagerClientTest {
                             dataSetId,
                             dataPartitionId,
                             numberOfSubpartitions,
-                            partitionFactoryName);
+                            0,
+                            partitionFactoryName,
+                            null);
             result1.join();
 
             assertThat(

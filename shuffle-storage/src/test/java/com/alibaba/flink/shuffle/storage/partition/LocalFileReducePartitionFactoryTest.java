@@ -1,11 +1,13 @@
 /*
- * Copyright 2021 The Flink Remote Shuffle Project
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *  	http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -41,9 +43,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** Tests for {@link LocalFileMapPartitionFactory}. */
-public class LocalFileMapPartitionFactoryTest {
-
+/** Tests for {@link LocalFileReducePartitionFactory}. */
+public class LocalFileReducePartitionFactoryTest {
     @Rule public final TemporaryFolder temporaryFolder1 = new TemporaryFolder();
 
     @Rule public final TemporaryFolder temporaryFolder2 = new TemporaryFolder();
@@ -54,13 +55,13 @@ public class LocalFileMapPartitionFactoryTest {
 
     @Test(expected = ConfigurationException.class)
     public void testDataDirNotConfigured() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
         partitionFactory.initialize(new Configuration(new Properties()));
     }
 
     @Test(expected = ConfigurationException.class)
     public void testIllegalDiskType() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
         Properties properties = new Properties();
         properties.setProperty(StorageOptions.STORAGE_PREFERRED_TYPE.key(), "Illegal");
         partitionFactory.initialize(new Configuration(properties));
@@ -68,7 +69,7 @@ public class LocalFileMapPartitionFactoryTest {
 
     @Test(expected = ConfigurationException.class)
     public void testConfiguredDataDirNotExists() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
         Properties properties = new Properties();
         properties.setProperty(StorageOptions.STORAGE_LOCAL_DATA_DIRS.key(), "Illegal");
         partitionFactory.initialize(new Configuration(properties));
@@ -76,7 +77,7 @@ public class LocalFileMapPartitionFactoryTest {
 
     @Test(expected = ConfigurationException.class)
     public void testConfiguredDataDirIsNotDirectory() throws IOException {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
         Properties properties = new Properties();
         properties.setProperty(
                 StorageOptions.STORAGE_LOCAL_DATA_DIRS.key(),
@@ -86,7 +87,7 @@ public class LocalFileMapPartitionFactoryTest {
 
     @Test(expected = ConfigurationException.class)
     public void testNoValidDataDir() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
         Properties properties = new Properties();
         properties.setProperty(StorageOptions.STORAGE_LOCAL_DATA_DIRS.key(), " ");
         partitionFactory.initialize(new Configuration(properties));
@@ -94,7 +95,7 @@ public class LocalFileMapPartitionFactoryTest {
 
     @Test
     public void testInitialization() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
         String path1 = temporaryFolder1.getRoot().getAbsolutePath() + "/";
         String path2 = temporaryFolder2.getRoot().getAbsolutePath() + "/";
         String path3 = temporaryFolder3.getRoot().getAbsolutePath() + "/";
@@ -128,8 +129,8 @@ public class LocalFileMapPartitionFactoryTest {
     }
 
     @Test
-    public void testFairness() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+    public void testFairness() throws Exception {
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
         String path1 = temporaryFolder1.getRoot().getAbsolutePath() + "/";
         String path2 = temporaryFolder2.getRoot().getAbsolutePath() + "/";
         String path3 = temporaryFolder3.getRoot().getAbsolutePath() + "/";
@@ -147,7 +148,7 @@ public class LocalFileMapPartitionFactoryTest {
                             StorageTestUtils.NO_OP_PARTITIONED_DATA_STORE,
                             StorageTestUtils.JOB_ID,
                             StorageTestUtils.DATA_SET_ID,
-                            StorageTestUtils.MAP_PARTITION_ID,
+                            StorageTestUtils.REDUCE_PARTITION_ID,
                             StorageTestUtils.NUM_MAP_PARTITIONS,
                             StorageTestUtils.NUM_REDUCE_PARTITIONS);
             selectedDirs.add(dataPartition.getPartitionMeta().getStorageMeta().getStoragePath());
@@ -172,8 +173,8 @@ public class LocalFileMapPartitionFactoryTest {
     }
 
     @Test
-    public void testPreferredDiskType() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+    public void testPreferredDiskType() throws Exception {
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
         String path1 = temporaryFolder1.getRoot().getAbsolutePath() + "/";
         String path2 = temporaryFolder2.getRoot().getAbsolutePath() + "/";
 
@@ -190,7 +191,7 @@ public class LocalFileMapPartitionFactoryTest {
                             StorageTestUtils.NO_OP_PARTITIONED_DATA_STORE,
                             StorageTestUtils.JOB_ID,
                             StorageTestUtils.DATA_SET_ID,
-                            StorageTestUtils.MAP_PARTITION_ID,
+                            StorageTestUtils.REDUCE_PARTITION_ID,
                             StorageTestUtils.NUM_MAP_PARTITIONS,
                             StorageTestUtils.NUM_REDUCE_PARTITIONS);
             assertEquals(path2, dataPartition.getPartitionMeta().getStorageMeta().getStoragePath());
@@ -199,8 +200,9 @@ public class LocalFileMapPartitionFactoryTest {
 
     @Test
     public void testUpdateFreeStorageSpace() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
-        FakeStorageMeta[] storageMetas = addStorageMetas(partitionFactory);
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
+        LocalFileReducePartitionFactoryTest.FakeStorageMeta[] storageMetas =
+                addStorageMetas(partitionFactory);
 
         assertEquals(0, partitionFactory.getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
         assertEquals(0, partitionFactory.getStorageSpaceInfo().getSsdMaxFreeSpaceBytes());
@@ -216,8 +218,9 @@ public class LocalFileMapPartitionFactoryTest {
 
     @Test
     public void testUpdateFreeStorageSpaceWithUnhealthyStorage() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
-        FakeStorageMeta[] storageMetas = addStorageMetas(partitionFactory);
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
+        LocalFileReducePartitionFactoryTest.FakeStorageMeta[] storageMetas =
+                addStorageMetas(partitionFactory);
         updateStorageFreeSpace(storageMetas, 0, partitionFactory);
 
         updateStorageHealthStatus(storageMetas, 2, 4, false, partitionFactory);
@@ -233,27 +236,32 @@ public class LocalFileMapPartitionFactoryTest {
         assertEquals(4, partitionFactory.getStorageSpaceInfo().getHddMaxFreeSpaceBytes());
     }
 
-    static FakeStorageMeta[] addStorageMetas(LocalFileMapPartitionFactory partitionFactory) {
+    static LocalFileReducePartitionFactoryTest.FakeStorageMeta[] addStorageMetas(
+            LocalFileReducePartitionFactory partitionFactory) {
         partitionFactory.preferredStorageType = StorageType.SSD;
-        FakeStorageMeta ssdStorageMeta1 = new FakeStorageMeta("ssd1", StorageType.SSD);
-        FakeStorageMeta hddStorageMeta1 = new FakeStorageMeta("hdd1", StorageType.HDD);
-        FakeStorageMeta ssdStorageMeta2 = new FakeStorageMeta("ssd2", StorageType.SSD);
-        FakeStorageMeta hddStorageMeta2 = new FakeStorageMeta("hdd2", StorageType.HDD);
+        LocalFileReducePartitionFactoryTest.FakeStorageMeta ssdStorageMeta1 =
+                new LocalFileReducePartitionFactoryTest.FakeStorageMeta("ssd1", StorageType.SSD);
+        LocalFileReducePartitionFactoryTest.FakeStorageMeta hddStorageMeta1 =
+                new LocalFileReducePartitionFactoryTest.FakeStorageMeta("hdd1", StorageType.HDD);
+        LocalFileReducePartitionFactoryTest.FakeStorageMeta ssdStorageMeta2 =
+                new LocalFileReducePartitionFactoryTest.FakeStorageMeta("ssd2", StorageType.SSD);
+        LocalFileReducePartitionFactoryTest.FakeStorageMeta hddStorageMeta2 =
+                new LocalFileReducePartitionFactoryTest.FakeStorageMeta("hdd2", StorageType.HDD);
 
         partitionFactory.addSsdStorageMeta(ssdStorageMeta1);
         partitionFactory.addHddStorageMeta(hddStorageMeta1);
         partitionFactory.addSsdStorageMeta(ssdStorageMeta2);
         partitionFactory.addHddStorageMeta(hddStorageMeta2);
 
-        return new FakeStorageMeta[] {
+        return new LocalFileReducePartitionFactoryTest.FakeStorageMeta[] {
             ssdStorageMeta1, hddStorageMeta1, ssdStorageMeta2, hddStorageMeta2
         };
     }
 
     static void updateStorageFreeSpace(
-            FakeStorageMeta[] storageMetas,
+            LocalFileReducePartitionFactoryTest.FakeStorageMeta[] storageMetas,
             long base,
-            LocalFileMapPartitionFactory partitionFactory) {
+            LocalFileReducePartitionFactory partitionFactory) {
         for (int i = 1; i <= storageMetas.length; ++i) {
             storageMetas[i - 1].updateFreeStorageSpace(i + base);
         }
@@ -261,11 +269,11 @@ public class LocalFileMapPartitionFactoryTest {
     }
 
     static void updateStorageHealthStatus(
-            FakeStorageMeta[] storageMetas,
+            LocalFileReducePartitionFactoryTest.FakeStorageMeta[] storageMetas,
             int startIndex,
             int endIndex,
             boolean isHealthy,
-            LocalFileMapPartitionFactory partitionFactory) {
+            LocalFileReducePartitionFactory partitionFactory) {
         for (int i = startIndex; i < endIndex; ++i) {
             storageMetas[i].updateStorageHealthStatus(isHealthy);
         }
@@ -274,8 +282,9 @@ public class LocalFileMapPartitionFactoryTest {
 
     @Test
     public void testGetNextStorageMetaWithUnhealthyStorage() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
-        FakeStorageMeta[] storageMetas = addStorageMetas(partitionFactory);
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
+        LocalFileReducePartitionFactoryTest.FakeStorageMeta[] storageMetas =
+                addStorageMetas(partitionFactory);
         updateStorageFreeSpace(storageMetas, 0, partitionFactory);
 
         updateStorageHealthStatus(storageMetas, 2, 4, false, partitionFactory);
@@ -292,7 +301,7 @@ public class LocalFileMapPartitionFactoryTest {
     }
 
     static void assertExpectedStorageMeta(
-            LocalFileMapPartitionFactory partitionFactory, StorageMeta expectedStorageMeta) {
+            LocalFileReducePartitionFactory partitionFactory, StorageMeta expectedStorageMeta) {
         for (int i = 0; i < 1024; ++i) {
             assertEquals(expectedStorageMeta, partitionFactory.getNextDataStorageMeta());
         }
@@ -300,7 +309,7 @@ public class LocalFileMapPartitionFactoryTest {
 
     @Test
     public void testAllDisksWillBeUsed() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
         Properties properties = new Properties();
         properties.setProperty(
                 StorageOptions.STORAGE_LOCAL_DATA_DIRS.key(),
@@ -310,12 +319,12 @@ public class LocalFileMapPartitionFactoryTest {
                         temporaryFolder2.getRoot().getAbsolutePath()));
         partitionFactory.initialize(new Configuration(properties));
 
-        expectedEvenDiskUsedCount(
+        expectedReducePartitionEvenDiskUsedCount(
                 partitionFactory, temporaryFolder1, temporaryFolder2, StorageType.HDD);
     }
 
-    static void expectedEvenDiskUsedCount(
-            LocalFileMapPartitionFactory partitionFactory,
+    static void expectedReducePartitionEvenDiskUsedCount(
+            LocalFileReducePartitionFactory partitionFactory,
             TemporaryFolder temporaryFolder1,
             TemporaryFolder temporaryFolder2,
             StorageType expectedStorageType) {
@@ -337,7 +346,7 @@ public class LocalFileMapPartitionFactoryTest {
 
     @Test
     public void testGetStorageName() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
         String path1 = temporaryFolder1.getRoot().getAbsolutePath() + "/";
         String path2 = temporaryFolder2.getRoot().getAbsolutePath() + "/";
 
@@ -366,7 +375,8 @@ public class LocalFileMapPartitionFactoryTest {
         storageNameMap.put(path2, "storage2");
         storageNameMap.put(path3, "storage3");
         storageNameMap.put(path4, "storage3");
-        LocalFileMapPartitionFactory partitionFactory = new FakePartitionFactory(storageNameMap);
+        LocalFileReducePartitionFactory partitionFactory =
+                new LocalFileReducePartitionFactoryTest.FakePartitionFactory(storageNameMap);
 
         Configuration configuration = new Configuration();
         configuration.setString(
@@ -392,7 +402,7 @@ public class LocalFileMapPartitionFactoryTest {
     }
 
     private void assertUsedStorageSpace(
-            LocalFileMapPartitionFactory partitionFactory,
+            LocalFileReducePartitionFactory partitionFactory,
             long hddMaxUsedSpaceBytes,
             long ssdMaxUsedSpaceBytes,
             long storage1UsedSpaceBytes,
@@ -413,7 +423,7 @@ public class LocalFileMapPartitionFactoryTest {
 
     @Test
     public void testSkipOverusedStorage() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
         String path1 = temporaryFolder1.getRoot().getAbsolutePath() + "/";
         String path2 = temporaryFolder2.getRoot().getAbsolutePath() + "/";
         String path3 = temporaryFolder3.getRoot().getAbsolutePath() + "/";
@@ -442,7 +452,7 @@ public class LocalFileMapPartitionFactoryTest {
 
     @Test
     public void testSkipStorageWithoutEnoughSpace() {
-        LocalFileMapPartitionFactory partitionFactory = new LocalFileMapPartitionFactory();
+        LocalFileReducePartitionFactory partitionFactory = new LocalFileReducePartitionFactory();
         String path1 = temporaryFolder1.getRoot().getAbsolutePath() + "/";
         String path2 = temporaryFolder2.getRoot().getAbsolutePath() + "/";
         String path3 = temporaryFolder3.getRoot().getAbsolutePath() + "/";
@@ -452,8 +462,10 @@ public class LocalFileMapPartitionFactoryTest {
                 StorageOptions.STORAGE_LOCAL_DATA_DIRS, String.format("[HDD]%s", path3));
         partitionFactory.initialize(configuration);
 
-        FakeStorageMeta storageMeta1 = new FakeStorageMeta(path1, StorageType.SSD);
-        FakeStorageMeta storageMeta2 = new FakeStorageMeta(path2, StorageType.SSD);
+        LocalFileReducePartitionFactoryTest.FakeStorageMeta storageMeta1 =
+                new LocalFileReducePartitionFactoryTest.FakeStorageMeta(path1, StorageType.SSD);
+        LocalFileReducePartitionFactoryTest.FakeStorageMeta storageMeta2 =
+                new LocalFileReducePartitionFactoryTest.FakeStorageMeta(path2, StorageType.SSD);
         storageMeta1.updateFreeStorageSpace(1024);
         storageMeta2.updateFreeStorageSpace(Long.MAX_VALUE);
         partitionFactory.addSsdStorageMeta(storageMeta1);
@@ -468,7 +480,7 @@ public class LocalFileMapPartitionFactoryTest {
      * Fake {@link com.alibaba.flink.shuffle.core.storage.DataPartitionFactory} implementation for
      * test.
      */
-    static class FakePartitionFactory extends LocalFileMapPartitionFactory {
+    static class FakePartitionFactory extends LocalFileReducePartitionFactory {
 
         private final Map<String, String> storageNameMap;
 

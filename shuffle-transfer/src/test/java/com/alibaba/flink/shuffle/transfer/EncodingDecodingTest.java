@@ -21,6 +21,7 @@ import com.alibaba.flink.shuffle.core.ids.ChannelID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.CloseChannel;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.CloseConnection;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ErrorResponse;
@@ -28,6 +29,8 @@ import com.alibaba.flink.shuffle.transfer.TransferMessage.Heartbeat;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadAddCredit;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadData;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadHandshakeRequest;
+import com.alibaba.flink.shuffle.transfer.TransferMessage.ReducePartitionReadHandshakeRequest;
+import com.alibaba.flink.shuffle.transfer.TransferMessage.ReducePartitionWriteHandshakeRequest;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.WriteAddCredit;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.WriteData;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.WriteFinish;
@@ -160,6 +163,53 @@ public class EncodingDecodingTest {
     }
 
     @Test
+    public void testReducePartitionWriteHandshakeRequest() {
+        int version = currentProtocolVersion();
+        ChannelID channelID = new ChannelID();
+        JobID jobID = new JobID(CommonUtils.randomBytes(32));
+        DataSetID dataSetID = new DataSetID(CommonUtils.randomBytes(32));
+        MapPartitionID mapID = new MapPartitionID(CommonUtils.randomBytes(16));
+        ReducePartitionID reduceID = new ReducePartitionID(random.nextInt());
+        int numMaps = 1234;
+        int bufferSize = random.nextInt();
+        String dataPartitionTypeFactory = bytesToString(CommonUtils.randomBytes(32));
+        String extraInfo = bytesToString(CommonUtils.randomBytes(32));
+        Supplier<ReducePartitionWriteHandshakeRequest> messageBuilder =
+                () ->
+                        new ReducePartitionWriteHandshakeRequest(
+                                version,
+                                channelID,
+                                jobID,
+                                dataSetID,
+                                mapID,
+                                reduceID,
+                                numMaps,
+                                bufferSize,
+                                dataPartitionTypeFactory,
+                                extraInfo);
+        Consumer<TransferMessage> messageVerifier =
+                msg -> {
+                    ReducePartitionWriteHandshakeRequest tmp =
+                            (ReducePartitionWriteHandshakeRequest) msg;
+                    assertEquals(version, tmp.getVersion());
+                    assertEquals(channelID, tmp.getChannelID());
+                    assertEquals(jobID, tmp.getJobID());
+                    assertEquals(dataSetID, tmp.getDataSetID());
+                    assertEquals(mapID, tmp.getMapID());
+                    assertEquals(numMaps, tmp.getNumMaps());
+                    assertEquals(bufferSize, tmp.getBufferSize());
+                    assertEquals(dataPartitionTypeFactory, tmp.getDataPartitionType());
+                    assertEquals(extraInfo, tmp.getExtraInfo());
+                };
+        testCommonMessage(messageBuilder, messageVerifier, 100, 20);
+        testCommonMessage(messageBuilder, messageVerifier, 100, 32);
+        testCommonMessage(messageBuilder, messageVerifier, 100, 96);
+        testCommonMessage(messageBuilder, messageVerifier, 100, 100);
+        testCommonMessage(messageBuilder, messageVerifier, 100, 200);
+        testCommonMessage(messageBuilder, messageVerifier, 100, 1024);
+    }
+
+    @Test
     public void testWriteAddCredit() {
         int version = currentProtocolVersion();
         ChannelID channelID = new ChannelID();
@@ -190,15 +240,27 @@ public class EncodingDecodingTest {
         int version = currentProtocolVersion();
         ChannelID channelID = new ChannelID();
         int regionIdx = 123;
+        int numMaps = 1;
+        int credit = 100;
         boolean isBroadcast = false;
         String extraInfo = bytesToString(CommonUtils.randomBytes(32));
         Supplier<WriteRegionStart> messageBuilder =
-                () -> new WriteRegionStart(version, channelID, regionIdx, isBroadcast, extraInfo);
+                () ->
+                        new WriteRegionStart(
+                                version,
+                                channelID,
+                                regionIdx,
+                                numMaps,
+                                credit,
+                                isBroadcast,
+                                extraInfo);
         Consumer<TransferMessage> messageVerifier =
                 msg -> {
                     WriteRegionStart tmp = (WriteRegionStart) msg;
                     assertEquals(version, tmp.getVersion());
                     assertEquals(channelID, tmp.getChannelID());
+                    assertEquals(numMaps, tmp.getNumMaps());
+                    assertEquals(credit, tmp.getCredit());
                     assertEquals(regionIdx, tmp.getRegionIdx());
                     assertEquals(isBroadcast, tmp.isBroadcast());
                     assertEquals(extraInfo, tmp.getExtraInfo());
@@ -217,7 +279,7 @@ public class EncodingDecodingTest {
         ChannelID channelID = new ChannelID();
         String extraInfo = bytesToString(CommonUtils.randomBytes(32));
         Supplier<WriteRegionFinish> messageBuilder =
-                () -> new WriteRegionFinish(version, channelID, extraInfo);
+                () -> new WriteRegionFinish(version, channelID, 0, extraInfo);
         Consumer<TransferMessage> messageVerifier =
                 msg -> {
                     WriteRegionFinish tmp = (WriteRegionFinish) msg;
@@ -310,6 +372,49 @@ public class EncodingDecodingTest {
                     assertEquals(mapID, tmp.getMapID());
                     assertEquals(startSubIdx, tmp.getStartSubIdx());
                     assertEquals(endSubIdx, tmp.getEndSubIdx());
+                    assertEquals(initialCredit, tmp.getInitialCredit());
+                    assertEquals(bufferSize, tmp.getBufferSize());
+                    assertEquals(offset, tmp.getOffset());
+                    assertEquals(extraInfo, tmp.getExtraInfo());
+                };
+        testCommonMessage(messageBuilder, messageVerifier, 100, 20);
+        testCommonMessage(messageBuilder, messageVerifier, 100, 72);
+        testCommonMessage(messageBuilder, messageVerifier, 100, 144);
+        testCommonMessage(messageBuilder, messageVerifier, 100, 200);
+        testCommonMessage(messageBuilder, messageVerifier, 100, 1024);
+    }
+
+    @Test
+    public void testReducePartitionReadHandshakeRequest() {
+        int version = currentProtocolVersion();
+        ChannelID channelID = new ChannelID();
+        DataSetID dataSetID = new DataSetID(CommonUtils.randomBytes(32));
+        ReducePartitionID reduceID = new ReducePartitionID(random.nextInt());
+        int numSubs = 456;
+        int initialCredit = 789;
+        int bufferSize = random.nextInt();
+        int offset = random.nextInt();
+        String extraInfo = bytesToString(CommonUtils.randomBytes(32));
+        Supplier<ReducePartitionReadHandshakeRequest> messageBuilder =
+                () ->
+                        new ReducePartitionReadHandshakeRequest(
+                                version,
+                                channelID,
+                                dataSetID,
+                                reduceID,
+                                numSubs,
+                                initialCredit,
+                                bufferSize,
+                                offset,
+                                extraInfo);
+        Consumer<TransferMessage> messageVerifier =
+                msg -> {
+                    ReducePartitionReadHandshakeRequest tmp =
+                            (ReducePartitionReadHandshakeRequest) msg;
+                    assertEquals(version, tmp.getVersion());
+                    assertEquals(channelID, tmp.getChannelID());
+                    assertEquals(dataSetID, tmp.getDataSetID());
+                    assertEquals(numSubs, tmp.getNumSubs());
                     assertEquals(initialCredit, tmp.getInitialCredit());
                     assertEquals(bufferSize, tmp.getBufferSize());
                     assertEquals(offset, tmp.getOffset());

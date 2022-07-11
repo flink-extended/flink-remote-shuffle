@@ -39,8 +39,6 @@ import com.alibaba.flink.shuffle.rpc.message.Acknowledge;
 
 import org.apache.commons.lang3.tuple.Triple;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -66,7 +64,6 @@ import static org.junit.Assert.fail;
 
 /** Tests the assignment tracker implementation by {@link AssignmentTrackerImpl}. */
 public class AssignmentTrackerTest {
-    private static final Logger LOG = LoggerFactory.getLogger(AssignmentTrackerTest.class);
 
     private static final String partitionFactory =
             "com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactory";
@@ -107,7 +104,7 @@ public class AssignmentTrackerTest {
         assignmentTracker.registerJob(jobId);
 
         assignmentTracker.requestShuffleResource(
-                jobId, randomDataSetId(), randomMapPartitionId(), 3, partitionFactory, null);
+                jobId, randomDataSetId(), randomMapPartitionId(), 3, 0, partitionFactory, null);
     }
 
     @Test
@@ -148,10 +145,10 @@ public class AssignmentTrackerTest {
         List<ShuffleResource> allocatedResources = new ArrayList<>();
         allocatedResources.add(
                 assignmentTracker.requestShuffleResource(
-                        jobId, randomDataSetId(), dataPartitionId1, 2, partitionFactory, null));
+                        jobId, randomDataSetId(), dataPartitionId1, 2, 0, partitionFactory, null));
         allocatedResources.add(
                 assignmentTracker.requestShuffleResource(
-                        jobId, randomDataSetId(), dataPartitionId2, 2, partitionFactory, null));
+                        jobId, randomDataSetId(), dataPartitionId2, 2, 0, partitionFactory, null));
         assertThat(
                 allocatedResources.stream()
                         .map(
@@ -177,12 +174,12 @@ public class AssignmentTrackerTest {
         MapPartitionID dataPartitionId = randomMapPartitionId();
         ShuffleResource shuffleResource1 =
                 assignmentTracker.requestShuffleResource(
-                        jobId, dataSetId, dataPartitionId, 2, partitionFactory, null);
+                        jobId, dataSetId, dataPartitionId, 2, 0, partitionFactory, null);
 
         // reallocation the same data partition on the same worker should remain unchanged
         ShuffleResource shuffleResource2 =
                 assignmentTracker.requestShuffleResource(
-                        jobId, dataSetId, dataPartitionId, 2, partitionFactory, null);
+                        jobId, dataSetId, dataPartitionId, 2, 0, partitionFactory, null);
         assertEquals(shuffleResource1, shuffleResource2);
     }
 
@@ -232,7 +229,7 @@ public class AssignmentTrackerTest {
                         jobId, worker1, new InstanceID("worker1"), shuffleWorkerGateway);
 
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetID, dataPartitionID, 2, partitionFactory, null);
+                jobId, dataSetID, dataPartitionID, 2, 0, partitionFactory, null);
         assignmentTracker.synchronizeWorkerDataPartitions(
                 worker1,
                 Collections.singletonList(
@@ -267,7 +264,7 @@ public class AssignmentTrackerTest {
                         jobId, worker1, new InstanceID("worker1"), shuffleWorkerGateway);
 
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetID, dataPartitionID, 2, partitionFactory, null);
+                jobId, dataSetID, dataPartitionID, 2, 0, partitionFactory, null);
         assignmentTracker.releaseShuffleResource(jobId, dataSetID, dataPartitionID);
         shuffleWorkerGateway.reset();
 
@@ -305,7 +302,7 @@ public class AssignmentTrackerTest {
                         jobId, worker1, new InstanceID("worker1"), shuffleWorkerGateway);
 
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetID, dataPartitionID, 2, partitionFactory, null);
+                jobId, dataSetID, dataPartitionID, 2, 0, partitionFactory, null);
         assignmentTracker.releaseShuffleResource(jobId, dataSetID, dataPartitionID);
         shuffleWorkerGateway.reset();
 
@@ -343,7 +340,7 @@ public class AssignmentTrackerTest {
                 new DataPartitionCoordinate(dataSetId, dataPartitionId);
 
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetId, dataPartitionId, 2, partitionFactory, null);
+                jobId, dataSetId, dataPartitionId, 2, 0, partitionFactory, null);
 
         // Step 1. Client asks to releasing the data partition
         assignmentTracker.releaseShuffleResource(jobId, dataSetId, dataPartitionId);
@@ -414,7 +411,7 @@ public class AssignmentTrackerTest {
                 new DataPartitionCoordinate(dataSetId, dataPartitionId);
 
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetId, dataPartitionId, 2, partitionFactory, null);
+                jobId, dataSetId, dataPartitionId, 2, 0, partitionFactory, null);
 
         // Step 1. Worker reports the data is released
         assignmentTracker.workerReportDataPartitionReleased(
@@ -491,7 +488,7 @@ public class AssignmentTrackerTest {
         // Requesting two shuffle resources, which would be assigned in the two workers
         InstanceID firstWorkerId =
                 (assignmentTracker.requestShuffleResource(
-                                jobId, dataSetID, mapPartitionID, 2, partitionFactory, null))
+                                jobId, dataSetID, mapPartitionID, 2, 0, partitionFactory, null))
                         .getMapPartitionLocation()
                         .getWorkerId();
         InstanceID secondWorkerId =
@@ -500,6 +497,7 @@ public class AssignmentTrackerTest {
                                 RandomIDUtils.randomDataSetId(),
                                 RandomIDUtils.randomMapPartitionId(),
                                 2,
+                                0,
                                 partitionFactory,
                                 null))
                         .getMapPartitionLocation()
@@ -547,7 +545,7 @@ public class AssignmentTrackerTest {
         MapPartitionID mapPartitionID = RandomIDUtils.randomMapPartitionId();
 
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetID, mapPartitionID, 2, partitionFactory, null);
+                jobId, dataSetID, mapPartitionID, 2, 0, partitionFactory, null);
 
         // This is a safe guard, in reality the following should not happen, but
         // we still want to have this.
@@ -576,9 +574,9 @@ public class AssignmentTrackerTest {
                         jobId, worker1, new InstanceID("worker1"), shuffleWorkerGateway);
 
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetId, dataPartitionID1, 2, partitionFactory, null);
+                jobId, dataSetId, dataPartitionID1, 2, 0, partitionFactory, null);
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetId, dataPartitionID2, 2, partitionFactory, null);
+                jobId, dataSetId, dataPartitionID2, 2, 0, partitionFactory, null);
 
         assignmentTracker.unregisterJob(jobId);
 
@@ -610,9 +608,9 @@ public class AssignmentTrackerTest {
                         jobId, worker1, new InstanceID("worker1"), shuffleWorkerGateway);
 
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetId, dataPartitionID1, 2, partitionFactory, null);
+                jobId, dataSetId, dataPartitionID1, 2, 0, partitionFactory, null);
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetId, dataPartitionID2, 2, partitionFactory, null);
+                jobId, dataSetId, dataPartitionID2, 2, 0, partitionFactory, null);
 
         assignmentTracker.unregisterWorker(worker1);
 
@@ -636,9 +634,9 @@ public class AssignmentTrackerTest {
                         jobId, worker1, new InstanceID("worker1"), shuffleWorkerGateway);
 
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetId, dataPartitionID1, 2, partitionFactory, null);
+                jobId, dataSetId, dataPartitionID1, 2, 0, partitionFactory, null);
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetId, dataPartitionID2, 2, partitionFactory, null);
+                jobId, dataSetId, dataPartitionID2, 2, 0, partitionFactory, null);
 
         assignmentTracker.releaseShuffleResource(jobId, dataSetId, dataPartitionID1);
 
@@ -664,7 +662,7 @@ public class AssignmentTrackerTest {
                         jobId, worker1, new InstanceID("worker1"), shuffleWorkerGateway1);
 
         assignmentTracker.requestShuffleResource(
-                jobId, dataSetId, dataPartitionId, 2, partitionFactory, null);
+                jobId, dataSetId, dataPartitionId, 2, 0, partitionFactory, null);
         assertEquals(1, assignmentTracker.getWorkers().get(worker1).getDataPartitions().size());
         assertEquals(1, assignmentTracker.getJobs().get(jobId).getDataPartitions().size());
 
@@ -767,7 +765,7 @@ public class AssignmentTrackerTest {
 
         try {
             assignmentTracker.requestShuffleResource(
-                    jobId, randomDataSetId(), randomMapPartitionId(), 2, partitionFactory, null);
+                    jobId, randomDataSetId(), randomMapPartitionId(), 2, 0, partitionFactory, null);
         } catch (Exception e) {
             fail(e.getMessage());
         }
@@ -776,7 +774,46 @@ public class AssignmentTrackerTest {
         storageSpaceInfos.put(partitionFactory, StorageSpaceInfo.ZERO_STORAGE_SPACE);
         assignmentTracker.getWorkers().get(worker1).updateStorageSpaceInfo(storageSpaceInfos);
         assignmentTracker.requestShuffleResource(
-                jobId, randomDataSetId(), randomMapPartitionId(), 2, partitionFactory, null);
+                jobId, randomDataSetId(), randomMapPartitionId(), 2, 0, partitionFactory, null);
+    }
+
+    @Test
+    public void testChooseSortedWorkers() throws ShuffleResourceAllocationException {
+        JobID jobId = randomJobId();
+        Configuration configuration = new Configuration();
+        AssignmentTrackerImpl assignmentTracker = new AssignmentTrackerImpl(configuration);
+        assignmentTracker.registerJob(jobId);
+
+        // Registers two workers
+        RegistrationID worker1 = new RegistrationID();
+        RegistrationID worker2 = new RegistrationID();
+        RegistrationID worker3 = new RegistrationID();
+
+        assignmentTracker.registerWorker(
+                new InstanceID("worker1"),
+                worker1,
+                new EmptyShuffleWorkerGateway(),
+                "worker1",
+                1024);
+        assignmentTracker.registerWorker(
+                new InstanceID("worker2"),
+                worker2,
+                new EmptyShuffleWorkerGateway(),
+                "worker2",
+                1026);
+        assignmentTracker.registerWorker(
+                new InstanceID("worker3"),
+                worker3,
+                new EmptyShuffleWorkerGateway(),
+                "worker3",
+                1027);
+        assertEquals(3, assignmentTracker.getNumberOfWorkers());
+
+        List<WorkerStatus> chosenWorkers = assignmentTracker.chooseWorkers(2);
+        assertEquals(2, chosenWorkers.size());
+
+        chosenWorkers = assignmentTracker.chooseWorkers(7);
+        assertEquals(7, chosenWorkers.size());
     }
 
     // ------------------------------- Utilities ----------------------------------------------

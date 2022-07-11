@@ -21,6 +21,7 @@ import com.alibaba.flink.shuffle.common.utils.CommonUtils;
 import com.alibaba.flink.shuffle.core.config.TransferOptions;
 import com.alibaba.flink.shuffle.core.ids.ChannelID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.core.memory.Buffer;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionReadingView;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWritingView;
@@ -75,7 +76,11 @@ public class ShuffleServerTest extends AbstractNettyTest {
 
     private MapPartitionID mapID;
 
+    private ReducePartitionID reduceID;
+
     private MapPartitionID mapIDToFail;
+
+    private int numMaps;
 
     private int numSubs;
 
@@ -103,7 +108,9 @@ public class ShuffleServerTest extends AbstractNettyTest {
         super.setup();
         channelID = new ChannelID();
         mapID = new MapPartitionID(CommonUtils.randomBytes(32));
+        reduceID = new ReducePartitionID(0);
         mapIDToFail = new MapPartitionID(CommonUtils.randomBytes(32));
+        numMaps = 1;
         numSubs = 2;
         int dataPort = initServer();
         address = new InetSocketAddress(InetAddress.getLocalHost(), dataPort);
@@ -145,7 +152,13 @@ public class ShuffleServerTest extends AbstractNettyTest {
         // Client sends WriteRegionStart.
         writeChannel.writeAndFlush(
                 new WriteRegionStart(
-                        currentProtocolVersion(), channelID, 0, false, emptyExtraMessage()));
+                        currentProtocolVersion(),
+                        channelID,
+                        0,
+                        1,
+                        100,
+                        false,
+                        emptyExtraMessage()));
         checkUntil(() -> assertEquals(1, dataStore.writingView.getRegionStartCount()));
         checkUntil(() -> assertEquals(1, writeClientH.numMessages()));
         assertTrue(writeClientH.getMsg(0) instanceof WriteAddCredit);
@@ -188,7 +201,7 @@ public class ShuffleServerTest extends AbstractNettyTest {
 
         // Client sends WriteRegionFinish and WriteFinish.
         writeChannel.writeAndFlush(
-                new WriteRegionFinish(currentProtocolVersion(), channelID, emptyExtraMessage()));
+                new WriteRegionFinish(currentProtocolVersion(), channelID, 0, emptyExtraMessage()));
         checkUntil(() -> assertEquals(1, dataStore.writingView.getRegionFinishCount()));
         writeChannel.writeAndFlush(
                 new WriteFinish(currentProtocolVersion(), channelID, emptyExtraMessage()));
@@ -298,7 +311,13 @@ public class ShuffleServerTest extends AbstractNettyTest {
                         emptyExtraMessage()));
         writeChannel.writeAndFlush(
                 new WriteRegionStart(
-                        currentProtocolVersion(), channelID, 0, false, emptyExtraMessage()));
+                        currentProtocolVersion(),
+                        channelID,
+                        0,
+                        1,
+                        100,
+                        false,
+                        emptyExtraMessage()));
         checkUntil(() -> assertTrue(writeClientH.isConnected()));
         checkUntil(() -> assertNotNull(dataStore.writingView));
         List<Buffer> candidateBuffers = dataStore.writingView.getCandidateBuffers();
@@ -343,7 +362,13 @@ public class ShuffleServerTest extends AbstractNettyTest {
                         emptyExtraMessage()));
         writeChannel.writeAndFlush(
                 new WriteRegionStart(
-                        currentProtocolVersion(), channelID, 0, false, emptyExtraMessage()));
+                        currentProtocolVersion(),
+                        channelID,
+                        0,
+                        1,
+                        100,
+                        false,
+                        emptyExtraMessage()));
         checkUntil(() -> assertEquals(1, writeClientH.numMessages()));
         assertTrue(writeClientH.getMsg(0) instanceof WriteAddCredit);
         ChannelID channelID1 = new ChannelID();
@@ -363,7 +388,7 @@ public class ShuffleServerTest extends AbstractNettyTest {
         assertEquals(channelID1, ((ErrorResponse) writeClientH.getMsg(1)).getChannelID());
 
         writeChannel.writeAndFlush(
-                new WriteRegionFinish(currentProtocolVersion(), channelID, emptyExtraMessage()));
+                new WriteRegionFinish(currentProtocolVersion(), channelID, 0, emptyExtraMessage()));
         writeChannel.writeAndFlush(
                 new WriteFinish(currentProtocolVersion(), channelID, emptyExtraMessage()));
         checkUntil(() -> assertTrue(dataStore.writingView.isFinished()));

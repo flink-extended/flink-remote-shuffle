@@ -72,6 +72,7 @@ public class MinNumberPlacementStrategyTest {
                         randomDataSetId(),
                         dataPartitionId1,
                         2,
+                        0,
                         PARTITION_FACTORY_CLASS,
                         null);
         String workerAddress1 = shuffleResource1.getMapPartitionLocation().getWorkerAddress();
@@ -81,6 +82,7 @@ public class MinNumberPlacementStrategyTest {
                         randomDataSetId(),
                         dataPartitionId2,
                         2,
+                        0,
                         PARTITION_FACTORY_CLASS,
                         null);
         String workerAddress2 = shuffleResource2.getMapPartitionLocation().getWorkerAddress();

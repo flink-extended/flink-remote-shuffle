@@ -25,6 +25,7 @@ import com.alibaba.flink.shuffle.core.config.TransferOptions;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionReadingView;
+import com.alibaba.flink.shuffle.core.storage.DiskType;
 import com.alibaba.flink.shuffle.core.storage.ReadingViewContext;
 import com.alibaba.flink.shuffle.plugin.RemoteShuffleDescriptor;
 import com.alibaba.flink.shuffle.plugin.utils.BufferUtils;
@@ -345,8 +346,9 @@ public class ReadingIntegrationTest {
             ShuffleResource shuffleResource =
                     new DefaultShuffleResource(
                             new ShuffleWorkerDescriptor[] {descs.get(randIdx)},
-                            DataPartition.DataPartitionType.MAP_PARTITION);
-            ret[i] = new RemoteShuffleDescriptor(rID, jobID, shuffleResource);
+                            DataPartition.DataPartitionType.MAP_PARTITION,
+                            DiskType.ANY_TYPE);
+            ret[i] = new RemoteShuffleDescriptor(rID, jobID, shuffleResource, true, 1);
         }
         return ret;
     }

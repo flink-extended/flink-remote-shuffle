@@ -1,11 +1,13 @@
 /*
- * Copyright 2021 The Flink Remote Shuffle Project
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *  	http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -49,10 +51,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/** Tests for {@link LocalFileMapPartitionWriter}. */
+/** Tests for {@link LocalFileReducePartitionWriter}. */
 @RunWith(Parameterized.class)
-public class LocalFileMapPartitionWriterTest {
-
+public class LocalFileReducePartitionWriterTest {
     @Rule public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     private final boolean dataChecksumEnabled;
@@ -62,16 +63,16 @@ public class LocalFileMapPartitionWriterTest {
         return new Boolean[] {true, false};
     }
 
-    public LocalFileMapPartitionWriterTest(boolean dataChecksumEnabled) {
+    public LocalFileReducePartitionWriterTest(boolean dataChecksumEnabled) {
         this.dataChecksumEnabled = dataChecksumEnabled;
     }
 
     @Test
     public void testAddAndWriteData() throws Throwable {
-        TestMapPartition dataPartition = createBaseMapPartition();
-        LocalFileMapPartitionWriter partitionWriter =
-                createLocalFileMapPartitionWriter(dataPartition);
-        TestMapPartition.TestPartitionWritingTask writingTask =
+        TestReducePartition dataPartition = createBaseReducePartition();
+        LocalFileReducePartitionWriter partitionWriter =
+                createLocalFileReducePartitionWriter(dataPartition);
+        TestReducePartition.TestPartitionWritingTask writingTask =
                 dataPartition.getPartitionWritingTask();
 
         partitionWriter.startRegion(0, false);
@@ -87,13 +88,14 @@ public class LocalFileMapPartitionWriterTest {
 
         partitionWriter.addBuffer(new ReducePartitionID(1), 0, createBuffer());
         assertEquals(2, writingTask.getNumWritingTriggers());
-        assertEquals(1, partitionWriter.numBufferOrMarkers());
+        partitionWriter.writeData();
+        assertEquals(0, partitionWriter.numBufferOrMarkers());
 
         partitionWriter.finishRegion(0);
         TestDataCommitListener commitListener = new TestDataCommitListener();
         partitionWriter.finishDataInput(commitListener);
-        assertEquals(2, writingTask.getNumWritingTriggers());
-        assertEquals(3, partitionWriter.numBufferOrMarkers());
+        assertEquals(3, writingTask.getNumWritingTriggers());
+        assertEquals(2, partitionWriter.numBufferOrMarkers());
 
         partitionWriter.writeData();
         assertEquals(0, partitionWriter.numBufferOrMarkers());
@@ -103,10 +105,10 @@ public class LocalFileMapPartitionWriterTest {
     @Test
     public void testOnError() throws Throwable {
         TestFailureListener failureListener = new TestFailureListener();
-        TestMapPartition dataPartition = createBaseMapPartition();
-        LocalFileMapPartitionWriter partitionWriter =
-                createLocalFileMapPartitionWriter(dataPartition, failureListener);
-        TestMapPartition.TestPartitionWritingTask writingTask =
+        TestReducePartition dataPartition = createBaseReducePartition();
+        LocalFileReducePartitionWriter partitionWriter =
+                createLocalFileReducePartitionWriter(dataPartition, failureListener);
+        TestReducePartition.TestPartitionWritingTask writingTask =
                 dataPartition.getPartitionWritingTask();
 
         partitionWriter.startRegion(10, false);
@@ -131,10 +133,10 @@ public class LocalFileMapPartitionWriterTest {
     public void testAssignCredit() throws Throwable {
         int regionIndex = 0;
         TestDataRegionCreditListener creditListener = new TestDataRegionCreditListener();
-        LocalFileMapPartitionWriter partitionWriter =
-                createLocalFileMapPartitionWriter(creditListener);
+        LocalFileReducePartitionWriter partitionWriter =
+                createLocalFileReducePartitionWriter(creditListener);
 
-        partitionWriter.startRegion(regionIndex, false);
+        partitionWriter.startRegion(regionIndex, 1, 100, false);
         partitionWriter.writeData();
 
         BufferQueue buffers = createBufferQueue();
@@ -142,17 +144,13 @@ public class LocalFileMapPartitionWriterTest {
             buffers.add(ByteBuffer.allocateDirect(StorageTestUtils.DATA_BUFFER_SIZE));
         }
 
-        partitionWriter.assignCredits(buffers, (ignored) -> {});
         assertEquals(BaseDataPartitionWriter.MIN_CREDITS_TO_NOTIFY - 1, buffers.size());
-        assertNull(creditListener.take(1, regionIndex));
-
-        buffers.add(ByteBuffer.allocateDirect(StorageTestUtils.DATA_BUFFER_SIZE));
-
         partitionWriter.assignCredits(buffers, (ignored) -> {});
         assertEquals(0, buffers.size());
-        for (int i = 0; i < BaseDataPartitionWriter.MIN_CREDITS_TO_NOTIFY; ++i) {
-            assertNotNull(creditListener.take(0, regionIndex));
+        for (int i = 1; i < BaseDataPartitionWriter.MIN_CREDITS_TO_NOTIFY; ++i) {
+            assertNotNull(creditListener.take(1, regionIndex));
         }
+        assertNull(creditListener.take(1, regionIndex));
 
         partitionWriter.finishRegion(regionIndex);
         partitionWriter.writeData();
@@ -165,10 +163,35 @@ public class LocalFileMapPartitionWriterTest {
     }
 
     @Test
+    public void testAssignCreditMoreThanRequired() throws Throwable {
+        int regionIndex = 0;
+        int numRequired = 5;
+        int numAssigned = 8;
+        TestDataRegionCreditListener creditListener = new TestDataRegionCreditListener();
+        LocalFileReducePartitionWriter partitionWriter =
+                createLocalFileReducePartitionWriter(creditListener);
+
+        partitionWriter.startRegion(regionIndex, 1, numRequired, false);
+        partitionWriter.writeData();
+
+        BufferQueue buffers = createBufferQueue();
+        for (int i = 0; i < numAssigned; ++i) {
+            buffers.add(ByteBuffer.allocateDirect(StorageTestUtils.DATA_BUFFER_SIZE));
+        }
+
+        partitionWriter.assignCredits(buffers, (ignored) -> {});
+        assertEquals(numAssigned - numRequired, buffers.size());
+        for (int i = 0; i < numRequired; ++i) {
+            assertNotNull(creditListener.take(1, regionIndex));
+        }
+        assertNull(creditListener.take(1, regionIndex));
+    }
+
+    @Test
     public void testRelease() throws Throwable {
         TestFailureListener failureListener = new TestFailureListener();
-        LocalFileMapPartitionWriter partitionWriter =
-                createLocalFileMapPartitionWriter(failureListener);
+        LocalFileReducePartitionWriter partitionWriter =
+                createLocalFileReducePartitionWriter(failureListener);
 
         partitionWriter.startRegion(10, false);
         partitionWriter.addBuffer(new ReducePartitionID(0), 0, createBuffer());
@@ -200,49 +223,57 @@ public class LocalFileMapPartitionWriterTest {
         return new BufferQueue(partition, dispatcher);
     }
 
-    private LocalFileMapPartitionWriter createLocalFileMapPartitionWriter(
+    private LocalFileReducePartitionWriter createLocalFileReducePartitionWriter(
             DataRegionCreditListener dataRegionCreditListener) throws IOException {
-        return createLocalFileMapPartitionWriter(
-                createBaseMapPartition(),
+        return createLocalFileReducePartitionWriter(
+                createBaseReducePartition(),
                 dataRegionCreditListener,
                 StorageTestUtils.NO_OP_FAILURE_LISTENER);
     }
 
-    private LocalFileMapPartitionWriter createLocalFileMapPartitionWriter(
+    private LocalFileReducePartitionWriter createLocalFileReducePartitionWriter(
             FailureListener failureListener) throws IOException {
-        return createLocalFileMapPartitionWriter(
-                createBaseMapPartition(), StorageTestUtils.NO_OP_CREDIT_LISTENER, failureListener);
+        return createLocalFileReducePartitionWriter(
+                createBaseReducePartition(),
+                StorageTestUtils.NO_OP_CREDIT_LISTENER,
+                failureListener);
     }
 
-    private LocalFileMapPartitionWriter createLocalFileMapPartitionWriter(
-            BaseMapPartition dataPartition, FailureListener failureListener) throws IOException {
-        return createLocalFileMapPartitionWriter(
+    private LocalFileReducePartitionWriter createLocalFileReducePartitionWriter(
+            BaseReducePartition dataPartition, FailureListener failureListener) throws IOException {
+        return createLocalFileReducePartitionWriter(
                 dataPartition, StorageTestUtils.NO_OP_CREDIT_LISTENER, failureListener);
     }
 
-    private LocalFileMapPartitionWriter createLocalFileMapPartitionWriter(
-            BaseMapPartition dataPartition) throws IOException {
-        return createLocalFileMapPartitionWriter(
-                dataPartition,
-                StorageTestUtils.NO_OP_CREDIT_LISTENER,
-                StorageTestUtils.NO_OP_FAILURE_LISTENER);
+    private LocalFileReducePartitionWriter createLocalFileReducePartitionWriter(
+            BaseReducePartition dataPartition) throws IOException {
+        LocalFileReducePartitionWriter partitionWriter =
+                createLocalFileReducePartitionWriter(
+                        dataPartition,
+                        StorageTestUtils.NO_OP_CREDIT_LISTENER,
+                        StorageTestUtils.NO_OP_FAILURE_LISTENER);
+        dataPartition.writers.put(partitionWriter.mapPartitionID, partitionWriter);
+        return partitionWriter;
     }
 
-    private LocalFileMapPartitionWriter createLocalFileMapPartitionWriter(
-            BaseMapPartition dataPartition,
+    private LocalFileReducePartitionWriter createLocalFileReducePartitionWriter(
+            BaseReducePartition dataPartition,
             DataRegionCreditListener dataRegionCreditListener,
-            FailureListener failureListener)
-            throws IOException {
-        LocalMapPartitionFile partitionFile =
-                StorageTestUtils.createLocalMapPartitionFile(
+            FailureListener failureListener) {
+        LocalReducePartitionFile partitionFile =
+                StorageTestUtils.createLocalReducePartitionFile(
                         temporaryFolder.getRoot().getAbsolutePath());
-        return new LocalFileMapPartitionWriter(
-                dataChecksumEnabled,
+        LocalReducePartitionFileWriter fileWriter =
+                new LocalReducePartitionFileWriter(
+                        partitionFile,
+                        dataPartition.getPartitionWritingTask().minBuffersToWrite,
+                        dataChecksumEnabled);
+        return new LocalFileReducePartitionWriter(
                 StorageTestUtils.MAP_PARTITION_ID,
                 dataPartition,
                 dataRegionCreditListener,
                 failureListener,
-                partitionFile);
+                fileWriter);
     }
 
     private Buffer createBuffer() {
@@ -252,7 +283,7 @@ public class LocalFileMapPartitionWriterTest {
                 StorageTestUtils.DATA_BUFFER_SIZE);
     }
 
-    private TestMapPartition createBaseMapPartition() {
-        return new TestMapPartition(StorageTestUtils.NO_OP_PARTITIONED_DATA_STORE);
+    private TestReducePartition createBaseReducePartition() throws IOException {
+        return new TestReducePartition(StorageTestUtils.NO_OP_PARTITIONED_DATA_STORE);
     }
 }
