@@ -34,9 +34,11 @@ import com.alibaba.flink.shuffle.core.storage.DataPartitionReader;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWriter;
 import com.alibaba.flink.shuffle.core.storage.MapPartition;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
+import com.alibaba.flink.shuffle.storage.StorageMetricsUtil;
 import com.alibaba.flink.shuffle.storage.exception.ConcurrentWriteException;
 import com.alibaba.flink.shuffle.storage.utils.DataPartitionUtils;
 
+import com.alibaba.metrics.Counter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,6 +70,12 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
      * Whether a {@link DataPartitionWriter} has been created for this {@link MapPartition} or not.
      */
     protected boolean partitionWriterCreated;
+
+    /** Number of writing task fail. */
+    private final Counter numWriteFails = StorageMetricsUtil.registerNumWriteFails();
+
+    /** Number of reading task fail. */
+    private final Counter numReadFails = StorageMetricsUtil.registerNumReadFails();
 
     public BaseMapPartition(PartitionedDataStore dataStore, SingleThreadExecutor mainExecutor) {
         super(dataStore, mainExecutor);
@@ -322,6 +330,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                 LOG.info("Successfully write data partition: {}.", getPartitionMeta());
             } catch (Throwable throwable) {
                 LOG.error("Failed to write partition data.", throwable);
+                numWriteFails.inc();
                 CommonUtils.runQuietly(() -> releaseOnInternalError(throwable));
             }
         }
@@ -525,6 +534,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
                             LOG.debug("Successfully read partition data: {}.", reader);
                         }
                     } catch (Throwable throwable) {
+                        numReadFails.inc();
                         removePartitionReader(reader);
                         DataPartitionUtils.releaseDataPartitionReader(reader, throwable);
                         LOG.debug("Failed to read partition data: {}.", reader, throwable);

@@ -28,7 +28,7 @@ import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
  * <p>This class is copied from Apache Flink
  * (org.apache.flink.configuration.StructuredOptionsSplitter).
  */
-class StructuredOptionsSplitter {
+public class StructuredOptionsSplitter {
 
     /**
      * Splits the given string on the given delimiter. It supports quoting parts of the string with
@@ -48,7 +48,7 @@ class StructuredOptionsSplitter {
      * @param delimiter delimiter to split on
      * @return a list of splits
      */
-    static List<String> splitEscaped(String string, char delimiter) {
+    public static List<String> splitEscaped(String string, char delimiter) {
         List<Token> tokens = tokenize(checkNotNull(string), delimiter);
         return processTokens(tokens);
     }
@@ -74,7 +74,7 @@ class StructuredOptionsSplitter {
      * @param charsToEscape escape chars for the escape conditions
      * @return escaped string by single quote
      */
-    static String escapeWithSingleQuote(String string, String... charsToEscape) {
+    public static String escapeWithSingleQuote(String string, String... charsToEscape) {
         boolean escape =
                 Arrays.stream(charsToEscape).anyMatch(string::contains)
                         || string.contains("\"")

@@ -200,6 +200,10 @@ public class CommonUtils {
         return bb.array();
     }
 
+    public static boolean isValidHostPort(int port) {
+        return 0 <= port && port <= 65535;
+    }
+
     /**
      * Runs the given {@link RunnableWithException} in current thread silently and do nothing even
      * when any exception occurs.

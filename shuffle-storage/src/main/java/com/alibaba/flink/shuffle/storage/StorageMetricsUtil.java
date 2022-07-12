@@ -18,6 +18,7 @@ package com.alibaba.flink.shuffle.storage;
 
 import com.alibaba.flink.shuffle.metrics.entry.MetricUtils;
 
+import com.alibaba.metrics.Counter;
 import com.alibaba.metrics.Gauge;
 import com.alibaba.metrics.Meter;
 
@@ -98,6 +99,10 @@ public class StorageMetricsUtil {
 
     /** Current reading throughput in bytes. */
     public static final String READING_THROUGHPUT_BYTES = STORAGE + ".reading_throughput_bytes";
+
+    public static final String NUM_WRITE_FAILS = STORAGE + ".num_write_fails";
+
+    public static final String NUM_READ_FAILS = STORAGE + ".num_read_fails";
 
     public static void registerTotalNumExecutors(Supplier<Integer> totalNumExecutors) {
         MetricUtils.registerMetric(
@@ -447,5 +452,13 @@ public class StorageMetricsUtil {
 
     public static Meter registerReadingThroughputBytes() {
         return MetricUtils.getMeter(STORAGE, READING_THROUGHPUT_BYTES);
+    }
+
+    public static Counter registerNumWriteFails() {
+        return MetricUtils.getCounter(STORAGE, NUM_WRITE_FAILS);
+    }
+
+    public static Counter registerNumReadFails() {
+        return MetricUtils.getCounter(STORAGE, NUM_READ_FAILS);
     }
 }
