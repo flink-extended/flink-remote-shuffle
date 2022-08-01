@@ -496,7 +496,7 @@ public class RemoteShuffleMaster implements ShuffleMaster<RemoteShuffleDescripto
             TaskInputsOutputsDescriptor taskInputsOutputsDescriptor) {
         for (ResultPartitionType partitionType :
                 taskInputsOutputsDescriptor.getPartitionTypes().values()) {
-            if (!partitionType.isBlocking()) {
+            if (!partitionType.isBlockingOrBlockingPersistentResultPartition()) {
                 throw new ShuffleException(
                         "Blocking result partition type expected but found " + partitionType);
             }

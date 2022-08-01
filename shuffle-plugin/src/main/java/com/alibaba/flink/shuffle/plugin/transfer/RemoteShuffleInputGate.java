@@ -855,6 +855,14 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
                 long cpId, ResultSubpartitionInfo info, int startSeqNum, Buffer... data) {}
 
         @Override
+        public void addOutputDataFuture(
+                long l,
+                ResultSubpartitionInfo resultSubpartitionInfo,
+                int i,
+                CompletableFuture<List<Buffer>> completableFuture)
+                throws IllegalArgumentException {}
+
+        @Override
         public void finishInput(long checkpointId) {}
 
         @Override

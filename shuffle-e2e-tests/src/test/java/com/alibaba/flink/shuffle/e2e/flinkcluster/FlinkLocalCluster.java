@@ -150,7 +150,7 @@ public class FlinkLocalCluster {
 
         leaderRetrievalService.stop();
 
-        RpcUtils.terminateRpcService(rpcService, Time.seconds(30L));
+        RpcUtils.terminateRpcService(rpcService);
 
         highAvailabilityServices.closeAndCleanupAllData();
 
@@ -232,7 +232,7 @@ public class FlinkLocalCluster {
                         () ->
                                 dispatcherGateway.requestClusterOverview(
                                         Time.milliseconds(timeLeft.toMillis())),
-                        Time.milliseconds(50L),
+                        Duration.ofMillis(50L),
                         org.apache.flink.api.common.time.Deadline.fromNow(
                                 Duration.ofMillis(timeLeft.toMillis())),
                         overview -> overview.getNumTaskManagersConnected() >= numTaskManagers,

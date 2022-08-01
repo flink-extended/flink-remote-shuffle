@@ -36,11 +36,13 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
+import org.apache.flink.runtime.executiongraph.ExecutionGraphID;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
-import org.apache.flink.runtime.scheduler.strategy.ConsumedPartitionGroup;
+import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.shuffle.JobShuffleContext;
 import org.apache.flink.runtime.shuffle.PartitionDescriptor;
 import org.apache.flink.runtime.shuffle.ProducerDescriptor;
@@ -52,9 +54,7 @@ import org.junit.Test;
 
 import java.net.InetAddress;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
@@ -97,7 +97,9 @@ public class RemoteShuffleMasterTest extends RemoteShuffleShuffleTestBase {
         IntermediateDataSetID intermediateDataSetId = new IntermediateDataSetID();
         IntermediateResultPartitionID intermediateResultPartitionId =
                 new IntermediateResultPartitionID(intermediateDataSetId, 0);
-        ExecutionAttemptID executionAttemptId = new ExecutionAttemptID();
+        ExecutionAttemptID executionAttemptId =
+                new ExecutionAttemptID(
+                        new ExecutionGraphID(), new ExecutionVertexID(new JobVertexID(), 0), 0);
         ResultPartitionID resultPartitionId =
                 new ResultPartitionID(intermediateResultPartitionId, executionAttemptId);
         PartitionDescriptor partitionDescriptor =
@@ -116,9 +118,6 @@ public class RemoteShuffleMasterTest extends RemoteShuffleShuffleTestBase {
                         executionAttemptId,
                         InetAddress.getLocalHost(),
                         50000);
-        List<ConsumedPartitionGroup> consumedPartitionGroups =
-                Collections.singletonList(
-                        ConsumedPartitionGroup.fromSinglePartition(intermediateResultPartitionId));
         try (RemoteShuffleMaster shuffleMaster = createAndInitializeShuffleMaster(jobID)) {
             CompletableFuture<RemoteShuffleDescriptor> shuffleDescriptorFuture =
                     shuffleMaster.registerPartitionWithProducer(
