@@ -71,6 +71,7 @@ public class LocalityPlacementStrategyTest {
                             randomDataSetId(),
                             dataPartitionId,
                             2,
+                            0,
                             PARTITION_FACTORY_CLASS,
                             "localhost");
             assertEquals("localhost", shuffleResource.getMapPartitionLocation().getWorkerAddress());
@@ -92,6 +93,7 @@ public class LocalityPlacementStrategyTest {
                             randomDataSetId(),
                             dataPartitionId,
                             2,
+                            0,
                             PARTITION_FACTORY_CLASS,
                             "localhost");
             assertEquals("remote", shuffleResource.getMapPartitionLocation().getWorkerAddress());

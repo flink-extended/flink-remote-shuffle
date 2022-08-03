@@ -21,6 +21,8 @@ import com.alibaba.flink.shuffle.core.ids.ChannelID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
+import com.alibaba.flink.shuffle.core.storage.MapPartition;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 import org.apache.flink.shaded.netty4.io.netty.channel.Channel;
@@ -33,8 +35,10 @@ import javax.annotation.concurrent.GuardedBy;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.ClosedChannelException;
+import java.util.function.Consumer;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.randomBytes;
 import static com.alibaba.flink.shuffle.common.utils.ProtocolUtils.currentProtocolVersion;
@@ -67,7 +71,7 @@ public class ShuffleWriteClient {
     private static final Logger LOG = LoggerFactory.getLogger(ShuffleWriteClient.class);
 
     /** Address of shuffle worker. */
-    private final InetSocketAddress address;
+    protected final InetSocketAddress address;
 
     /** String representation the remote shuffle address. */
     private final String addressStr;
@@ -75,17 +79,26 @@ public class ShuffleWriteClient {
     /** {@link MapPartitionID} of the writing. */
     private final MapPartitionID mapID;
 
+    /** {@link ReducePartitionID} of the writing. */
+    private final ReducePartitionID reduceID;
+
     /** {@link JobID} of the writing. */
     private final JobID jobID;
 
     /** {@link DataSetID} of the writing. */
     private final DataSetID dataSetID;
 
+    /** Number of map partitions, which is equal to the upstream parallelism. */
+    private final int numMaps;
+
     /** Number of subpartitions of the writing. */
     private final int numSubs;
 
     /** Defines the buffer size used by client. */
     private final int bufferSize;
+
+    /** Whether the data partition type is {@link MapPartition}. */
+    private final boolean isMapPartition;
 
     /** Target data partition type to write. */
     private final String dataPartitionFactoryName;
@@ -94,85 +107,142 @@ public class ShuffleWriteClient {
     private final ConnectionManager connectionManager;
 
     /** Lock to protect {@link #currentCredit}. */
-    private final Object lock = new Object();
+    protected final Object lock = new Object();
 
     /** Netty channel. */
     private Channel nettyChannel;
 
+    /** The number of required credit to send the data in current region. */
+    private int requireCredit;
+
     /** Current view of the sum of credits received from remote shuffle worker for the channel. */
     @GuardedBy("lock")
-    private int currentCredit;
+    protected int currentCredit;
 
     /** Current writing region index, used for outdating credits. */
     @GuardedBy("lock")
-    private int currentRegionIdx;
+    protected int currentRegionIdx;
 
     /** Identifier of the channel. */
-    private final ChannelID channelID;
+    protected final ChannelID channelID;
 
     /** String of channelID. */
-    private final String channelIDStr;
+    protected final String channelIDStr;
 
     /** {@link WriteClientHandler} back this write-client. */
     private WriteClientHandler writeClientHandler;
 
     /** Whether task thread is waiting for more credits for sending. */
-    private volatile boolean isWaitingForCredit;
-
-    /** Whether task thread is waiting for {@link TransferMessage.WriteFinishCommit}. */
-    private volatile boolean isWaitingForFinishCommit;
-
-    /** Whether {@link TransferMessage.WriteFinishCommit} is already received. */
-    private volatile boolean finishCommitted;
+    protected volatile boolean isWaitingForCredit;
 
     /** {@link Throwable} when writing failure. */
-    private volatile Throwable cause;
+    protected volatile Throwable cause;
 
     /** If closed ever. */
-    private volatile boolean closed;
+    protected volatile boolean closed;
+
+    /** Whether the client has sent region finish marker to the server. */
+    private boolean sentRegionFinish;
+
+    /** Whether the client need more than one buffer when writing buffers in a sort buffer. */
+    private boolean needMoreThanOneBuffer;
+
+    /**
+     * Whether the client has data to write in the current region. When starting a region, the flag
+     * will be set.
+     */
+    private boolean isEmptyDataInRegion;
+
+    /** Register to adding new shuffle write client when creating a new one. */
+    private final Consumer<ShuffleWriteClient> writingClientRegister;
 
     /** Callback when write channel. */
     private final ChannelFutureListenerImpl channelFutureListener =
             new ChannelFutureListenerImpl((channelFuture, cause) -> handleFailure(cause));
+
+    /** Callback to decrease the number of writers waiting the finish commitment. */
+    private Runnable decWaitingFinishListener;
+
+    /** Whether the {@link ShuffleWriteClient} is released. */
+    private boolean isReleased;
 
     /**
      * @param address Address of shuffle worker.
      * @param jobID {@link JobID} of the writing.
      * @param dataSetID {@link DataSetID} of the writing.
      * @param mapID {@link MapPartitionID} of the writing.
+     * @param reduceID {@link ReducePartitionID} of the writing.
+     * @param numMaps Number of subpartitions of the map partition.
      * @param numSubs Number of subpartitions of the writing.
+     * @param bufferSize Size of a single network buffer.
+     * @param isMapPartition Whether the data partition type is {@link MapPartition}
      * @param connectionManager Manages physical connections.
+     * @param writingClientRegister Register to adding new shuffle write client when creating a new
+     *     one.
      */
     public ShuffleWriteClient(
             InetSocketAddress address,
             JobID jobID,
             DataSetID dataSetID,
             MapPartitionID mapID,
+            ReducePartitionID reduceID,
+            int numMaps,
             int numSubs,
             int bufferSize,
+            boolean isMapPartition,
             String dataPartitionFactoryName,
-            ConnectionManager connectionManager) {
+            ConnectionManager connectionManager,
+            Consumer<ShuffleWriteClient> writingClientRegister) {
 
         checkArgument(address != null, "Must be not null.");
         checkArgument(jobID != null, "Must be not null.");
         checkArgument(dataSetID != null, "Must be not null.");
         checkArgument(mapID != null, "Must be not null.");
+        checkArgument(reduceID != null, "Must be not null.");
         checkArgument(numSubs > 0, "Must be positive value.");
         checkArgument(bufferSize > 0, "Must be positive value.");
         checkArgument(dataPartitionFactoryName != null, "Must be not null.");
         checkArgument(connectionManager != null, "Must be not null.");
+        checkArgument(numMaps >= 0, "Must be positive value.");
+        checkArgument(writingClientRegister != null, "Must be not null.");
 
         this.address = address;
         this.addressStr = address.toString();
         this.mapID = mapID;
+        this.reduceID = reduceID;
         this.jobID = jobID;
         this.dataSetID = dataSetID;
+        this.numMaps = numMaps;
         this.numSubs = numSubs;
         this.bufferSize = bufferSize;
+        this.isMapPartition = isMapPartition;
         this.dataPartitionFactoryName = dataPartitionFactoryName;
         this.connectionManager = connectionManager;
         this.channelID = new ChannelID(randomBytes(16));
         this.channelIDStr = channelID.toString();
+        this.writingClientRegister = writingClientRegister;
+    }
+
+    public int getCurrentCredit() {
+        synchronized (lock) {
+            return currentCredit;
+        }
+    }
+
+    public boolean needMoreThanOneBuffer() {
+        return needMoreThanOneBuffer;
+    }
+
+    public boolean needMoreCredits() {
+        return currentCredit < requireCredit;
+    }
+
+    public boolean sentRegionFinish() {
+        return sentRegionFinish;
+    }
+
+    public ReducePartitionID getReduceID() {
+        return reduceID;
     }
 
     /** Initialize Netty connection and fire handshake. */
@@ -185,20 +255,40 @@ public class ShuffleWriteClient {
                     "The network connection is already released for channelID: " + channelIDStr);
         }
         writeClientHandler.register(this);
-
-        TransferMessage.WriteHandshakeRequest msg =
-                new TransferMessage.WriteHandshakeRequest(
-                        currentProtocolVersion(),
-                        channelID,
-                        jobID,
-                        dataSetID,
-                        mapID,
-                        numSubs,
-                        bufferSize,
-                        dataPartitionFactoryName,
-                        emptyExtraMessage());
+        TransferMessage msg = writeHandshakeRequestMsg();
         LOG.debug("(remote: {}, channel: {}) Send {}.", address, channelIDStr, msg);
         writeAndFlush(msg);
+    }
+
+    private TransferMessage writeHandshakeRequestMsg() {
+        TransferMessage msg;
+        if (isMapPartition) {
+            msg =
+                    new TransferMessage.WriteHandshakeRequest(
+                            currentProtocolVersion(),
+                            channelID,
+                            jobID,
+                            dataSetID,
+                            mapID,
+                            numSubs,
+                            bufferSize,
+                            dataPartitionFactoryName,
+                            emptyExtraMessage());
+        } else {
+            msg =
+                    new TransferMessage.ReducePartitionWriteHandshakeRequest(
+                            currentProtocolVersion(),
+                            channelID,
+                            jobID,
+                            dataSetID,
+                            mapID,
+                            reduceID,
+                            numMaps,
+                            bufferSize,
+                            dataPartitionFactoryName,
+                            emptyExtraMessage());
+        }
+        return msg;
     }
 
     /** Writes a piece of data to a subpartition. */
@@ -213,7 +303,7 @@ public class ShuffleWriteClient {
                                         + currentCredit
                                         + ", channelID="
                                         + channelIDStr);
-                if (currentCredit == 0) {
+                if (currentCredit == 0 && isMapPartition) {
                     isWaitingForCredit = true;
                     while (currentCredit == 0 && cause == null && !closed) {
                         lock.wait();
@@ -243,9 +333,9 @@ public class ShuffleWriteClient {
                             size,
                             false,
                             emptyExtraMessage());
-            LOG.trace("(remote: {}, channel: {}) Send {}.", address, channelIDStr, writeData);
             writeAndFlush(writeData);
             currentCredit--;
+            checkState(currentCredit >= 0);
         }
     }
 
@@ -254,8 +344,12 @@ public class ShuffleWriteClient {
      * completed.
      *
      * @param isBroadcast Whether it's a broadcast region.
+     * @param numMaps The number of map partitions.
+     * @param requireCredit The number of credit when writing sort buffers
+     * @param needMoreThanOneBuffer Whether the number of buffers in the region is more than one.
      */
-    public void regionStart(boolean isBroadcast) {
+    public void regionStart(
+            boolean isBroadcast, int numMaps, int requireCredit, boolean needMoreThanOneBuffer) {
         synchronized (lock) {
             healthCheck();
             TransferMessage.WriteRegionStart writeRegionStart =
@@ -263,12 +357,25 @@ public class ShuffleWriteClient {
                             currentProtocolVersion(),
                             channelID,
                             currentRegionIdx,
+                            numMaps,
+                            requireCredit,
                             isBroadcast,
                             emptyExtraMessage());
             LOG.debug(
                     "(remote: {}, channel: {}) Send {}.", address, channelIDStr, writeRegionStart);
+            this.requireCredit = requireCredit;
+            this.needMoreThanOneBuffer = needMoreThanOneBuffer;
+            sentRegionFinish = false;
             writeAndFlush(writeRegionStart);
         }
+    }
+
+    public void setIsEmptyDataInRegion(boolean isEmptyDataInRegion) {
+        this.isEmptyDataInRegion = isEmptyDataInRegion;
+    }
+
+    public boolean isEmptyDataInRegion() {
+        return isEmptyDataInRegion;
     }
 
     /**
@@ -280,43 +387,44 @@ public class ShuffleWriteClient {
             healthCheck();
             TransferMessage.WriteRegionFinish writeRegionFinish =
                     new TransferMessage.WriteRegionFinish(
-                            currentProtocolVersion(), channelID, emptyExtraMessage());
+                            currentProtocolVersion(),
+                            channelID,
+                            currentRegionIdx,
+                            emptyExtraMessage());
             LOG.debug(
                     "(remote: {}, channel: {}) Region({}) finished, send {}.",
                     address,
                     channelIDStr,
                     currentRegionIdx,
                     writeRegionFinish);
-            currentRegionIdx++;
             currentCredit = 0;
+            requireCredit = 0;
+            needMoreThanOneBuffer = false;
+            currentRegionIdx++;
+            sentRegionFinish = true;
             writeAndFlush(writeRegionFinish);
         }
     }
 
     /** Indicates the writing is finished. */
-    public void finish() throws InterruptedException {
+    public void finish(Runnable decWaitingFinishListener) {
         synchronized (lock) {
+            this.decWaitingFinishListener = decWaitingFinishListener;
             healthCheck();
             TransferMessage.WriteFinish writeFinish =
                     new TransferMessage.WriteFinish(
                             currentProtocolVersion(), channelID, emptyExtraMessage());
-            LOG.debug("(remote: {}, channel: {}) Send {}.", address, channelIDStr, writeFinish);
+            LOG.debug("(remote: {}, channel: {}) Send {}. ", address, channelIDStr, writeFinish);
             writeAndFlush(writeFinish);
-            if (!finishCommitted) {
-                isWaitingForFinishCommit = true;
-                while (!finishCommitted && cause == null && !closed) {
-                    lock.wait();
-                }
-                isWaitingForFinishCommit = false;
-                healthCheck();
-                checkState(finishCommitted, "finishCommitted should be true.");
-            }
         }
     }
 
     /** Closes Netty connection. */
     public void close() throws IOException {
         synchronized (lock) {
+            if (closed) {
+                return;
+            }
             closed = true;
             lock.notifyAll();
         }
@@ -336,11 +444,6 @@ public class ShuffleWriteClient {
         return isWaitingForCredit;
     }
 
-    /** Whether task thread is waiting for {@link TransferMessage.WriteFinishCommit}. */
-    public boolean isWaitingForFinishCommit() {
-        return isWaitingForFinishCommit;
-    }
-
     /** Identifier of the channel. */
     public ChannelID getChannelID() {
         return channelID;
@@ -354,22 +457,20 @@ public class ShuffleWriteClient {
     /** Called by Netty thread. */
     public void writeFinishCommitReceived(TransferMessage.WriteFinishCommit commit) {
         LOG.debug("(remote: {}, channel: {}) Received {}.", address, channelIDStr, commit);
-        synchronized (lock) {
-            finishCommitted = true;
-            if (isWaitingForFinishCommit) {
-                lock.notifyAll();
-            }
-        }
+        checkNotNull(decWaitingFinishListener).run();
     }
 
     /** Called by Netty thread. */
     public void creditReceived(TransferMessage.WriteAddCredit addCredit) {
-        LOG.trace("(remote: {}, channel: {}) Received {}.", address, channelIDStr, addCredit);
         synchronized (lock) {
             if (addCredit.getCredit() > 0 && addCredit.getRegionIdx() == currentRegionIdx) {
+                int prevCredit = currentCredit;
                 currentCredit += addCredit.getCredit();
-                if (isWaitingForCredit) {
+                if (isMapPartition && isWaitingForCredit) {
                     lock.notifyAll();
+                }
+                if (!isMapPartition && prevCredit == 0) {
+                    writingClientRegister.accept(this);
                 }
             }
         }
@@ -391,7 +492,7 @@ public class ShuffleWriteClient {
         }
     }
 
-    private void healthCheck() {
+    protected void healthCheck() {
         if (cause != null) {
             ExceptionUtils.rethrowAsRuntimeException(cause);
         }
@@ -400,7 +501,7 @@ public class ShuffleWriteClient {
         }
     }
 
-    private void writeAndFlush(Object obj) {
+    public void writeAndFlush(Object obj) {
         nettyChannel.writeAndFlush(obj).addListener(channelFutureListener);
     }
 
@@ -425,6 +526,12 @@ public class ShuffleWriteClient {
                                         + " for channel of "
                                         + channelIDStr);
             }
+
+            if (!isReleased && decWaitingFinishListener != null) {
+                decWaitingFinishListener.run();
+                isReleased = true;
+            }
+
             LOG.error("(remote: {}, channel: {}) Shuffle failure.", address, channelIDStr, cause);
             lock.notifyAll();
         }

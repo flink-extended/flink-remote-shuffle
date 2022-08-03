@@ -26,6 +26,7 @@ import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.memory.Buffer;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWritingView;
+import com.alibaba.flink.shuffle.core.storage.DiskType;
 import com.alibaba.flink.shuffle.core.storage.WritingViewContext;
 import com.alibaba.flink.shuffle.plugin.RemoteShuffleDescriptor;
 import com.alibaba.flink.shuffle.transfer.AbstractNettyTest;
@@ -243,7 +244,7 @@ public class WritingIntegrationTest {
                     if (i % regionSize == 0) {
                         // No need to test broadcast which doesn't have effect on credit-based
                         // transportation.
-                        gate.regionStart(false);
+                        gate.regionStart(false, 0, 0, true);
                     }
                     gate.write(buffer, random.nextInt(numSubs));
                     if (i % regionSize == regionSize - 1) {
@@ -291,9 +292,10 @@ public class WritingIntegrationTest {
                             new ShuffleWorkerDescriptor(
                                     null, localhost, nettyConfig.getServerPort())
                         },
-                        DataPartition.DataPartitionType.MAP_PARTITION);
+                        DataPartition.DataPartitionType.MAP_PARTITION,
+                        DiskType.ANY_TYPE);
         RemoteShuffleDescriptor shuffleDescriptor =
-                new RemoteShuffleDescriptor(resultPartitionID, jobID, shuffleResource);
+                new RemoteShuffleDescriptor(resultPartitionID, jobID, shuffleResource, true, 1);
         return new RemoteShuffleOutputGate(
                 shuffleDescriptor,
                 numSubs,

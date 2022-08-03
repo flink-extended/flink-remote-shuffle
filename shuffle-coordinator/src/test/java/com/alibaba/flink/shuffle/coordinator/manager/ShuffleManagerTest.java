@@ -395,7 +395,7 @@ public class ShuffleManagerTest extends TestLogger {
         MapPartitionID dataPartitionID = RandomIDUtils.randomMapPartitionId();
         shuffleManagerGateway
                 .requestShuffleResource(
-                        jobID, instanceId, dataSetID, dataPartitionID, 1, partitionFactoryName)
+                        jobID, instanceId, dataSetID, dataPartitionID, 1, 0, partitionFactoryName)
                 .get();
 
         shuffleManagerGateway.unregisterClient(jobID, instanceId).get();
@@ -445,6 +445,7 @@ public class ShuffleManagerTest extends TestLogger {
                                 dataSetID,
                                 mapPartitionID,
                                 128,
+                                0,
                                 partitionFactoryName)
                         .get();
         assertTrue(shuffleResource instanceof DefaultShuffleResource);
@@ -485,6 +486,7 @@ public class ShuffleManagerTest extends TestLogger {
                             RandomIDUtils.randomDataSetId(),
                             RandomIDUtils.randomMapPartitionId(),
                             2,
+                            0,
                             partitionFactoryName);
             assertFailedWithInconsistentInstanceId(result);
         }

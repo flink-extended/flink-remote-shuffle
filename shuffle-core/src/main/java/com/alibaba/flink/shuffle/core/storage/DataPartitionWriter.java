@@ -23,6 +23,8 @@ import com.alibaba.flink.shuffle.core.memory.Buffer;
 import com.alibaba.flink.shuffle.core.memory.BufferRecycler;
 import com.alibaba.flink.shuffle.core.memory.BufferSupplier;
 
+import java.io.IOException;
+
 /**
  * Data writer for {@link DataPartition}. Each {@link DataPartitionWriter} can write data of one
  * same {@link MapPartitionID} to the target {@link DataPartition}, that is, those data must come
@@ -46,7 +48,7 @@ public interface DataPartitionWriter extends BufferSupplier {
      * Adds a data {@link Buffer} of the given {@link MapPartitionID} and {@link ReducePartitionID}
      * to this partition writer.
      */
-    void addBuffer(ReducePartitionID reducePartitionID, Buffer buffer);
+    void addBuffer(ReducePartitionID reducePartitionID, int dataRegionIndex, Buffer buffer);
 
     /**
      * Starts a new data region and announces the number of credits required by the data region.
@@ -57,10 +59,19 @@ public interface DataPartitionWriter extends BufferSupplier {
     void startRegion(int dataRegionIndex, boolean isBroadcastRegion);
 
     /**
+     * Starts a new data region and announces the number of credits required by the data region.
+     *
+     * @param dataRegionIndex Index of the new data region to be written.
+     * @param numMaps The number of map partitions.
+     * @param isBroadcastRegion Whether to broadcast data to all reduce partitions in this region.
+     */
+    void startRegion(int dataRegionIndex, int numMaps, int needCredit, boolean isBroadcastRegion);
+
+    /**
      * Finishes the current data region, after which the current data region is completed and ready
      * to be processed.
      */
-    void finishRegion();
+    void finishRegion(int dataRegionIndex);
 
     /**
      * Finishes the data input, which means no data can be added to this partition writer any more.
@@ -75,6 +86,33 @@ public interface DataPartitionWriter extends BufferSupplier {
      * data receiving.
      */
     boolean assignCredits(BufferQueue credits, BufferRecycler recycler);
+
+    /** Indicates whether the current {@link DataPartitionWriter} is in the process queue. */
+    boolean isInProcessQueue();
+
+    /**
+     * Sets the status of whether the current {@link DataPartitionWriter} is in the process queue.
+     */
+    void setInProcessQueue(boolean isInProcessQueue);
+
+    /**
+     * Indicates whether the current {@link DataPartitionWriter} is writing some partial records.
+     * When it returns true, any other {@link DataPartitionWriter}s should not write data to file
+     * writer except for the current {@link DataPartitionWriter}.
+     */
+    boolean isWritingPartial();
+
+    /**
+     * Triggers to flush the data buffers in file writer, which is to release cached resources in
+     * time.
+     */
+    void triggerFlushFileDataBuffers() throws IOException;
+
+    /** Returns the queue size storing buffers or markers. */
+    int numBufferOrMarkers();
+
+    /** Returns the number of required credits which have not been fulfilled. */
+    int numPendingCredit();
 
     /**
      * Notifies the failure to this partition writer when any exception occurs at the corresponding

@@ -16,6 +16,9 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager;
 
+import com.alibaba.flink.shuffle.core.storage.DataPartition;
+import com.alibaba.flink.shuffle.core.storage.DiskType;
+
 import java.io.Serializable;
 
 /**
@@ -26,4 +29,12 @@ public interface ShuffleResource extends Serializable {
     ShuffleWorkerDescriptor[] getReducePartitionLocations();
 
     ShuffleWorkerDescriptor getMapPartitionLocation();
+
+    void setConsumerGroupID(long consumerGroupID);
+
+    long getConsumerGroupID();
+
+    DataPartition.DataPartitionType getDataPartitionType();
+
+    DiskType getDiskType();
 }

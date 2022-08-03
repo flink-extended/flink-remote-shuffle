@@ -29,6 +29,7 @@ import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionMeta;
+import com.alibaba.flink.shuffle.core.storage.DiskType;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
 import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
@@ -269,6 +270,7 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
             JobID jobID,
             DataSetID dataSetID,
             DataPartitionID dataPartitionID,
+            int numMapPartitions,
             int numReducePartitions) {
         CommonUtils.checkArgument(dataPartitionID != null, "Must be not null.");
         CommonUtils.checkArgument(dataPartitionID instanceof MapPartitionID, "Illegal type.");
@@ -352,6 +354,11 @@ public class LocalFileMapPartitionFactory implements DataPartitionFactory {
         for (StorageMeta storageMeta : storageMetas) {
             storageMeta.updateStorageHealthStatus();
         }
+    }
+
+    @Override
+    public DiskType getDiskType() {
+        return DiskType.ANY_TYPE;
     }
 
     @Override

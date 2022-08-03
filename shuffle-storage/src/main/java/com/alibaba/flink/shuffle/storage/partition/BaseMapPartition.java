@@ -205,8 +205,27 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
     }
 
     @Override
+    protected void finishInput() {}
+
+    @Override
     public MapPartitionReadingTask getPartitionReadingTask() {
         return readingTask;
+    }
+
+    @Override
+    protected void addPendingBufferWriter(DataPartitionWriter writer) {}
+
+    @Override
+    protected void removePendingBufferWriter(DataPartitionWriter writer) {}
+
+    @Override
+    protected int numPendingBufferWriters() {
+        return 0;
+    }
+
+    @Override
+    protected int numPendingProcessWriters() {
+        return 0;
     }
 
     @Override
@@ -342,7 +361,7 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         }
 
         @Override
-        public void allocateResources() throws Exception {
+        public void allocateResources() {
             CommonUtils.checkState(inExecutorThread(), "Not in main thread.");
             checkInProcessState();
 
@@ -367,9 +386,27 @@ public abstract class BaseMapPartition extends BaseDataPartition implements MapP
         }
 
         @Override
-        public void triggerWriting() {
+        public void triggerWriting(DataPartitionWriter writer) {
             addPartitionProcessingTask(this);
         }
+
+        @Override
+        public int numAvailableBuffers() {
+            return buffers.size();
+        }
+
+        @Override
+        public int numOccupiedBuffers() {
+            return buffers.numBuffersOccupied();
+        }
+
+        @Override
+        public boolean hasAllocatedMaxWritingBuffers() {
+            return buffers.numBuffersOccupied() == maxWritingBuffers;
+        }
+
+        @Override
+        public void recycleResources() {}
 
         private void dispatchBuffers() {
             CommonUtils.checkState(inExecutorThread(), "Not in main thread.");

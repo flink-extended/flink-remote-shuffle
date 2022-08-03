@@ -21,6 +21,7 @@ import com.alibaba.flink.shuffle.common.utils.ExceptionUtils;
 import com.alibaba.flink.shuffle.coordinator.manager.ShuffleWorkerDescriptor;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.plugin.RemoteShuffleDescriptor;
 import com.alibaba.flink.shuffle.plugin.utils.BufferUtils;
 import com.alibaba.flink.shuffle.transfer.ConnectionManager;
@@ -86,6 +87,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
+import static com.alibaba.flink.shuffle.plugin.utils.GateUtils.getSimplifiedShuffleDescriptors;
 
 /** A {@link IndexedInputGate} which ingest data from remote shuffle workers. */
 public class RemoteShuffleInputGate extends IndexedInputGate {
@@ -106,6 +108,9 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
 
     /** Deployment descriptor for a single input gate instance. */
     private final InputGateDeploymentDescriptor gateDescriptor;
+
+    /** {@link ShuffleDescriptor}s pairs with channel indexes. */
+    List<Pair<Integer, ShuffleDescriptor>> shuffleDescriptorPairs;
 
     /** Number of concurrent readings. */
     private final int numConcurrentReading;
@@ -137,6 +142,9 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
 
     /** The number of subpartitions that has not consumed per channel. */
     private final int[] numSubPartitionsHasNotConsumed;
+
+    /** Whether the data partition type is MapPartition. */
+    private final boolean isMapPartition;
 
     /** The overall number of subpartitions that has not been consumed. */
     private long numUnconsumedSubpartitions;
@@ -180,8 +188,10 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
         this.connectionManager = connectionManager;
         this.bufferPoolFactory = bufferPoolFactory;
         this.bufferDecompressor = bufferDecompressor;
+        this.isMapPartition = isMapPartition(gateDescriptor);
 
-        int numChannels = gateDescriptor.getShuffleDescriptors().length;
+        this.shuffleDescriptorPairs = getShuffleDescriptorPairs();
+        int numChannels = shuffleDescriptorPairs.size();
         this.clientIndexMap = new int[numChannels];
         this.channelIndexMap = new int[numChannels];
         this.numSubPartitionsHasNotConsumed = new int[numChannels];
@@ -191,29 +201,49 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
         this.pendingEndOfDataEvents = numUnconsumedSubpartitions;
     }
 
+    /**
+     * In the ReducePartition mode, before the {@link ShuffleDescriptor}s are simplified , all
+     * {@link ShuffleDescriptor}s in the list are the same. Use the first one as the {@link
+     * ShuffleDescriptor}s to be simplified. The specified number of simplified {@link
+     * ShuffleDescriptor}s are returned.
+     */
+    private List<Pair<Integer, ShuffleDescriptor>> getShuffleDescriptorPairs() {
+        int startSubIdx = gateDescriptor.getConsumedSubpartitionIndexRange().getStartIndex();
+        int endSubIdx = gateDescriptor.getConsumedSubpartitionIndexRange().getEndIndex();
+
+        checkState(endSubIdx >= startSubIdx);
+        checkState(gateDescriptor.getShuffleDescriptors().length > 0);
+
+        return isMapPartition
+                ? convertShuffleDescriptorToPairs(gateDescriptor.getShuffleDescriptors())
+                : getSimplifiedShuffleDescriptorPairs(
+                        (RemoteShuffleDescriptor) gateDescriptor.getShuffleDescriptors()[0],
+                        startSubIdx,
+                        endSubIdx);
+    }
+
     private long initShuffleReadClients(int bufferSize, boolean shuffleChannels) {
         int startSubIdx = gateDescriptor.getConsumedSubpartitionIndexRange().getStartIndex();
         int endSubIdx = gateDescriptor.getConsumedSubpartitionIndexRange().getEndIndex();
-        checkState(endSubIdx >= startSubIdx);
         int numSubpartitionsPerChannel = endSubIdx - startSubIdx + 1;
         long numUnconsumedSubpartitions = 0;
 
-        List<Pair<Integer, ShuffleDescriptor>> descriptors =
-                IntStream.range(0, gateDescriptor.getShuffleDescriptors().length)
-                        .mapToObj(i -> Pair.of(i, gateDescriptor.getShuffleDescriptors()[i]))
-                        .collect(Collectors.toList());
         if (shuffleChannels) {
-            Collections.shuffle(descriptors);
+            Collections.shuffle(shuffleDescriptorPairs);
         }
 
         int clientIndex = 0;
-        for (Pair<Integer, ShuffleDescriptor> descriptor : descriptors) {
+        for (Pair<Integer, ShuffleDescriptor> descriptor : shuffleDescriptorPairs) {
+            int subIdx = startSubIdx + descriptor.getLeft();
             RemoteShuffleDescriptor remoteDescriptor =
                     (RemoteShuffleDescriptor) descriptor.getRight();
-            ShuffleWorkerDescriptor swd =
-                    remoteDescriptor.getShuffleResource().getMapPartitionLocation();
+            checkState(
+                    isMapPartition == remoteDescriptor.isMapPartition(),
+                    "Inconsistent partition type.");
+            ShuffleWorkerDescriptor workerDescriptor = getWorkerDescriptor(remoteDescriptor);
             InetSocketAddress address =
-                    new InetSocketAddress(swd.getWorkerAddress(), swd.getDataPort());
+                    new InetSocketAddress(
+                            workerDescriptor.getWorkerAddress(), workerDescriptor.getDataPort());
             LOG.debug(
                     "Create DataPartitionReader [dataSetID: {}, resultPartitionID: {}, channelIdx: "
                             + "{}, mapID: {}, startSubIdx: {}, endSubIdx {}, address: {}]",
@@ -230,21 +260,73 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
                             address,
                             remoteDescriptor.getDataSetId(),
                             (MapPartitionID) remoteDescriptor.getDataPartitionID(),
+                            getReducePartitionID(remoteDescriptor, subIdx),
+                            1,
                             startSubIdx,
                             endSubIdx,
                             bufferSize,
+                            isMapPartition,
                             transferBufferPool,
                             getDataListener(descriptor.getLeft()),
                             getFailureListener(remoteDescriptor.getResultPartitionID()));
-
             shuffleReadClients.add(shuffleReadClient);
-            numSubPartitionsHasNotConsumed[descriptor.getLeft()] = numSubpartitionsPerChannel;
-            numUnconsumedSubpartitions += numSubpartitionsPerChannel;
+            int numResultPartitionsPerChannel =
+                    isMapPartition ? numSubpartitionsPerChannel : remoteDescriptor.getNumMaps();
+            checkState(numResultPartitionsPerChannel > 0, "Wrong number of partitions.");
+            numSubPartitionsHasNotConsumed[descriptor.getLeft()] += numResultPartitionsPerChannel;
+            numUnconsumedSubpartitions += numResultPartitionsPerChannel;
             clientIndexMap[descriptor.getLeft()] = clientIndex;
-            channelIndexMap[clientIndex] = descriptor.getLeft();
-            ++clientIndex;
+            channelIndexMap[clientIndex++] = descriptor.getLeft();
         }
+        checkState(
+                isMapPartition || shuffleReadClients.size() == numSubpartitionsPerChannel,
+                "Wrong number of shuffle read clients.");
         return numUnconsumedSubpartitions;
+    }
+
+    private List<Pair<Integer, ShuffleDescriptor>> getSimplifiedShuffleDescriptorPairs(
+            RemoteShuffleDescriptor shuffleDescriptor, int startSubIdx, int endSubIdx) {
+        ShuffleDescriptor[] simplifiedDescriptors =
+                getSimplifiedShuffleDescriptors(shuffleDescriptor, startSubIdx, endSubIdx);
+        return convertShuffleDescriptorToPairs(simplifiedDescriptors);
+    }
+
+    private static List<Pair<Integer, ShuffleDescriptor>> convertShuffleDescriptorToPairs(
+            ShuffleDescriptor[] shuffleDescriptors) {
+        return IntStream.range(0, shuffleDescriptors.length)
+                .mapToObj(i -> Pair.of(i, shuffleDescriptors[i]))
+                .collect(Collectors.toList());
+    }
+
+    private ReducePartitionID getReducePartitionID(
+            RemoteShuffleDescriptor remoteDescriptor, int subPartitionIdx) {
+        return isMapPartition
+                ? new ReducePartitionID(0)
+                : new ReducePartitionID(
+                        subPartitionIdx,
+                        remoteDescriptor.getShuffleResource().getConsumerGroupID());
+    }
+
+    /**
+     * In the ReducePartition mode, the corresponding partition indexed {@link
+     * ShuffleWorkerDescriptor} is returned.
+     */
+    private ShuffleWorkerDescriptor getWorkerDescriptor(RemoteShuffleDescriptor remoteDescriptor) {
+        if (isMapPartition) {
+            return remoteDescriptor.getShuffleResource().getMapPartitionLocation();
+        } else {
+            ShuffleWorkerDescriptor[] shuffleWorkerDescriptors =
+                    remoteDescriptor.getShuffleResource().getReducePartitionLocations();
+            checkState(shuffleWorkerDescriptors.length > 0);
+            return shuffleWorkerDescriptors[0];
+        }
+    }
+
+    private static boolean isMapPartition(InputGateDeploymentDescriptor gateDescriptor) {
+        checkState(gateDescriptor != null && gateDescriptor.getShuffleDescriptors().length > 0);
+        RemoteShuffleDescriptor remoteDescriptor =
+                (RemoteShuffleDescriptor) gateDescriptor.getShuffleDescriptors()[0];
+        return remoteDescriptor.isMapPartition();
     }
 
     /** Setup gate and build network connections. */
@@ -257,8 +339,8 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
                 bufferPool, RemoteShuffleInputGateFactory.MIN_BUFFERS_PER_GATE);
 
         try {
-            for (int i = 0; i < gateDescriptor.getShuffleDescriptors().length; i++) {
-                shuffleReadClients.get(i).connect();
+            for (ShuffleReadClient shuffleReadClient : shuffleReadClients) {
+                shuffleReadClient.connect();
             }
         } catch (Throwable throwable) {
             LOG.error("Failed to setup remote input gate.", throwable);
@@ -391,7 +473,7 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
     }
 
     private List<InputChannelInfo> createChannelInfos() {
-        return IntStream.range(0, gateDescriptor.getShuffleDescriptors().length)
+        return IntStream.range(0, shuffleDescriptorPairs.size())
                 .mapToObj(i -> new InputChannelInfo(gateIndex, i))
                 .collect(Collectors.toList());
     }
@@ -401,9 +483,12 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
             InetSocketAddress address,
             DataSetID dataSetID,
             MapPartitionID mapID,
+            ReducePartitionID reduceID,
+            int numSubs,
             int startSubIdx,
             int endSubIdx,
             int bufferSize,
+            boolean isMapPartition,
             TransferBufferPool bufferPool,
             Consumer<ByteBuf> dataListener,
             Consumer<Throwable> failureListener) {
@@ -411,9 +496,12 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
                 address,
                 dataSetID,
                 mapID,
+                reduceID,
+                numSubs,
                 startSubIdx,
                 endSubIdx,
                 bufferSize,
+                isMapPartition,
                 bufferPool,
                 connectionManager,
                 dataListener,
@@ -428,15 +516,9 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
                 throw new IOException("Input gate already closed.");
             }
 
-            LOG.debug("Try open some partition readers.");
             int numOnGoing = 0;
             for (int i = 0; i < shuffleReadClients.size(); i++) {
                 ShuffleReadClient shuffleReadClient = shuffleReadClients.get(i);
-                LOG.debug(
-                        "Trying reader: {}, isOpened={}, numSubPartitionsHasNotConsumed={}.",
-                        shuffleReadClient,
-                        shuffleReadClient.isOpened(),
-                        numSubPartitionsHasNotConsumed[channelIndexMap[i]]);
                 if (numOnGoing >= numConcurrentReading) {
                     break;
                 }
@@ -484,6 +566,7 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
             try {
                 boolean wasEmpty = receivedBuffers.isEmpty();
                 InputChannelInfo channelInfo = channelsInfo.get(channelIdx);
+                checkState(channelInfo != null, "Empty channel info for channel " + channelIdx);
                 checkState(
                         channelInfo.getInputChannelIdx() == channelIdx, "Illegal channel index.");
                 receivedBuffers.add(Pair.of(buffer, channelInfo));
@@ -590,17 +673,21 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
         }
 
         if (event.getClass() == EndOfPartitionEvent.class) {
+            int channelIdx = channelInfo.getInputChannelIdx();
             checkState(
-                    numSubPartitionsHasNotConsumed[channelInfo.getInputChannelIdx()] > 0,
+                    numSubPartitionsHasNotConsumed[channelIdx] > 0,
+                    "BUG -- EndOfPartitionEvent in channel received repeatedly.");
+            numSubPartitionsHasNotConsumed[channelIdx]--;
+            checkState(
+                    numUnconsumedSubpartitions > 0,
                     "BUG -- EndOfPartitionEvent received repeatedly.");
-            numSubPartitionsHasNotConsumed[channelInfo.getInputChannelIdx()]--;
             numUnconsumedSubpartitions--;
             // not the real end.
-            if (numSubPartitionsHasNotConsumed[channelInfo.getInputChannelIdx()] != 0) {
+            if (numSubPartitionsHasNotConsumed[channelIdx] != 0) {
                 return Optional.empty();
             } else {
                 // the real end.
-                shuffleReadClients.get(clientIndexMap[channelInfo.getInputChannelIdx()]).close();
+                shuffleReadClients.get(clientIndexMap[channelIdx]).close();
                 tryOpenSomeChannels();
                 if (allReadersEOF()) {
                     availabilityHelper.getUnavailableToResetAvailable().complete(null);
@@ -766,6 +853,14 @@ public class RemoteShuffleInputGate extends IndexedInputGate {
         @Override
         public void addOutputData(
                 long cpId, ResultSubpartitionInfo info, int startSeqNum, Buffer... data) {}
+
+        @Override
+        public void addOutputDataFuture(
+                long l,
+                ResultSubpartitionInfo resultSubpartitionInfo,
+                int i,
+                CompletableFuture<List<Buffer>> completableFuture)
+                throws IllegalArgumentException {}
 
         @Override
         public void finishInput(long checkpointId) {}

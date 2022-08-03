@@ -148,6 +148,7 @@ public class LocalFileMapPartitionFactoryTest {
                             StorageTestUtils.JOB_ID,
                             StorageTestUtils.DATA_SET_ID,
                             StorageTestUtils.MAP_PARTITION_ID,
+                            StorageTestUtils.NUM_MAP_PARTITIONS,
                             StorageTestUtils.NUM_REDUCE_PARTITIONS);
             selectedDirs.add(dataPartition.getPartitionMeta().getStorageMeta().getStoragePath());
         }
@@ -190,6 +191,7 @@ public class LocalFileMapPartitionFactoryTest {
                             StorageTestUtils.JOB_ID,
                             StorageTestUtils.DATA_SET_ID,
                             StorageTestUtils.MAP_PARTITION_ID,
+                            StorageTestUtils.NUM_MAP_PARTITIONS,
                             StorageTestUtils.NUM_REDUCE_PARTITIONS);
             assertEquals(path2, dataPartition.getPartitionMeta().getStorageMeta().getStoragePath());
         }

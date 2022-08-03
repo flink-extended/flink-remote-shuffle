@@ -20,6 +20,7 @@ import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.common.exception.ConfigurationException;
 import com.alibaba.flink.shuffle.core.config.StorageOptions;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
+import com.alibaba.flink.shuffle.core.storage.DiskType;
 import com.alibaba.flink.shuffle.core.storage.StorageMeta;
 import com.alibaba.flink.shuffle.core.storage.StorageSpaceInfo;
 import com.alibaba.flink.shuffle.core.storage.StorageType;
@@ -89,6 +90,11 @@ public class HDDOnlyLocalFileMapPartitionFactory extends LocalFileMapPartitionFa
         for (StorageMeta storageMeta : storageMetas) {
             storageMeta.updateStorageHealthStatus();
         }
+    }
+
+    @Override
+    public DiskType getDiskType() {
+        return DiskType.HDD_ONLY;
     }
 
     @Override

@@ -17,3 +17,6 @@
 com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactory
 com.alibaba.flink.shuffle.storage.partition.SSDOnlyLocalFileMapPartitionFactory
 com.alibaba.flink.shuffle.storage.partition.HDDOnlyLocalFileMapPartitionFactory
+com.alibaba.flink.shuffle.storage.partition.LocalFileReducePartitionFactory
+com.alibaba.flink.shuffle.storage.partition.SSDOnlyLocalFileReducePartitionFactory
+com.alibaba.flink.shuffle.storage.partition.HDDOnlyLocalFileReducePartitionFactory

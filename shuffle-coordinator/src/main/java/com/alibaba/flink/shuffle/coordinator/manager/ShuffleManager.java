@@ -351,6 +351,7 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
             DataSetID dataSetID,
             MapPartitionID mapPartitionID,
             int numberOfConsumers,
+            long consumerGroupID,
             String dataPartitionFactoryName) {
         return requestShuffleResource(
                 jobID,
@@ -358,6 +359,7 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
                 dataSetID,
                 mapPartitionID,
                 numberOfConsumers,
+                consumerGroupID,
                 dataPartitionFactoryName,
                 null);
     }
@@ -369,6 +371,7 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
             DataSetID dataSetID,
             MapPartitionID mapPartitionID,
             int numberOfConsumers,
+            long consumerGroupID,
             String dataPartitionFactoryName,
             String taskLocation) {
         resourceRequestThroughput.mark();
@@ -393,6 +396,7 @@ public class ShuffleManager extends RemoteShuffleFencedRpcEndpoint<UUID>
                             dataSetID,
                             mapPartitionID,
                             numberOfConsumers,
+                            consumerGroupID,
                             dataPartitionFactoryName,
                             taskLocation);
             return CompletableFuture.completedFuture(allocatedShuffleResource);

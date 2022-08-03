@@ -300,6 +300,7 @@ public class TestingShuffleManagerGateway implements ShuffleManagerGateway {
             DataSetID dataSetID,
             MapPartitionID mapPartitionID,
             int numberOfConsumers,
+            long consumerGroupID,
             String dataPartitionFactoryName) {
         return requestShuffleResource(
                 jobID,
@@ -307,6 +308,7 @@ public class TestingShuffleManagerGateway implements ShuffleManagerGateway {
                 dataSetID,
                 mapPartitionID,
                 numberOfConsumers,
+                consumerGroupID,
                 dataPartitionFactoryName,
                 null);
     }
@@ -318,6 +320,7 @@ public class TestingShuffleManagerGateway implements ShuffleManagerGateway {
             DataSetID dataSetID,
             MapPartitionID mapPartitionID,
             int numberOfConsumers,
+            long consumerGroupID,
             String dataPartitionFactoryName,
             String taskLocation) {
         QuadFunction<JobID, DataSetID, MapPartitionID, Integer, CompletableFuture<ShuffleResource>>

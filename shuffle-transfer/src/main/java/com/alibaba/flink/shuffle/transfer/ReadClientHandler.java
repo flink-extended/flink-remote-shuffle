@@ -188,7 +188,7 @@ public class ReadClientHandler extends ChannelInboundHandlerAdapter {
                 SocketAddress address = ctx.channel().remoteAddress();
                 ChannelID channelID = backlog.getChannelID();
                 currentChannelID = channelID;
-                LOG.trace("({}) Received {}.", address, backlog);
+                LOG.debug("({}) Received {}.", address, backlog);
                 ShuffleReadClient shuffleReadClient = readClientsByChannelID.get(channelID);
                 assertChannelExists(channelID, shuffleReadClient);
                 shuffleReadClient.backlogReceived(backlog.getBacklog());

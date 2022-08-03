@@ -39,6 +39,9 @@ public class WritingViewContext {
     /** ID of the logic {@link MapPartition} that the written data belongs to. */
     private final MapPartitionID mapPartitionID;
 
+    /** The total number of partitions, which is equal to the upstream parallelism. */
+    private final int numMapPartitions;
+
     /** Number of the {@link ReducePartition}s of the whole {@link DataSet}. */
     private final int numReducePartitions;
 
@@ -56,6 +59,7 @@ public class WritingViewContext {
             DataSetID dataSetID,
             DataPartitionID dataPartitionID,
             MapPartitionID mapPartitionID,
+            int numMapPartitions,
             int numReducePartitions,
             String partitionFactoryClassName,
             DataRegionCreditListener dataRegionCreditListener,
@@ -64,6 +68,7 @@ public class WritingViewContext {
         CommonUtils.checkArgument(dataSetID != null, "Must be not null.");
         CommonUtils.checkArgument(dataPartitionID != null, "Must be not null.");
         CommonUtils.checkArgument(mapPartitionID != null, "Must be not null.");
+        CommonUtils.checkArgument(numMapPartitions >= 0, "Must be non-negative.");
         CommonUtils.checkArgument(numReducePartitions > 0, "Must be positive.");
         CommonUtils.checkArgument(partitionFactoryClassName != null, "Must be not null.");
         CommonUtils.checkArgument(dataRegionCreditListener != null, "Must be not null.");
@@ -73,6 +78,7 @@ public class WritingViewContext {
         this.dataSetID = dataSetID;
         this.dataPartitionID = dataPartitionID;
         this.mapPartitionID = mapPartitionID;
+        this.numMapPartitions = numMapPartitions;
         this.numReducePartitions = numReducePartitions;
         this.partitionFactoryClassName = partitionFactoryClassName;
         this.dataRegionCreditListener = dataRegionCreditListener;
@@ -93,6 +99,10 @@ public class WritingViewContext {
 
     public MapPartitionID getMapPartitionID() {
         return mapPartitionID;
+    }
+
+    public int getNumMapPartitions() {
+        return numMapPartitions;
     }
 
     public int getNumReducePartitions() {

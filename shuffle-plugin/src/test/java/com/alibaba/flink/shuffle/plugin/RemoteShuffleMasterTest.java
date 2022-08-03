@@ -24,6 +24,7 @@ import com.alibaba.flink.shuffle.core.ids.InstanceID;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
+import com.alibaba.flink.shuffle.core.storage.DiskType;
 import com.alibaba.flink.shuffle.plugin.config.PluginOptions;
 import com.alibaba.flink.shuffle.plugin.utils.ConfigurationUtils;
 import com.alibaba.flink.shuffle.rpc.RemoteShuffleRpcService;
@@ -35,10 +36,13 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
+import org.apache.flink.runtime.executiongraph.ExecutionGraphID;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
+import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.shuffle.JobShuffleContext;
 import org.apache.flink.runtime.shuffle.PartitionDescriptor;
 import org.apache.flink.runtime.shuffle.ProducerDescriptor;
@@ -71,7 +75,8 @@ public class RemoteShuffleMasterTest extends RemoteShuffleShuffleTestBase {
                         new ShuffleWorkerDescriptor[] {
                             new ShuffleWorkerDescriptor(new InstanceID("worker1"), "worker1", 20480)
                         },
-                        DataPartition.DataPartitionType.MAP_PARTITION);
+                        DataPartition.DataPartitionType.MAP_PARTITION,
+                        DiskType.ANY_TYPE);
         smGateway.setAllocateShuffleResourceConsumer(
                 (jobID, dataSetID, mapPartitionID, numberOfSubpartitions) -> {
                     resourceRequestFuture.complete(
@@ -92,7 +97,9 @@ public class RemoteShuffleMasterTest extends RemoteShuffleShuffleTestBase {
         IntermediateDataSetID intermediateDataSetId = new IntermediateDataSetID();
         IntermediateResultPartitionID intermediateResultPartitionId =
                 new IntermediateResultPartitionID(intermediateDataSetId, 0);
-        ExecutionAttemptID executionAttemptId = new ExecutionAttemptID();
+        ExecutionAttemptID executionAttemptId =
+                new ExecutionAttemptID(
+                        new ExecutionGraphID(), new ExecutionVertexID(new JobVertexID(), 0), 0);
         ResultPartitionID resultPartitionId =
                 new ResultPartitionID(intermediateResultPartitionId, executionAttemptId);
         PartitionDescriptor partitionDescriptor =
@@ -102,7 +109,9 @@ public class RemoteShuffleMasterTest extends RemoteShuffleShuffleTestBase {
                         intermediateResultPartitionId,
                         ResultPartitionType.BLOCKING,
                         5,
-                        1);
+                        1,
+                        false,
+                        true);
         ProducerDescriptor producerDescriptor =
                 new ProducerDescriptor(
                         new ResourceID("tm1"),

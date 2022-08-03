@@ -153,6 +153,20 @@ public class StorageOptions {
                                     MIN_WRITING_READING_MEMORY_SIZE.toHumanReadableString(),
                                     MIN_WRITING_READING_MEMORY_SIZE.toHumanReadableString()));
 
+    public static final ConfigOption<MemorySize> STORAGE_PARTITION_LAZY_RECYCLE_WRITING_MEMORY =
+            new ConfigOption<MemorySize>(
+                            "remote-shuffle.storage.partition.lazy-recycle-writing-memory")
+                    .defaultValue(MemorySize.parse("1m"))
+                    .description(
+                            String.format(
+                                    "When writing data partition, some buffers are reserved when "
+                                            + "recycling to avoid requesting buffers too frequently. "
+                                            + "This is the memory size to reserve. Note that if the "
+                                            + "configured value is more than %s, the value of %s "
+                                            + "will be used.",
+                                    STORAGE_MAX_PARTITION_WRITING_MEMORY.key(),
+                                    STORAGE_MAX_PARTITION_WRITING_MEMORY.key()));
+
     /**
      * The update interval of the worker check thread which will periodically get the status like
      * disk space at this time interval.

@@ -16,6 +16,8 @@
 
 package com.alibaba.flink.shuffle.storage.partition;
 
+import com.alibaba.flink.shuffle.core.storage.DataPartitionWriter;
+
 import javax.annotation.Nullable;
 
 /**
@@ -25,10 +27,34 @@ import javax.annotation.Nullable;
 public interface DataPartitionWritingTask extends PartitionProcessingTask {
 
     /** Allocates resources for data writing, will be called on the first data writing request. */
-    void allocateResources() throws Exception;
+    void allocateResources();
 
     /** Triggers running of this writing task which will write data to data partition. */
-    void triggerWriting();
+    void triggerWriting(DataPartitionWriter writer);
+
+    /**
+     * Returns the maximum number of available writing buffers of this {@link
+     * DataPartitionWritingTask}.
+     */
+    int numAvailableBuffers();
+
+    /**
+     * Returns the occupied number of available writing buffers of this {@link
+     * DataPartitionWritingTask}.
+     */
+    int numOccupiedBuffers();
+
+    /**
+     * Whether the number of occupied buffers of this {@link DataPartitionWritingTask} equals with
+     * maximum writing buffers.
+     */
+    boolean hasAllocatedMaxWritingBuffers();
+
+    /**
+     * Recycles the buffers of this {@link DataPartitionWritingTask}. When no more writers, it will
+     * actively release the allocated resources.
+     */
+    void recycleResources();
 
     /** Releases this {@link DataPartitionWritingTask} which releases all allocated resources. */
     void release(@Nullable Throwable throwable) throws Exception;

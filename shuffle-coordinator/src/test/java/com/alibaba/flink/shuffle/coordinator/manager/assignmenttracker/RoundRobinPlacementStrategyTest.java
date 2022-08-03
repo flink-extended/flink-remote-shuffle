@@ -84,6 +84,7 @@ public class RoundRobinPlacementStrategyTest {
                             randomDataSetId(),
                             dataPartitionId,
                             2,
+                            0,
                             PARTITION_FACTORY_CLASS,
                             null);
             shuffleResources.add(shuffleResource);

@@ -22,6 +22,9 @@ import com.alibaba.flink.shuffle.core.memory.BufferRecycler;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.annotation.concurrent.GuardedBy;
 
 import java.nio.ByteBuffer;
@@ -36,6 +39,8 @@ import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
 
 /** A buffer pool which will dispatch buffers to all {@link CreditListener}s. */
 public class TransferBufferPool implements BufferRecycler {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TransferBufferPool.class);
 
     private static final int MIN_CREDITS_TO_NOTIFY = 2;
 
@@ -82,6 +87,10 @@ public class TransferBufferPool implements BufferRecycler {
             creditAssignments = dispatchReservedCredits();
         }
         for (CreditAssignment creditAssignment : creditAssignments) {
+            LOG.debug(
+                    "Notify {} credits in addBuffers, total={}",
+                    creditAssignment.getNumCredits(),
+                    numAvailableBuffers);
             creditAssignment
                     .getCreditListener()
                     .notifyAvailableCredits(creditAssignment.getNumCredits());
@@ -113,6 +122,7 @@ public class TransferBufferPool implements BufferRecycler {
             }
         }
         if (listener != null) {
+            LOG.debug("Notify {} credits in addBuffers, total={}", numCredits, numAvailableBuffers);
             listener.notifyAvailableCredits(numCredits);
         }
     }
@@ -155,6 +165,10 @@ public class TransferBufferPool implements BufferRecycler {
             creditAssignments = dispatchReservedCredits();
         }
         for (CreditAssignment creditAssignment : creditAssignments) {
+            LOG.debug(
+                    "Notify {} credits in addBuffers, total={}",
+                    creditAssignment.getNumCredits(),
+                    numAvailableBuffers);
             creditAssignment
                     .getCreditListener()
                     .notifyAvailableCredits(creditAssignment.getNumCredits());
@@ -172,6 +186,11 @@ public class TransferBufferPool implements BufferRecycler {
         if (numCredits > 0) {
             creditListener.decreaseNumCreditsNeeded(numCredits);
             numAvailableBuffers -= numCredits;
+            LOG.debug(
+                    "Assigning {} credit to {}, total={}",
+                    numCredits,
+                    creditListener.toString(),
+                    numAvailableBuffers);
         }
 
         if (creditListener.getNumCreditsNeeded() > 0) {

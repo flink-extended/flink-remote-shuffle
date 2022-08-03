@@ -69,6 +69,7 @@ public interface ShuffleManagerJobGateway extends RemoteShuffleFencedRpcGateway<
      * @param dataSetID The id of the dataset that contains this partition.
      * @param mapPartitionID The id represents the map task.
      * @param numberOfConsumers The number of consumers of the partition.
+     * @param consumerGroupID The id of consumer vertex group of the partition.
      * @param dataPartitionFactoryName The factory name of the data partition.
      * @return The allocated shuffle resources.
      */
@@ -78,6 +79,7 @@ public interface ShuffleManagerJobGateway extends RemoteShuffleFencedRpcGateway<
             DataSetID dataSetID,
             MapPartitionID mapPartitionID,
             int numberOfConsumers,
+            long consumerGroupID,
             String dataPartitionFactoryName);
 
     /**
@@ -89,6 +91,7 @@ public interface ShuffleManagerJobGateway extends RemoteShuffleFencedRpcGateway<
      * @param dataSetID The id of the dataset that contains this partition.
      * @param mapPartitionID The id represents the map task.
      * @param numberOfConsumers The number of consumers of the partition.
+     * @param consumerGroupID The id of consumer vertex group of the partition.
      * @param dataPartitionFactoryName The factory name of the data partition.
      * @param taskLocation The location (host name) of the target task requesting resources.
      * @return The allocated shuffle resources.
@@ -99,6 +102,7 @@ public interface ShuffleManagerJobGateway extends RemoteShuffleFencedRpcGateway<
             DataSetID dataSetID,
             MapPartitionID mapPartitionID,
             int numberOfConsumers,
+            long consumerGroupID,
             String dataPartitionFactoryName,
             @Nullable String taskLocation);
 

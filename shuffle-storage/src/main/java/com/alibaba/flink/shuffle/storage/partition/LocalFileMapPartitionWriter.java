@@ -58,7 +58,8 @@ public class LocalFileMapPartitionWriter extends BaseMapPartitionWriter {
     }
 
     @Override
-    protected void processDataBuffer(BufferOrMarker.DataBuffer buffer) throws Exception {
+    protected void processDataBuffer(BufferOrMarker.DataBuffer buffer, boolean isLastBufferOrMarker)
+            throws Exception {
         if (!fileWriter.isOpened()) {
             fileWriter.open();
         }

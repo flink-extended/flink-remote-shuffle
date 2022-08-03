@@ -22,6 +22,7 @@ import com.alibaba.flink.shuffle.common.utils.ExceptionUtils;
 import com.alibaba.flink.shuffle.core.ids.ChannelID;
 import com.alibaba.flink.shuffle.core.ids.DataSetID;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.core.storage.PartitionedDataStore;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.BacklogAnnouncement;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.CloseChannel;
@@ -30,6 +31,7 @@ import com.alibaba.flink.shuffle.transfer.TransferMessage.ErrorResponse;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.Heartbeat;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadAddCredit;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ReadHandshakeRequest;
+import com.alibaba.flink.shuffle.transfer.TransferMessage.ReducePartitionReadHandshakeRequest;
 
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelHandlerContext;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandler;
@@ -121,6 +123,7 @@ public class ReadServerHandler extends SimpleChannelInboundHandler<TransferMessa
     private void onMessage(ChannelHandlerContext ctx, TransferMessage msg) throws Throwable {
 
         Class<?> msgClazz = msg.getClass();
+        // TODO, process reduce partition read and write request.
         if (msgClazz == ReadHandshakeRequest.class) {
             ReadHandshakeRequest handshakeReq = (ReadHandshakeRequest) msg;
             ChannelID channelID = handshakeReq.getChannelID();
@@ -148,9 +151,35 @@ public class ReadServerHandler extends SimpleChannelInboundHandler<TransferMessa
                     initCredit,
                     address.toString());
 
+        } else if (msgClazz == ReducePartitionReadHandshakeRequest.class) {
+            ReducePartitionReadHandshakeRequest handshakeReq =
+                    (ReducePartitionReadHandshakeRequest) msg;
+            ChannelID channelID = handshakeReq.getChannelID();
+            SocketAddress address = ctx.channel().remoteAddress();
+            LOG.debug("({}}) received {}.", address, handshakeReq);
+
+            currentChannelID = channelID;
+            DataSetID dataSetID = handshakeReq.getDataSetID();
+            ReducePartitionID reduceID = handshakeReq.getReduceID();
+            int numSubs = handshakeReq.getNumSubs();
+            int initCredit = handshakeReq.getInitialCredit();
+            Consumer<DataViewReader> dataListener = ctx.pipeline()::fireUserEventTriggered;
+            Consumer<Integer> backlogListener = getBacklogListener(ctx, channelID);
+            Consumer<Throwable> failureListener = getFailureListener(ctx, channelID);
+            readingService.reducePartitionHandshake(
+                    channelID,
+                    dataSetID,
+                    reduceID,
+                    numSubs,
+                    dataListener,
+                    backlogListener,
+                    failureListener,
+                    initCredit,
+                    address.toString());
+
         } else if (msgClazz == ReadAddCredit.class) {
             ReadAddCredit addCredit = (ReadAddCredit) msg;
-            LOG.trace("({}) Received {}.", ctx.channel().remoteAddress(), addCredit);
+            LOG.debug("({}) Received {}.", ctx.channel().remoteAddress(), addCredit);
 
             ChannelID channelID = addCredit.getChannelID();
             currentChannelID = channelID;

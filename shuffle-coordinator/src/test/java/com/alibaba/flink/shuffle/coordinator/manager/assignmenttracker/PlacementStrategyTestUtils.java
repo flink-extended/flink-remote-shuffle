@@ -147,6 +147,7 @@ public class PlacementStrategyTestUtils {
                             randomDataSetId(),
                             dataPartitionId,
                             2,
+                            0,
                             PARTITION_FACTORY_CLASS,
                             taskLocation);
             shuffleResources.add(shuffleResource);
@@ -214,6 +215,7 @@ public class PlacementStrategyTestUtils {
                     randomDataSetId(),
                     randomMapPartitionId(),
                     2,
+                    0,
                     PARTITION_FACTORY_CLASS,
                     taskLocation);
         } catch (ShuffleResourceAllocationException e) {

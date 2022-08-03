@@ -82,6 +82,7 @@ public class RandomPlacementStrategyTest {
                             randomDataSetId(),
                             dataPartitionId,
                             2,
+                            0,
                             PARTITION_FACTORY_CLASS,
                             null);
             shuffleResources.add(shuffleResource);

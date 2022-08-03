@@ -308,7 +308,7 @@ public class LocalFileMapPartitionTest {
                     }
 
                     buffer.writeBytes(StorageTestUtils.DATA_BYTES);
-                    partitionWriter.addBuffer(new ReducePartitionID(reduceIndex), buffer);
+                    partitionWriter.addBuffer(new ReducePartitionID(reduceIndex), 0, buffer);
                     ++buffersWritten;
                 }
 
@@ -317,7 +317,7 @@ public class LocalFileMapPartitionTest {
                     return buffersWritten;
                 }
             }
-            partitionWriter.finishRegion();
+            partitionWriter.finishRegion(regionIndex);
         }
 
         TestDataCommitListener commitListener = new TestDataCommitListener();

@@ -24,6 +24,8 @@ import com.alibaba.flink.shuffle.core.memory.BufferRecycler;
 import com.alibaba.flink.shuffle.core.storage.BufferQueue;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionWriter;
 
+import java.io.IOException;
+
 /** A no-op {@link DataPartitionWriter} implementation for tests. */
 public class NoOpDataPartitionWriter implements DataPartitionWriter {
 
@@ -43,13 +45,15 @@ public class NoOpDataPartitionWriter implements DataPartitionWriter {
     }
 
     @Override
-    public void addBuffer(ReducePartitionID reducePartitionID, Buffer buffer) {}
+    public void addBuffer(
+            ReducePartitionID reducePartitionID, int dataRegionIndex, Buffer buffer) {}
 
     @Override
-    public void startRegion(int dataRegionIndex, boolean isBroadcastRegion) {}
+    public void startRegion(
+            int dataRegionIndex, int numMaps, int needCredit, boolean isBroadcastRegion) {}
 
     @Override
-    public void finishRegion() {}
+    public void finishRegion(int dataRegionIndex) {}
 
     @Override
     public void finishDataInput(DataCommitListener commitListener) {}
@@ -60,8 +64,37 @@ public class NoOpDataPartitionWriter implements DataPartitionWriter {
     }
 
     @Override
+    public boolean isInProcessQueue() {
+        return false;
+    }
+
+    @Override
+    public int numBufferOrMarkers() {
+        return 0;
+    }
+
+    @Override
+    public void setInProcessQueue(boolean isInProcessQueue) {}
+
+    @Override
+    public boolean isWritingPartial() {
+        return false;
+    }
+
+    @Override
+    public void triggerFlushFileDataBuffers() throws IOException {}
+
+    @Override
+    public int numPendingCredit() {
+        return 0;
+    }
+
+    @Override
     public void onError(Throwable throwable) {}
 
     @Override
     public void release(Throwable throwable) {}
+
+    @Override
+    public void startRegion(int dataRegionIndex, boolean isBroadcastRegion) {}
 }

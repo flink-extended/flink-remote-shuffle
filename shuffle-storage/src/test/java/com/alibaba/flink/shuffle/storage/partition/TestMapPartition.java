@@ -110,7 +110,7 @@ public class TestMapPartition extends BaseMapPartition {
         public void allocateResources() {}
 
         @Override
-        public void triggerWriting() {
+        public void triggerWriting(DataPartitionWriter writer) {
             ++numWritingTriggers;
         }
 

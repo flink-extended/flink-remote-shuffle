@@ -28,6 +28,8 @@ import org.apache.flink.runtime.shuffle.ShuffleDescriptor;
 
 import java.util.Optional;
 
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
+
 /** {@link ShuffleDescriptor} for the flink remote shuffle. */
 public class RemoteShuffleDescriptor implements ShuffleDescriptor {
 
@@ -42,11 +44,22 @@ public class RemoteShuffleDescriptor implements ShuffleDescriptor {
     /** The allocated shuffle resource. */
     private final ShuffleResource shuffleResource;
 
+    private final int numMaps;
+
+    private final boolean isMapPartition;
+
     public RemoteShuffleDescriptor(
-            ResultPartitionID resultPartitionID, JobID jobId, ShuffleResource shuffleResource) {
+            ResultPartitionID resultPartitionID,
+            JobID jobId,
+            ShuffleResource shuffleResource,
+            boolean isMapPartition,
+            int numMaps) {
         this.resultPartitionID = resultPartitionID;
         this.jobId = jobId;
         this.shuffleResource = shuffleResource;
+        this.isMapPartition = isMapPartition;
+        this.numMaps = numMaps;
+        checkState(isMapPartition || numMaps > 0);
     }
 
     @Override
@@ -76,6 +89,14 @@ public class RemoteShuffleDescriptor implements ShuffleDescriptor {
         return shuffleResource;
     }
 
+    public boolean isMapPartition() {
+        return isMapPartition;
+    }
+
+    public int getNumMaps() {
+        return numMaps;
+    }
+
     @Override
     public String toString() {
         return "RemoteShuffleDescriptor{"
@@ -89,6 +110,8 @@ public class RemoteShuffleDescriptor implements ShuffleDescriptor {
                 + getDataPartitionID()
                 + ", shuffleResource="
                 + shuffleResource
+                + ", isMapPartition="
+                + isMapPartition
                 + '}';
     }
 }

@@ -48,6 +48,9 @@ import com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionMeta;
 import com.alibaba.flink.shuffle.storage.partition.LocalMapPartitionFile;
 import com.alibaba.flink.shuffle.storage.partition.LocalMapPartitionFileMeta;
 import com.alibaba.flink.shuffle.storage.partition.LocalMapPartitionFileWriter;
+import com.alibaba.flink.shuffle.storage.partition.LocalReducePartitionFile;
+import com.alibaba.flink.shuffle.storage.partition.LocalReducePartitionFileMeta;
+import com.alibaba.flink.shuffle.storage.partition.LocalReducePartitionFileWriter;
 
 import org.junit.rules.TemporaryFolder;
 
@@ -64,6 +67,8 @@ import java.util.Set;
 
 /** Utility methods commonly used by tests of storage layer. */
 public class StorageTestUtils {
+
+    public static final int NUM_MAP_PARTITIONS = 8;
 
     public static final int NUM_REDUCE_PARTITIONS = 10;
 
@@ -82,6 +87,8 @@ public class StorageTestUtils {
 
     public static final MapPartitionID MAP_PARTITION_ID =
             new MapPartitionID(CommonUtils.randomBytes(16));
+
+    public static final ReducePartitionID REDUCE_PARTITION_ID = new ReducePartitionID(0);
 
     public static final DataRegionCreditListener NO_OP_CREDIT_LISTENER = (ignored1, ignored2) -> {};
 
@@ -171,6 +178,59 @@ public class StorageTestUtils {
         fileWriter.finishWriting();
     }
 
+    public static LocalReducePartitionFileMeta createLocalReducePartitionFileMeta() {
+        String basePath = CommonUtils.randomHexString(128) + "/";
+        String fileName = CommonUtils.randomHexString(32);
+        Random random = new Random();
+        int numMapPartitions = random.nextInt(Integer.MAX_VALUE) + 1;
+
+        return new LocalReducePartitionFileMeta(
+                basePath + fileName,
+                numMapPartitions,
+                LocalMapPartitionFile.LATEST_STORAGE_VERSION);
+    }
+
+    public static LocalReducePartitionFile createLocalReducePartitionFile(String baseDir) {
+        String basePath = baseDir + "/";
+        String fileName = CommonUtils.randomHexString(32);
+        LocalReducePartitionFileMeta fileMeta =
+                new LocalReducePartitionFileMeta(
+                        basePath + fileName,
+                        NUM_MAP_PARTITIONS,
+                        LocalMapPartitionFile.LATEST_STORAGE_VERSION);
+        return new LocalReducePartitionFile(fileMeta, 3, false);
+    }
+
+    public static void writeLocalReducePartitionFile(
+            LocalReducePartitionFile partitionFile,
+            int numRegions,
+            int numMapPartitions,
+            int numBuffers,
+            boolean withEmptyMapPartitions,
+            boolean dataChecksumEnabled)
+            throws Exception {
+        LocalReducePartitionFileWriter fileWriter =
+                new LocalReducePartitionFileWriter(partitionFile, 2, dataChecksumEnabled);
+        fileWriter.open();
+        MapPartitionID mapPartitionID = new MapPartitionID(CommonUtils.randomBytes(16));
+        fileWriter.startRegion(false, mapPartitionID);
+        for (int regionIndex = 0; regionIndex < numRegions; regionIndex++) {
+            for (int partition = 0; partition < numMapPartitions; partition++) {
+                if (withEmptyMapPartitions && regionIndex % 2 == 0) {
+                    continue;
+                }
+                for (int bufferIndex = 0; bufferIndex < numBuffers; ++bufferIndex) {
+                    fileWriter.writeBuffer(createDataBuffer(createRandomData(), 0), false);
+                }
+            }
+        }
+        fileWriter.finishRegion(mapPartitionID);
+
+        fileWriter.prepareFinishWriting(
+                new BufferOrMarker.InputFinishedMarker(mapPartitionID, () -> {}));
+        fileWriter.closeWriting();
+    }
+
     public static ByteBuffer createRandomData() {
         ByteBuffer data = ByteBuffer.allocateDirect(DATA_BUFFER_SIZE);
         data.put(DATA_BYTES);
@@ -181,6 +241,7 @@ public class StorageTestUtils {
     public static BufferOrMarker.DataBuffer createDataBuffer(ByteBuffer data, int channelIndex) {
         return new BufferOrMarker.DataBuffer(
                 StorageTestUtils.MAP_PARTITION_ID,
+                0,
                 new ReducePartitionID(channelIndex),
                 new Buffer(data, StorageTestUtils.NO_OP_BUFFER_RECYCLER, data.remaining()));
     }
@@ -231,6 +292,7 @@ public class StorageTestUtils {
                         DATA_SET_ID,
                         MAP_PARTITION_ID,
                         MAP_PARTITION_ID,
+                        NUM_MAP_PARTITIONS,
                         NUM_REDUCE_PARTITIONS,
                         LOCAL_FILE_MAP_PARTITION_FACTORY,
                         NO_OP_CREDIT_LISTENER,
@@ -248,6 +310,7 @@ public class StorageTestUtils {
                         DATA_SET_ID,
                         MAP_PARTITION_ID,
                         MAP_PARTITION_ID,
+                        NUM_MAP_PARTITIONS,
                         NUM_REDUCE_PARTITIONS,
                         LOCAL_FILE_MAP_PARTITION_FACTORY,
                         dataRegionCreditListener,
@@ -262,6 +325,7 @@ public class StorageTestUtils {
                         DATA_SET_ID,
                         MAP_PARTITION_ID,
                         MAP_PARTITION_ID,
+                        NUM_MAP_PARTITIONS,
                         NUM_REDUCE_PARTITIONS,
                         LOCAL_FILE_MAP_PARTITION_FACTORY,
                         NO_OP_CREDIT_LISTENER,

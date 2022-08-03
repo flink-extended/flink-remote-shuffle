@@ -41,6 +41,7 @@ import com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionFactory;
 import com.alibaba.flink.shuffle.storage.partition.LocalFileMapPartitionMeta;
 import com.alibaba.flink.shuffle.storage.partition.LocalMapPartitionFile;
 import com.alibaba.flink.shuffle.storage.partition.LocalMapPartitionFileMeta;
+import com.alibaba.flink.shuffle.storage.partition.LocalReducePartitionFile;
 import com.alibaba.flink.shuffle.storage.partition.SSDOnlyLocalFileMapPartitionFactory;
 import com.alibaba.flink.shuffle.storage.utils.StorageTestUtils;
 import com.alibaba.flink.shuffle.storage.utils.TestDataCommitListener;
@@ -141,6 +142,19 @@ public class PartitionedDataStoreImplTest {
     }
 
     @Test(expected = PartitionNotFoundException.class)
+    public void testDeleteIndexFileOfLocalFileReducePartition() throws Exception {
+        StorageTestUtils.createEmptyDataPartition(dataStore);
+
+        for (File file : CommonUtils.checkNotNull(temporaryFolder.getRoot().listFiles())) {
+            if (file.getPath().contains(LocalReducePartitionFile.INDEX_FILE_SUFFIX)) {
+                Files.delete(file.toPath());
+            }
+        }
+
+        StorageTestUtils.createDataPartitionReadingView(dataStore, 0);
+    }
+
+    @Test(expected = PartitionNotFoundException.class)
     public void testDeleteIndexFileOfLocalFileMapPartition() throws Exception {
         StorageTestUtils.createEmptyDataPartition(dataStore);
 
@@ -159,6 +173,19 @@ public class PartitionedDataStoreImplTest {
 
         for (File file : CommonUtils.checkNotNull(temporaryFolder.getRoot().listFiles())) {
             if (file.getPath().contains(LocalMapPartitionFile.DATA_FILE_SUFFIX)) {
+                Files.delete(file.toPath());
+            }
+        }
+
+        StorageTestUtils.createDataPartitionReadingView(dataStore, 0);
+    }
+
+    @Test(expected = PartitionNotFoundException.class)
+    public void testDeleteDataFileOfLocalFileReducePartition() throws Exception {
+        StorageTestUtils.createEmptyDataPartition(dataStore);
+
+        for (File file : CommonUtils.checkNotNull(temporaryFolder.getRoot().listFiles())) {
+            if (file.getPath().contains(LocalReducePartitionFile.DATA_FILE_SUFFIX)) {
                 Files.delete(file.toPath());
             }
         }
@@ -306,6 +333,7 @@ public class PartitionedDataStoreImplTest {
                                                     dataSetID,
                                                     partitionID,
                                                     mapPartitionID,
+                                                    StorageTestUtils.NUM_MAP_PARTITIONS,
                                                     StorageTestUtils.NUM_REDUCE_PARTITIONS,
                                                     StorageTestUtils
                                                             .LOCAL_FILE_MAP_PARTITION_FACTORY,
@@ -430,7 +458,7 @@ public class PartitionedDataStoreImplTest {
         dataStore.updateUsedStorageSpace();
 
         Map<String, StorageSpaceInfo> storageSpaceInfos = dataStore.getStorageSpaceInfos();
-        assertEquals(2, storageSpaceInfos.size());
+        assertEquals(4, storageSpaceInfos.size());
         assertNull(storageSpaceInfos.get(SSDOnlyLocalFileMapPartitionFactory.class.getName()));
         assertEquals(
                 storageSpaceInfos.get(LocalFileMapPartitionFactory.class.getName()),
@@ -543,10 +571,11 @@ public class PartitionedDataStoreImplTest {
                                         Buffer buffer =
                                                 writingView.getBufferSupplier().pollBuffer();
                                         buffer.writeBytes(StorageTestUtils.DATA_BYTES);
-                                        writingView.onBuffer(buffer, reducePartitionID);
+                                        writingView.onBuffer(
+                                                buffer, regionIndex, reducePartitionID);
                                     }
                                 }
-                                writingView.regionFinished();
+                                writingView.regionFinished(regionIndex);
                                 writingView.finish(StorageTestUtils.NO_OP_DATA_COMMIT_LISTENER);
                             } catch (Throwable ignored) {
                             }
@@ -767,6 +796,7 @@ public class PartitionedDataStoreImplTest {
                                         StorageTestUtils.DATA_SET_ID,
                                         partitionID,
                                         partitionID,
+                                        StorageTestUtils.NUM_MAP_PARTITIONS,
                                         StorageTestUtils.NUM_REDUCE_PARTITIONS,
                                         StorageTestUtils.LOCAL_FILE_MAP_PARTITION_FACTORY,
                                         creditListener,
@@ -781,7 +811,7 @@ public class PartitionedDataStoreImplTest {
                             creditListener.take(0, regionID);
                             Buffer buffer = writingView.getBufferSupplier().pollBuffer();
                             buffer.writeBytes(StorageTestUtils.DATA_BYTES);
-                            writingView.onBuffer(buffer, new ReducePartitionID(reduceID));
+                            writingView.onBuffer(buffer, regionID, new ReducePartitionID(reduceID));
                         }
 
                         if (triggerWritingViewError) {
@@ -789,7 +819,7 @@ public class PartitionedDataStoreImplTest {
                             break;
                         }
                     }
-                    writingView.regionFinished();
+                    writingView.regionFinished(regionID);
                 }
                 writingView.finish(commitListener);
                 commitListener.waitForDataCommission();

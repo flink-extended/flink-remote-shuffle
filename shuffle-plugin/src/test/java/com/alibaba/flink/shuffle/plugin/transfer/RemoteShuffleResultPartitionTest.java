@@ -22,6 +22,7 @@ import com.alibaba.flink.shuffle.coordinator.manager.DefaultShuffleResource;
 import com.alibaba.flink.shuffle.coordinator.manager.ShuffleWorkerDescriptor;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
+import com.alibaba.flink.shuffle.core.storage.DiskType;
 import com.alibaba.flink.shuffle.plugin.RemoteShuffleDescriptor;
 import com.alibaba.flink.shuffle.plugin.transfer.PartitionSortedBufferTest.DataAndType;
 import com.alibaba.flink.shuffle.plugin.utils.BufferUtils;
@@ -96,7 +97,7 @@ public class RemoteShuffleResultPartitionTest {
     @After
     public void tearDown() throws Exception {
         if (outputGate != null) {
-            outputGate.release();
+            outputGate.tearDown();
         }
 
         if (sortBufferPool != null) {
@@ -323,7 +324,7 @@ public class RemoteShuffleResultPartitionTest {
         }
         IntStream.range(0, numSubpartitions).forEach(subpartitions -> {});
         PartitionSortedBufferTest.checkWriteReadResult(
-                numSubpartitions, numBytesWritten, numBytesWritten, dataWritten, validateTarget);
+                null, numSubpartitions, numBytesWritten, numBytesRead, dataWritten, validateTarget);
     }
 
     private void initResultPartitionWriter(
@@ -457,13 +458,31 @@ public class RemoteShuffleResultPartitionTest {
         }
 
         @Override
-        public void regionStart(boolean isBroadcast) {
+        public void regionStart(boolean isBroadcast, SortBuffer sortBuffer, int bufferSize) {
+            currentIsBroadcast = isBroadcast;
+            currentRegionIndex++;
+        }
+
+        @Override
+        public void regionStart(
+                boolean isBroadcast,
+                int targetSubpartition,
+                int requireCredit,
+                boolean needMoreThanOneBuffer) {
             currentIsBroadcast = isBroadcast;
             currentRegionIndex++;
         }
 
         @Override
         public void regionFinish() {
+            if (finishedRegions.contains(currentRegionIndex)) {
+                throw new IllegalStateException("Unexpected region: " + currentRegionIndex);
+            }
+            finishedRegions.add(currentRegionIndex);
+        }
+
+        @Override
+        public void regionFinish(int targetSubpartition) {
             if (finishedRegions.contains(currentRegionIndex)) {
                 throw new IllegalStateException("Unexpected region: " + currentRegionIndex);
             }
@@ -504,7 +523,7 @@ public class RemoteShuffleResultPartitionTest {
             return isClosed;
         }
 
-        public void release() throws Exception {
+        public void tearDown() throws Exception {
             IntStream.range(0, numSubs)
                     .forEach(
                             subpartitionIndex -> {
@@ -525,6 +544,9 @@ public class RemoteShuffleResultPartitionTest {
                         new ShuffleWorkerDescriptor[] {
                             new ShuffleWorkerDescriptor(null, "localhost", 0)
                         },
-                        DataPartition.DataPartitionType.MAP_PARTITION));
+                        DataPartition.DataPartitionType.MAP_PARTITION,
+                        DiskType.ANY_TYPE),
+                true,
+                1);
     }
 }

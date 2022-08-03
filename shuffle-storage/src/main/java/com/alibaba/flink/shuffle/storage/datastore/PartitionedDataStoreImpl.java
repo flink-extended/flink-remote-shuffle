@@ -68,6 +68,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
+import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkState;
 
 /** Implementation of {@link PartitionedDataStore}. */
 public class PartitionedDataStoreImpl implements PartitionedDataStore {
@@ -143,8 +144,7 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
                 }
             }
 
-            CommonUtils.checkState(
-                    !partitionFactories.isEmpty(), "No valid partition factory found.");
+            checkState(!partitionFactories.isEmpty(), "No valid partition factory found.");
         }
         StorageMetricsUtil.registerTotalNumExecutors(this::numTotalExecutors);
     }
@@ -264,7 +264,7 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
         }
 
         synchronized (lock) {
-            CommonUtils.checkState(!isShutDown, "Data store has been shut down.");
+            checkState(!isShutDown, "Data store has been shut down.");
 
             DataSet dataSet = dataSets.get(context.getDataSetID());
             if (dataSet != null && dataSet.containsDataPartition(context.getDataPartitionID())) {
@@ -279,7 +279,13 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
                                 context.getJobID(),
                                 context.getDataSetID(),
                                 context.getDataPartitionID(),
+                                context.getNumMapPartitions(),
                                 context.getNumReducePartitions());
+                LOG.debug(
+                        "Create a new data partition for "
+                                + dataSet
+                                + " "
+                                + context.getDataPartitionID());
                 try {
                     partitionStateListener.onPartitionCreated(dataPartition.getPartitionMeta());
                     addDataPartition(dataPartition);
@@ -359,6 +365,11 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
         }
     }
 
+    @Override
+    public Map<String, DataPartitionFactory> partitionFactories() {
+        return partitionFactories;
+    }
+
     /**
      * Failure handler in case of adding {@link DataPartition}s to this data store fails. It should
      * never happen by design, we add this to catch potential bugs.
@@ -405,7 +416,6 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
         synchronized (lock) {
             DataSetID dataSetID = partitionMeta.getDataSetID();
             DataSet dataSet = dataSets.get(dataSetID);
-
             if (dataSet != null) {
                 dataSet.removeDataPartition(partitionMeta.getDataPartitionID());
             }
@@ -460,7 +470,7 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
 
         DataPartitionMeta partitionMeta = dataPartition.getPartitionMeta();
         synchronized (lock) {
-            CommonUtils.checkState(!isShutDown, "Data store has been shut down.");
+            checkState(!isShutDown, "Data store has been shut down.");
 
             DataSet dataSet =
                     dataSets.computeIfAbsent(
@@ -480,7 +490,7 @@ public class PartitionedDataStoreImpl implements PartitionedDataStore {
         CommonUtils.checkArgument(partitionID != null, "Must be not null.");
 
         synchronized (lock) {
-            CommonUtils.checkState(!isShutDown, "Data store has been shut down.");
+            checkState(!isShutDown, "Data store has been shut down.");
 
             DataPartition dataPartition = null;
             DataSet dataSet = dataSets.get(dataSetID);

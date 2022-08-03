@@ -69,6 +69,9 @@ public class WordCountITCaseTest extends BatchJobTestBase {
 
         flinkConfiguration.setString(
                 "shuffle-service-factory.class", RemoteShuffleServiceFactory.class.getName());
+        flinkConfiguration.setString(
+                "remote-shuffle.job.data-partition-factory-name",
+                "com.alibaba.flink.shuffle.storage.partition.LocalFileReducePartitionFactory");
         flinkConfiguration.setString("remote-shuffle.job.memory-per-gate", "8m");
 
         flinkConfiguration.setString(HA_MODE.key(), "ZOOKEEPER");
@@ -123,7 +126,7 @@ public class WordCountITCaseTest extends BatchJobTestBase {
         words.keyBy(value -> value.f0)
                 .sum(1)
                 .map((MapFunction<Tuple2<String, Long>, Long>) wordCount -> wordCount.f1)
-                .addSink(new VerifySink(parallelism * WORD_COUNT));
+                .addSink(new VerifySink((long) parallelism * WORD_COUNT));
 
         StreamGraph streamGraph = env.getStreamGraph();
         streamGraph.setGlobalStreamExchangeMode(GlobalStreamExchangeMode.ALL_EDGES_BLOCKING);

@@ -16,9 +16,13 @@
 
 package com.alibaba.flink.shuffle.coordinator.manager.assignmenttracker;
 
+import com.alibaba.flink.shuffle.core.ids.RegistrationID;
 import com.alibaba.flink.shuffle.core.storage.DataPartitionFactory;
 
+import java.util.Map;
+
 import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
+import static com.alibaba.flink.shuffle.core.utils.PartitionUtils.isMapPartition;
 
 /**
  * A context class which is used when choose the next worker to store a new data partition. This is
@@ -26,14 +30,31 @@ import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkArgument;
  */
 public class PartitionPlacementContext {
 
+    private final Map<RegistrationID, WorkerStatus> currentWorkers;
+
     private final DataPartitionFactory partitionFactory;
 
     private final String taskLocation;
 
-    PartitionPlacementContext(DataPartitionFactory partitionFactory, String taskLocation) {
+    private final int numberOfConsumers;
+
+    PartitionPlacementContext(
+            Map<RegistrationID, WorkerStatus> currentWorkers,
+            DataPartitionFactory partitionFactory,
+            String taskLocation,
+            int numberOfConsumers) {
+        checkArgument(currentWorkers != null, "Must be not null.");
         checkArgument(partitionFactory != null, "Must be not null.");
+        checkArgument(numberOfConsumers > 0, "Must be positive.");
+
+        this.currentWorkers = currentWorkers;
         this.partitionFactory = partitionFactory;
         this.taskLocation = taskLocation;
+        this.numberOfConsumers = numberOfConsumers;
+    }
+
+    public Map<RegistrationID, WorkerStatus> currentWorkers() {
+        return currentWorkers;
     }
 
     DataPartitionFactory getPartitionFactory() {
@@ -42,5 +63,9 @@ public class PartitionPlacementContext {
 
     String getTaskLocation() {
         return taskLocation;
+    }
+
+    int numSelectWorkers() {
+        return isMapPartition(partitionFactory.getDataPartitionType()) ? 1 : numberOfConsumers;
     }
 }

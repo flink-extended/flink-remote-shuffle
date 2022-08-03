@@ -19,9 +19,11 @@ package com.alibaba.flink.shuffle.transfer;
 import com.alibaba.flink.shuffle.common.utils.CommonUtils;
 import com.alibaba.flink.shuffle.core.config.TransferOptions;
 import com.alibaba.flink.shuffle.core.ids.MapPartitionID;
+import com.alibaba.flink.shuffle.core.ids.ReducePartitionID;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.CloseChannel;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.CloseConnection;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.ErrorResponse;
+import com.alibaba.flink.shuffle.transfer.TransferMessage.ReducePartitionWriteHandshakeRequest;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.WriteAddCredit;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.WriteData;
 import com.alibaba.flink.shuffle.transfer.TransferMessage.WriteFinish;
@@ -44,6 +46,9 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.alibaba.flink.shuffle.common.utils.ProtocolUtils.currentProtocolVersion;
 import static com.alibaba.flink.shuffle.common.utils.ProtocolUtils.emptyBufferSize;
@@ -65,7 +70,11 @@ public class ShuffleWriteClientTest extends AbstractNettyTest {
 
     private ShuffleWriteClient client1;
 
+    private ShuffleWriteClient client2;
+
     private volatile DummyChannelInboundHandlerAdaptor serverH;
+
+    private BlockingQueue<ShuffleWriteClient> writeClients = new LinkedBlockingQueue<>();
 
     private final CreditListener creditListener = new TestCreditListener();
 
@@ -76,6 +85,7 @@ public class ShuffleWriteClientTest extends AbstractNettyTest {
         int dataPort = initShuffleServer();
         MapPartitionID mapID0 = new MapPartitionID(CommonUtils.randomBytes(16));
         MapPartitionID mapID1 = new MapPartitionID(CommonUtils.randomBytes(16));
+        ReducePartitionID redID0 = new ReducePartitionID(0, 0);
         int subsNum = 2;
         connManager = ConnectionManager.createWriteConnectionManager(nettyConfig, false);
         connManager.start();
@@ -86,20 +96,42 @@ public class ShuffleWriteClientTest extends AbstractNettyTest {
                         jobID,
                         dataSetID,
                         mapID0,
+                        redID0,
+                        0,
                         subsNum,
                         emptyBufferSize(),
+                        true,
                         emptyDataPartitionType(),
-                        connManager);
+                        connManager,
+                        new LinkedBlockingQueue<>()::add);
         client1 =
                 new ShuffleWriteClient(
                         address,
                         jobID,
                         dataSetID,
                         mapID1,
+                        redID0,
+                        0,
                         subsNum,
                         emptyBufferSize(),
+                        true,
                         emptyDataPartitionType(),
-                        connManager);
+                        connManager,
+                        new LinkedBlockingQueue<>()::add);
+        client2 =
+                new ShuffleWriteClient(
+                        address,
+                        jobID,
+                        dataSetID,
+                        mapID1,
+                        redID0,
+                        0,
+                        subsNum,
+                        emptyBufferSize(),
+                        false,
+                        emptyDataPartitionType(),
+                        connManager,
+                        writeClients::add);
     }
 
     @Override
@@ -126,7 +158,7 @@ public class ShuffleWriteClientTest extends AbstractNettyTest {
         assertTrue(serverH.getLastMsg() instanceof WriteHandshakeRequest);
 
         // Client sends WriteRegionStart;
-        runAsync(() -> client0.regionStart(false));
+        runAsync(() -> client0.regionStart(false, 1, 100, true));
         checkUntil(() -> assertEquals(2, serverH.numMessages()));
         assertTrue(serverH.getLastMsg() instanceof WriteRegionStart);
 
@@ -178,12 +210,13 @@ public class ShuffleWriteClientTest extends AbstractNettyTest {
                         1,
                         0,
                         emptyExtraMessage()));
+        AtomicInteger numReceivedFinishCommit = new AtomicInteger();
         runAsync(
                 () -> {
                     client0.write(buffersToSend.poll(), subIdx);
                     client0.write(buffersToSend.poll(), subIdx);
                     client0.regionFinish();
-                    client0.finish();
+                    client0.finish(numReceivedFinishCommit::getAndIncrement);
                 });
         checkUntil(() -> assertTrue(client0.isWaitingForCredit()));
 
@@ -202,15 +235,133 @@ public class ShuffleWriteClientTest extends AbstractNettyTest {
         assertTrue(serverH.getMsg(6) instanceof WriteData);
         assertTrue(serverH.getMsg(7) instanceof WriteRegionFinish);
         assertTrue(serverH.getMsg(8) instanceof WriteFinish);
-        assertTrue(client0.isWaitingForFinishCommit());
+        assertEquals(0, numReceivedFinishCommit.get());
 
         // Server sends WriteFinishCommit.
         serverH.send(
                 new WriteFinishCommit(
                         currentProtocolVersion(), client0.getChannelID(), emptyExtraMessage()));
-        checkUntil(() -> assertFalse(client0.isWaitingForFinishCommit()));
+        checkUntil(() -> assertEquals(1, numReceivedFinishCommit.get()));
 
         client0.close();
+        checkUntil(() -> assertEquals(11, serverH.numMessages()));
+        assertTrue(serverH.getMsg(9) instanceof CloseChannel);
+        assertTrue(serverH.getMsg(10) instanceof CloseConnection);
+
+        // verify buffers
+        List<ByteBuf> receivedBuffers = new ArrayList<>();
+        serverH.getMessages().stream()
+                .filter(o -> o instanceof WriteData)
+                .forEach(obj -> receivedBuffers.add(((WriteData) obj).getBuffer()));
+        verifyBuffers(4, 3, receivedBuffers);
+    }
+
+    @Test
+    public void testReducePartitionWriteDataAndSendCredit() throws Exception {
+        Queue<ByteBuf> buffersToSend = constructBuffers(4, 3);
+        int subIdx = 0;
+
+        checkUntil(() -> assertTrue(serverH.isEmpty()));
+
+        // Client send ReducePartitionWriteHandshakeRequest.
+        runAsync(() -> client2.open());
+        checkUntil(() -> assertEquals(1, serverH.numMessages()));
+        assertTrue(serverH.isConnected());
+        assertTrue(serverH.getLastMsg() instanceof ReducePartitionWriteHandshakeRequest);
+
+        // Client sends WriteRegionStart;
+        runAsync(() -> client2.regionStart(false, 1, 100, true));
+        checkUntil(() -> assertEquals(2, serverH.numMessages()));
+        assertTrue(serverH.getLastMsg() instanceof WriteRegionStart);
+
+        // Server sends 1 credit.
+        serverH.send(
+                new WriteAddCredit(
+                        currentProtocolVersion(),
+                        client2.getChannelID(),
+                        1,
+                        0,
+                        emptyExtraMessage()));
+        checkUntil(() -> assertFalse(writeClients.isEmpty()));
+        // Client sends WriteData.
+        client2.write(buffersToSend.poll(), subIdx);
+        checkUntil(() -> assertEquals(3, serverH.numMessages()));
+        checkUntil(() -> assertTrue(serverH.getLastMsg() instanceof WriteData));
+        assertEquals(0, client2.currentCredit);
+
+        // Server sends 1 credit.
+        // Client sends WriteData and WriteRegionFinish.
+        serverH.send(
+                new WriteAddCredit(
+                        currentProtocolVersion(),
+                        client2.getChannelID(),
+                        1,
+                        0,
+                        emptyExtraMessage()));
+
+        checkUntil(() -> assertFalse(writeClients.isEmpty()));
+        checkUntil(() -> assertEquals(1, client2.currentCredit));
+
+        // Client sends a WriteData.
+        client2.write(buffersToSend.poll(), subIdx);
+        checkUntil(() -> assertFalse(writeClients.isEmpty()));
+
+        client2.regionFinish();
+        checkUntil(() -> assertEquals(5, serverH.numMessages()));
+        assertTrue(serverH.getMsg(3) instanceof WriteData);
+        assertTrue(serverH.getMsg(4) instanceof WriteRegionFinish);
+        assertEquals(0, client2.currentCredit);
+
+        // Server sends outdated credits
+        serverH.send(
+                new WriteAddCredit(
+                        currentProtocolVersion(),
+                        client2.getChannelID(),
+                        1,
+                        0,
+                        emptyExtraMessage()));
+        serverH.send(
+                new WriteAddCredit(
+                        currentProtocolVersion(),
+                        client2.getChannelID(),
+                        1,
+                        0,
+                        emptyExtraMessage()));
+
+        assertEquals(0, client2.currentCredit);
+        // Server sends 2 credits.
+        // Client sends WriteData and WriteRegionFinish and WriteFinish.
+        serverH.send(
+                new WriteAddCredit(
+                        currentProtocolVersion(),
+                        client2.getChannelID(),
+                        2,
+                        1,
+                        emptyExtraMessage()));
+        checkUntil(() -> assertFalse(writeClients.isEmpty()));
+        checkUntil(() -> assertEquals(2, client2.currentCredit));
+
+        AtomicInteger numReceivedFinishCommit = new AtomicInteger();
+        client2.write(buffersToSend.poll(), subIdx);
+        client2.write(buffersToSend.poll(), subIdx);
+        client2.regionFinish();
+        runAsync(() -> client2.finish(numReceivedFinishCommit::getAndIncrement));
+        assertEquals(0, client2.currentCredit);
+
+        checkUntil(() -> assertEquals(9, serverH.numMessages()));
+        assertTrue(serverH.getMsg(5) instanceof WriteData);
+        assertTrue(serverH.getMsg(6) instanceof WriteData);
+        assertTrue(serverH.getMsg(7) instanceof WriteRegionFinish);
+        assertTrue(serverH.getMsg(8) instanceof WriteFinish);
+        assertEquals(0, numReceivedFinishCommit.get());
+
+        //         Server sends WriteFinishCommit.
+        serverH.send(
+                new WriteFinishCommit(
+                        currentProtocolVersion(), client2.getChannelID(), emptyExtraMessage()));
+        checkUntil(() -> assertEquals(1, numReceivedFinishCommit.get()));
+
+        client2.close();
         checkUntil(() -> assertEquals(11, serverH.numMessages()));
         assertTrue(serverH.getMsg(9) instanceof CloseChannel);
         assertTrue(serverH.getMsg(10) instanceof CloseConnection);
@@ -248,7 +399,7 @@ public class ShuffleWriteClientTest extends AbstractNettyTest {
         checkUntil(() -> assertTrue(serverH.isConnected()));
 
         // Client sends WriteRegionStart.
-        runAsync(() -> client0.regionStart(false));
+        runAsync(() -> client0.regionStart(false, 1, 100, true));
 
         // Client sends WriteData.
         ByteBuf byteBuf = buffersToSend.poll();
