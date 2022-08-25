@@ -100,6 +100,13 @@ under the License.
 			</exclusions>
 		</dependency>
 
+		<!-- air compression library -->
+		<dependency>
+			<groupId>io.airlift</groupId>
+			<artifactId>aircompressor</artifactId>
+			<version>${aircompressor.version}</version>
+		</dependency>
+
 		<!-- test dependencies -->
 		<dependency>
 			<groupId>com.alibaba.flink.shuffle</groupId>

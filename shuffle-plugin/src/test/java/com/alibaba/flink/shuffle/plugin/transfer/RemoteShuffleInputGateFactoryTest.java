@@ -48,6 +48,8 @@ import org.apache.flink.util.function.SupplierWithException;
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -58,7 +60,19 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 /** Test for {@link RemoteShuffleInputGateFactory}. */
+@RunWith(Parameterized.class)
 public class RemoteShuffleInputGateFactoryTest {
+
+    private final String compressCodec;
+
+    @Parameterized.Parameters
+    public static Object[] data() {
+        return new String[] {"LZ4", "LZO", "ZSTD"};
+    }
+
+    public RemoteShuffleInputGateFactoryTest(String compressCodec) {
+        this.compressCodec = compressCodec;
+    }
 
     @Test
     public void testBasicRoutine() throws Exception {
@@ -103,7 +117,8 @@ public class RemoteShuffleInputGateFactoryTest {
                 new TestingRemoteShuffleInputGateFactory(
                         ConfigurationUtils.fromFlinkConfiguration(conf),
                         networkBufferPool,
-                        bufferSize);
+                        bufferSize,
+                        compressCodec);
         TestingRemoteShuffleInputGate gate =
                 (TestingRemoteShuffleInputGate)
                         factory.create("", 0, createGateDescriptor(100), null);
@@ -147,8 +162,9 @@ public class RemoteShuffleInputGateFactoryTest {
         TestingRemoteShuffleInputGateFactory(
                 com.alibaba.flink.shuffle.common.config.Configuration configuration,
                 NetworkBufferPool networkBufferPool,
-                int bufferSize) {
-            super(configuration, networkBufferPool, bufferSize, "LZ4");
+                int bufferSize,
+                String compressCodec) {
+            super(configuration, networkBufferPool, bufferSize, compressCodec);
             this.bufferSize = bufferSize;
         }
 

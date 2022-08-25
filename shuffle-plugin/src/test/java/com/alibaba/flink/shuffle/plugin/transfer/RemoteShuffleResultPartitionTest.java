@@ -25,6 +25,8 @@ import com.alibaba.flink.shuffle.coordinator.manager.ShuffleWorkerDescriptor;
 import com.alibaba.flink.shuffle.core.ids.JobID;
 import com.alibaba.flink.shuffle.core.storage.DataPartition;
 import com.alibaba.flink.shuffle.plugin.RemoteShuffleDescriptor;
+import com.alibaba.flink.shuffle.plugin.compression.RemoteBufferCompressor;
+import com.alibaba.flink.shuffle.plugin.compression.RemoteBufferDecompressor;
 import com.alibaba.flink.shuffle.plugin.transfer.PartitionSortedBufferTest.DataAndType;
 import com.alibaba.flink.shuffle.plugin.utils.BufferUtils;
 import com.alibaba.flink.shuffle.transfer.ConnectionManager;
@@ -48,6 +50,8 @@ import org.apache.flink.util.function.SupplierWithException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -68,7 +72,19 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /** Test for {@link RemoteShuffleResultPartition}. */
+@RunWith(Parameterized.class)
 public class RemoteShuffleResultPartitionTest {
+
+    private final String compressCodec;
+
+    @Parameterized.Parameters
+    public static Object[] data() {
+        return new String[] {"LZ4", "LZO", "ZSTD"};
+    }
+
+    public RemoteShuffleResultPartitionTest(String compressCodec) {
+        this.compressCodec = compressCodec;
+    }
 
     private static final int totalBuffers = 1000;
 
@@ -91,8 +107,8 @@ public class RemoteShuffleResultPartitionTest {
     @Before
     public void setup() {
         globalBufferPool = new NetworkBufferPool(totalBuffers, bufferSize);
-        bufferCompressor = new BufferCompressor(bufferSize, "LZ4");
-        bufferDecompressor = new BufferDecompressor(bufferSize, "LZ4");
+        bufferCompressor = new RemoteBufferCompressor(bufferSize, compressCodec);
+        bufferDecompressor = new RemoteBufferDecompressor(bufferSize, compressCodec);
     }
 
     @After
