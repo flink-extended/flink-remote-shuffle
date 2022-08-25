@@ -73,6 +73,7 @@ under the License.
 		<rpc.flink.version>1.14.0</rpc.flink.version>
 		<jetty.version>9.4.44.v20210927</jetty.version>
 		<http.client.version>4.5.13</http.client.version>
+		<aircompressor.version>0.21</aircompressor.version>
 		<commons.lang3.version>3.3.2</commons.lang3.version>
 	</properties>
 

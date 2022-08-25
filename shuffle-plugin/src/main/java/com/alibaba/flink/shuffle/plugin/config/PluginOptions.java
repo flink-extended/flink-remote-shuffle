@@ -89,6 +89,18 @@ public class PluginOptions {
                                     + "compression can save the storage space and achieve better "
                                     + "performance.");
 
+    public static final ConfigOption<String> REMOTE_SHUFFLE_COMPRESSION_CODEC =
+            new ConfigOption<String>("remote-shuffle.job.compression.codec")
+                    .defaultValue("LZ4")
+                    .description(
+                            "The codec to be used when compressing shuffle data, only \"LZ4\", \"LZO\" "
+                                    + "and \"ZSTD\" are supported now. Through tpc-ds test of these "
+                                    + "three algorithms, the results show that \"LZ4\" algorithm has "
+                                    + "the highest compression and decompression speed, but the "
+                                    + "compression ratio is the lowest. \"ZSTD\" has the highest "
+                                    + "compression ratio, but the compression and decompression "
+                                    + "speed is the slowest, and LZO is between the two.");
+
     /**
      * Whether to shuffle the reading channels for better load balance of the downstream consumer
      * tasks.

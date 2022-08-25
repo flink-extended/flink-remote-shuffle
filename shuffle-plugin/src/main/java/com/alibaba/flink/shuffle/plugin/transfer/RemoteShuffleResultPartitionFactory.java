@@ -23,6 +23,7 @@ import com.alibaba.flink.shuffle.common.config.MemorySize;
 import com.alibaba.flink.shuffle.common.exception.ConfigurationException;
 import com.alibaba.flink.shuffle.common.utils.CommonUtils;
 import com.alibaba.flink.shuffle.plugin.RemoteShuffleDescriptor;
+import com.alibaba.flink.shuffle.plugin.compression.RemoteBufferCompressor;
 import com.alibaba.flink.shuffle.plugin.config.PluginOptions;
 import com.alibaba.flink.shuffle.transfer.ConnectionManager;
 
@@ -150,7 +151,7 @@ public class RemoteShuffleResultPartitionFactory {
 
         final BufferCompressor bufferCompressor;
         if (compressionEnabled) {
-            bufferCompressor = new BufferCompressor(networkBufferSize, compressionCodec);
+            bufferCompressor = new RemoteBufferCompressor(networkBufferSize, compressionCodec);
         } else {
             bufferCompressor = null;
         }
