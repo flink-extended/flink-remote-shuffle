@@ -19,15 +19,18 @@ package com.alibaba.flink.shuffle.kubernetes.operator.reconciler;
 import com.alibaba.flink.shuffle.common.config.Configuration;
 import com.alibaba.flink.shuffle.common.functions.RunnableWithException;
 import com.alibaba.flink.shuffle.core.config.ClusterOptions;
+import com.alibaba.flink.shuffle.core.config.KubernetesOptions;
 import com.alibaba.flink.shuffle.kubernetes.operator.crd.RemoteShuffleApplication;
 import com.alibaba.flink.shuffle.kubernetes.operator.parameters.K8sRemoteShuffleFileConfigsParameters;
 import com.alibaba.flink.shuffle.kubernetes.operator.parameters.KubernetesConfigMapParameters;
 import com.alibaba.flink.shuffle.kubernetes.operator.parameters.KubernetesDaemonSetParameters;
 import com.alibaba.flink.shuffle.kubernetes.operator.parameters.KubernetesShuffleManagerParameters;
 import com.alibaba.flink.shuffle.kubernetes.operator.parameters.KubernetesShuffleWorkerParameters;
+import com.alibaba.flink.shuffle.kubernetes.operator.parameters.KubernetesStatefulSetParameters;
 import com.alibaba.flink.shuffle.kubernetes.operator.resources.KubernetesConfigMapBuilder;
 import com.alibaba.flink.shuffle.kubernetes.operator.resources.KubernetesDaemonSetBuilder;
 import com.alibaba.flink.shuffle.kubernetes.operator.resources.KubernetesDeploymentBuilder;
+import com.alibaba.flink.shuffle.kubernetes.operator.resources.KubernetesStatefulSetBuilder;
 import com.alibaba.flink.shuffle.kubernetes.operator.util.Constants;
 import com.alibaba.flink.shuffle.kubernetes.operator.util.KubernetesInternalOptions;
 import com.alibaba.flink.shuffle.kubernetes.operator.util.KubernetesUtils;
@@ -36,6 +39,7 @@ import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.apps.DaemonSet;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
+import io.fabric8.kubernetes.api.model.apps.StatefulSet;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,7 +52,7 @@ import static com.alibaba.flink.shuffle.common.utils.CommonUtils.checkNotNull;
 
 /**
  * The {@link RemoteShuffleApplicationReconciler} is responsible for reconciling {@link
- * RemoteShuffleApplication} to the desired state which is described by {@link
+ * RemoteShuffleApplication} to the desired state which is described by {@code
  * RemoteShuffleApplication#spec}.
  */
 public class RemoteShuffleApplicationReconciler {
@@ -130,27 +134,56 @@ public class RemoteShuffleApplicationReconciler {
      */
     private void reconcileShuffleWorkers(Configuration configuration, HasMetadata owner) {
 
-        KubernetesDaemonSetParameters shuffleWorkerParameters =
-                new KubernetesShuffleWorkerParameters(configuration);
-        DaemonSet daemonSet =
-                new KubernetesDaemonSetBuilder()
-                        .buildKubernetesResourceFrom(shuffleWorkerParameters);
-        KubernetesUtils.setOwnerReference(daemonSet, owner);
+        KubernetesOptions.WorkerMode mode =
+                KubernetesOptions.WorkerMode.fromString(
+                        configuration.getString(KubernetesOptions.SHUFFLE_WORKER_DEPLOY_MODE));
 
-        LOG.info("Reconcile shuffle workers {}.", daemonSet.getMetadata().getName());
-        executeReconcileWithRetry(
-                () -> {
-                    LOG.debug("Try to create or update DaemonSet {}.", daemonSet.toString());
-                    this.kubeClient
-                            .apps()
-                            .daemonSets()
-                            .inNamespace(
-                                    checkNotNull(
-                                            configuration.getString(
-                                                    KubernetesInternalOptions.NAMESPACE)))
-                            .createOrReplace(daemonSet);
-                },
-                daemonSet.getMetadata().getName());
+        switch (mode) {
+            case STATEFUL_SETS:
+                KubernetesStatefulSetParameters statefulSetParameters =
+                        new KubernetesShuffleWorkerParameters(configuration);
+                StatefulSet statefulSet =
+                        KubernetesStatefulSetBuilder.INSTANCE.buildKubernetesResourceFrom(
+                                statefulSetParameters);
+                KubernetesUtils.setOwnerReference(statefulSet, owner);
+                LOG.info("Reconcile shuffle workers {}.", statefulSet.getMetadata().getName());
+                executeReconcileWithRetry(
+                        () -> {
+                            LOG.debug("Try to create or update StatefulSet {}.", statefulSet);
+                            this.kubeClient
+                                    .apps()
+                                    .statefulSets()
+                                    .inNamespace(
+                                            checkNotNull(
+                                                    configuration.getString(
+                                                            KubernetesInternalOptions.NAMESPACE)))
+                                    .createOrReplace(statefulSet);
+                        },
+                        statefulSet.getMetadata().getName());
+                break;
+            case DAEMON_SETS:
+                KubernetesDaemonSetParameters shuffleWorkerParameters =
+                        new KubernetesShuffleWorkerParameters(configuration);
+                DaemonSet daemonSet =
+                        new KubernetesDaemonSetBuilder()
+                                .buildKubernetesResourceFrom(shuffleWorkerParameters);
+                KubernetesUtils.setOwnerReference(daemonSet, owner);
+                LOG.info("Reconcile shuffle workers {}.", daemonSet.getMetadata().getName());
+                executeReconcileWithRetry(
+                        () -> {
+                            LOG.debug(
+                                    "Try to create or update DaemonSet {}.", daemonSet.toString());
+                            this.kubeClient
+                                    .apps()
+                                    .daemonSets()
+                                    .inNamespace(
+                                            checkNotNull(
+                                                    configuration.getString(
+                                                            KubernetesInternalOptions.NAMESPACE)))
+                                    .createOrReplace(daemonSet);
+                        },
+                        daemonSet.getMetadata().getName());
+        }
     }
 
     /**

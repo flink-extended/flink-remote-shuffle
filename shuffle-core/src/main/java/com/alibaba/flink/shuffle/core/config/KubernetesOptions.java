@@ -18,12 +18,17 @@ package com.alibaba.flink.shuffle.core.config;
 
 import com.alibaba.flink.shuffle.common.config.ConfigOption;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 /** This class holds configuration constants used by the remote shuffle deployment. */
 public class KubernetesOptions {
+
+    private static final Logger LOG = LoggerFactory.getLogger(KubernetesOptions.class);
 
     // --------------------------------------------------------------------------------------------
     //  Common configurations.
@@ -277,6 +282,41 @@ public class KubernetesOptions {
                                     + "value:value1,effect:NoSchedule;key:key2,operator:Exists,"
                                     + "effect:NoExecute,tolerationSeconds:6000.");
 
+    /** The number of shuffler worker. */
+    public static final ConfigOption<Integer> SHUFFLE_WORKER_REPLICAS =
+            new ConfigOption<Integer>("remote-shuffle.kubernetes.worker.replicas")
+                    .defaultValue(1)
+                    .description("The number of shuffle worker");
+
+    /** The access mode of the shuffle worker's pvc. */
+    public static final ConfigOption<List<String>> SHUFFLE_WORKER_PVC_ACCESS_MODE =
+            new ConfigOption<List<String>>("remote-shuffle.kubernetes.worker.pvc.access-mode")
+                    .defaultValue(Collections.singletonList("ReadWriteOnce"))
+                    .description("The access mode of the shuffle worker's pvc");
+
+    /** The storage class of the pvc. */
+    public static final ConfigOption<String> SHUFFLE_WORKER_PVC_STORAGE_CLASS =
+            new ConfigOption<String>("remote-shuffle.kubernetes.worker.pvc.storage-class")
+                    .defaultValue("alibabacloud-filesystem-ssd")
+                    .description("The storage class of the pvc");
+
+    /** The storage size of each pvc. */
+    public static final ConfigOption<String> SHUFFLE_WORKER_PVC_STORAGE_SIZE =
+            new ConfigOption<String>("remote-shuffle.kubernetes.worker.pvc.storage.size")
+                    .defaultValue("100Gi")
+                    .description("The storage size of each pvc.");
+
+    /** The mount path of the worker pvc. */
+    public static final ConfigOption<String> SHUFFLE_WORKER_PVC_MOUNT_PATH =
+            new ConfigOption<String>("remote-shuffle.kubernetes.worker.pvc.mount.path")
+                    .defaultValue("/shuffle-data-pvc")
+                    .description("The mount path of the worker pvc");
+
+    public static final ConfigOption<String> SHUFFLE_WORKER_DEPLOY_MODE =
+            new ConfigOption<String>("remote-shuffle.kubernetes.worker.deploy.mode")
+                    .defaultValue(WorkerMode.DAEMON_SETS.name())
+                    .description("The deploy mode of the shuffle worker");
+
     /**
      * The prefix of Kubernetes resource limit factor. It should not be less than 1. The resource
      * could be cpu, memory, ephemeral-storage and all other types supported by Kubernetes.
@@ -291,6 +331,20 @@ public class KubernetesOptions {
     public static final String SHUFFLE_WORKER_RESOURCE_LIMIT_FACTOR_PREFIX =
             "remote-shuffle.kubernetes.worker.limit-factor.";
 
+    /** The mode of the shuffle worker. */
+    public enum WorkerMode {
+        STATEFUL_SETS,
+        DAEMON_SETS;
+
+        public static WorkerMode fromString(String value) {
+            try {
+                return WorkerMode.valueOf(value);
+            } catch (Exception e) {
+                LOG.warn("Failed to parse the worker mode: " + value, e);
+                return DAEMON_SETS;
+            }
+        }
+    }
     // ------------------------------------------------------------------------
 
     /** Not intended to be instantiated. */

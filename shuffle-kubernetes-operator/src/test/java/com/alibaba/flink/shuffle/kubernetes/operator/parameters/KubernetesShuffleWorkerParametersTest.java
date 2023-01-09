@@ -69,6 +69,11 @@ public class KubernetesShuffleWorkerParametersTest extends KubernetesTestBase {
                 WorkerOptions.JVM_METASPACE, MemorySize.parse(CONTAINER_JVM_METASPACE_MB + "m"));
         conf.setMemorySize(
                 WorkerOptions.JVM_OVERHEAD, MemorySize.parse(CONTAINER_JVM_OVERHEAD_MB + "m"));
+        conf.setInteger(KubernetesOptions.SHUFFLE_WORKER_REPLICAS, WORKER_REPLICAS);
+        conf.setString(KubernetesOptions.SHUFFLE_WORKER_PVC_STORAGE_SIZE, PVC_STORAGE_SIZE);
+        conf.setString(KubernetesOptions.SHUFFLE_WORKER_PVC_STORAGE_CLASS, STORAGE_CLASS);
+        conf.setList(KubernetesOptions.SHUFFLE_WORKER_PVC_ACCESS_MODE, ACCESS_MODE);
+        conf.setString(KubernetesOptions.SHUFFLE_WORKER_PVC_MOUNT_PATH, MOUNT_PATH);
 
         shuffleWorkerParameters = new KubernetesShuffleWorkerParameters(conf);
     }
@@ -152,5 +157,15 @@ public class KubernetesShuffleWorkerParametersTest extends KubernetesTestBase {
     @Test
     public void testGetDaemonSetName() {
         assertThat(shuffleWorkerParameters.getDaemonSetName(), is(CLUSTER_ID + "-shuffleworker"));
+    }
+
+    @Test
+    public void testStatefulSetParameters() {
+        assertThat(shuffleWorkerParameters.getStatefulSetName(), is(CLUSTER_ID + "-shuffleworker"));
+        assertThat(shuffleWorkerParameters.getReplicas(), is(WORKER_REPLICAS));
+        assertThat(shuffleWorkerParameters.getStorageResource(), is(STORAGE_RESOURCES));
+        assertThat(shuffleWorkerParameters.getStorageClass(), is(STORAGE_CLASS));
+        assertThat(shuffleWorkerParameters.getAccessMode(), is(ACCESS_MODE));
+        assertThat(shuffleWorkerParameters.getMountPath(), is(MOUNT_PATH));
     }
 }

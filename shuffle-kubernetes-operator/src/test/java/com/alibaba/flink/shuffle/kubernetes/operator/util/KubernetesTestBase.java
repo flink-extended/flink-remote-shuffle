@@ -19,7 +19,10 @@ package com.alibaba.flink.shuffle.kubernetes.operator.util;
 import com.alibaba.flink.shuffle.common.config.MemorySize;
 import com.alibaba.flink.shuffle.kubernetes.operator.parameters.util.ConfigMapVolume;
 
+import io.fabric8.kubernetes.api.model.Quantity;
+
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,10 +54,25 @@ public class KubernetesTestBase {
     protected static final String CONTAINER_JVM_OPTIONS =
             "-verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:ParallelGCThreads=4";
 
-    // deployment, daemonset, configmap name
+    // deployment, daemonset, stateful-sets, configmap name
     protected static final String DEPLOYMENT_NAME = "TestingDeployment";
+    protected static final String STATEFUL_SET_NAME = "TestingStatefulSet";
     protected static final String DAEMON_SET_NAME = "TestingDaemonSet";
     protected static final String CONFIG_MAP_NAME = "TestingConfigMap";
+
+    // stateful sets mock parameters
+    protected static final int WORKER_REPLICAS = 10;
+    protected static final String PVC_STORAGE_SIZE = "10Gi";
+    protected static final Map<String, Quantity> STORAGE_RESOURCES =
+            new HashMap<String, Quantity>() {
+                {
+                    put(Constants.RESOURCE_NAME_STORAGE, new Quantity(PVC_STORAGE_SIZE));
+                }
+            };
+    protected static final String STORAGE_CLASS = "TestingStorageClass";
+    protected static final String PVC_ACCESS_MODE = "ReadWriteOnce";
+    protected static final List<String> ACCESS_MODE = Collections.singletonList(PVC_ACCESS_MODE);
+    protected static final String MOUNT_PATH = "/shuffle-data";
 
     protected static final List<Map<String, String>> CONTAINER_VOLUME_MOUNTS =
             new ArrayList<Map<String, String>>() {
